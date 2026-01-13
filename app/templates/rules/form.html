@@ -1016,6 +1016,7 @@
     const side = getSimpleSide().toUpperCase();
     const value = simpleValue.value || 0;
     updateSimpleLocks();
+    enforceTimeBounds();
     const timeFrom = simpleTimeFrom.value || 0;
     const timeTo = simpleTimeTo.value;
     const secondHalfText = simpleSecondHalf && simpleSecondHalf.checked ? " no 2o tempo" : "";
@@ -1156,12 +1157,22 @@
     if (simpleSecondHalfWrap) {
       simpleSecondHalfWrap.style.display = minuteExact ? "none" : "block";
     }
+    if (simpleSecondHalf) {
+      simpleSecondHalf.disabled = minuteExact;
+      if (minuteExact) {
+        simpleSecondHalf.checked = false;
+      }
+    }
     if (!minuteExact && simpleTimeFrom.value === "") {
       simpleTimeFrom.value = "0";
     }
   }
 
   function onSecondHalfToggle() {
+    enforceTimeBounds();
+  }
+
+  function enforceTimeBounds() {
     if (!simpleSecondHalf) return;
     const isSecondHalf = simpleSecondHalf.checked;
     const minFrom = isSecondHalf ? 46 : 1;

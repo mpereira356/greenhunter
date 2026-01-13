@@ -59,6 +59,7 @@
             </div>
           </div>
           <div class="topbar-right">
+            <button class="btn btn-sm btn-outline-secondary me-2" type="button" id="theme-toggle">Modo escuro</button>
             <div class="user-chip">
               <div class="user-avatar">{{ (current_user.username[:1] if current_user.username else 'U')|upper }}</div>
               <div class="user-name">Ola, {{ current_user.username }}</div>
@@ -98,6 +99,26 @@
     {% block scripts %}{% endblock %}
     {% if current_user.is_authenticated %}
     <script>
+      const bodyEl = document.body;
+      const themeToggle = document.getElementById("theme-toggle");
+      function setTheme(mode) {
+        if (mode === "dark") {
+          bodyEl.classList.add("theme-dark");
+          if (themeToggle) themeToggle.textContent = "Modo claro";
+        } else {
+          bodyEl.classList.remove("theme-dark");
+          if (themeToggle) themeToggle.textContent = "Modo escuro";
+        }
+        localStorage.setItem("theme", mode);
+      }
+      const savedTheme = localStorage.getItem("theme") || "light";
+      setTheme(savedTheme);
+      if (themeToggle) {
+        themeToggle.addEventListener("click", () => {
+          const isDark = bodyEl.classList.contains("theme-dark");
+          setTheme(isDark ? "light" : "dark");
+        });
+      }
       async function refreshApiStatus() {
         try {
           const resp = await fetch("{{ url_for('main.api_status') }}");
