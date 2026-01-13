@@ -72,7 +72,7 @@
           <div class="row g-3 mt-2">
             <div class="col-md-3">
               <label class="form-label">De (minuto)</label>
-              <input class="form-control" type="number" min="0" id="simple-time-from" value="0">
+              <input class="form-control" type="number" min="1" id="simple-time-from" value="1">
               <div class="form-text">Ex: 1 para comecar do inicio, 46 para 2o tempo.</div>
             </div>
             <div class="col-md-3">
@@ -1016,6 +1016,7 @@
     const side = getSimpleSide().toUpperCase();
     const value = simpleValue.value || 0;
     updateSimpleLocks();
+    onSecondHalfToggle();
     enforceTimeBounds();
     const timeFrom = simpleTimeFrom.value || 0;
     const timeTo = simpleTimeTo.value;
