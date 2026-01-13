@@ -11,8 +11,12 @@ settings_bp = Blueprint("settings", __name__, url_prefix="/settings")
 @login_required
 def settings():
     if request.method == "POST":
-        current_user.telegram_token = request.form.get("telegram_token", "").strip()
-        current_user.telegram_chat_id = request.form.get("telegram_chat_id", "").strip()
+        new_token = request.form.get("telegram_token", "").strip()
+        new_chat = request.form.get("telegram_chat_id", "").strip()
+        if new_token != (current_user.telegram_token or "") or new_chat != (current_user.telegram_chat_id or ""):
+            current_user.telegram_verified = False
+        current_user.telegram_token = new_token
+        current_user.telegram_chat_id = new_chat
         db.session.commit()
         flash("Configuracoes atualizadas.", "success")
         return redirect(url_for("settings.settings"))
@@ -29,6 +33,8 @@ def test_telegram():
         return redirect(url_for("settings.settings"))
     ok, message = send_message(token, chat_id, "Teste de notificacao do sistema.")
     if ok:
+        current_user.telegram_verified = True
+        db.session.commit()
         flash("Mensagem enviada com sucesso.", "success")
     else:
         flash(f"Falha ao enviar: {message}", "danger")

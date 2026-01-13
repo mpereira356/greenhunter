@@ -81,9 +81,9 @@
         {% endif %}
       {% endwith %}
 
-      {% if current_user.is_authenticated and (not current_user.telegram_token or not current_user.telegram_chat_id) %}
+      {% if current_user.is_authenticated and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified) %}
         <div class="alert alert-warning">
-          Configure seu Telegram em <a href="{{ url_for('settings.settings') }}">Configuracoes</a> para receber alertas.
+          Configure e teste seu Telegram em <a href="{{ url_for('settings.settings') }}">Configuracoes</a> para receber alertas.
         </div>
       {% endif %}
 

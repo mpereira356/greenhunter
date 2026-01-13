@@ -90,6 +90,7 @@ def _ensure_user_columns():
     columns = {
         "email": "VARCHAR(120)",
         "is_admin": "BOOLEAN DEFAULT 0",
+        "telegram_verified": "BOOLEAN DEFAULT 0",
     }
     with db.engine.connect() as conn:
         result = conn.execute(text("PRAGMA table_info('user')"))

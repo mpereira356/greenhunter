@@ -106,6 +106,9 @@ def list_rules():
 @rules_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def create_rule():
+    if not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified:
+        flash("Configure e teste o Telegram antes de criar regras.", "warning")
+        return redirect(url_for("settings.settings"))
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         time_limit_min = request.form.get("time_limit_min", "30").strip()
@@ -159,6 +162,9 @@ def create_rule():
 @rules_bp.route("/<int:rule_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_rule(rule_id):
+    if not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified:
+        flash("Configure e teste o Telegram antes de editar regras.", "warning")
+        return redirect(url_for("settings.settings"))
     rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
