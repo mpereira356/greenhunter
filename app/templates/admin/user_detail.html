@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Usuario{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Usuario: {{ user.username }}</div>
+    <div class="page-subtitle">Resumo das regras e alertas deste usuario.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin.users_list') }}">Voltar</a>
+    <a class="btn btn-primary" href="{{ url_for('admin.edit_user', user_id=user.id) }}">Editar usuario</a>
+    <form method="post" action="{{ url_for('admin.reset_telegram', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Resetar Telegram deste usuario?');">
+      <button class="btn btn-outline-danger">Resetar Telegram</button>
+    </form>
+  </div>
+</div>
+
+<div class="stat-grid mb-3">
+  <div class="stat-card">
+    <div class="stat-label">Regras</div>
+    <div class="stat-value">{{ rules|length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Alertas recentes</div>
+    <div class="stat-value">{{ recent_alerts|length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Email</div>
+    <div class="stat-value">{{ user.email or '-' }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Admin</div>
+    <div class="stat-value">{{ "Sim" if user.is_admin_user else "Nao" }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Criado em</div>
+    <div class="stat-value">{{ user.created_at.strftime('%d/%m/%Y') }}</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="mb-3">Regras</h5>
+        <div class="table-responsive">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tempo</th>
+                <th>Status</th>
+                <th>Greens</th>
+                <th>Reds</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for rule in rules %}
+              <tr>
+                <td>{{ rule.name }}</td>
+                <td>{{ rule.time_limit_min }} min</td>
+                <td>
+                  {% if rule.is_active %}
+                    <span class="badge-status badge-on">Ativa</span>
+                  {% else %}
+                    <span class="badge-status badge-off">Inativa</span>
+                  {% endif %}
+                </td>
+                <td>{{ rule_stats.get(rule.id, {}).get("green", 0) }}</td>
+                <td>{{ rule_stats.get(rule.id, {}).get("red", 0) }}</td>
+                <td class="text-end">
+                  <form method="post" action="{{ url_for('admin.toggle_rule', rule_id=rule.id) }}" class="d-inline">
+                    <button class="btn btn-sm btn-outline-secondary">
+                      {% if rule.is_active %}Desativar{% else %}Ativar{% endif %}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if rules|length == 0 %}
+              <tr><td colspan="6" class="text-muted">Este usuario nao tem regras.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="mb-3">Ultimos alertas</h5>
+        <div class="table-responsive">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Jogo</th>
+                <th>Status</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in recent_alerts %}
+              <tr>
+                <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
+                <td>
+                  {% if alert.status == "green" %}
+                    <span class="badge-status badge-on">Green</span>
+                  {% elif alert.status == "red" %}
+                    <span class="badge-status badge-off">Red</span>
+                  {% else %}
+                    <span class="badge-status badge-wait">Pendente</span>
+                  {% endif %}
+                </td>
+                <td>{{ alert.created_at.strftime('%d/%m %H:%M') }}</td>
+              </tr>
+              {% endfor %}
+              {% if recent_alerts|length == 0 %}
+              <tr><td colspan="3" class="text-muted">Sem alertas recentes.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

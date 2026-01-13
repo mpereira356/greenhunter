@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Editar Usuario{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Editar usuario</div>
+    <div class="page-subtitle">Atualize dados e permissao.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin.user_detail', user_id=user.id) }}">Voltar</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Usuario</label>
+        <input class="form-control" name="username" value="{{ user.username }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input class="form-control" name="email" type="email" value="{{ user.email or '' }}">
+      </div>
+      <div class="mb-3 form-check">
+        <input class="form-check-input" type="checkbox" name="is_admin" id="is_admin" {% if user.is_admin_user %}checked{% endif %}>
+        <label class="form-check-label" for="is_admin">Administrador</label>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Nova senha (opcional)</label>
+        <input class="form-control" type="password" name="new_password" placeholder="Deixe vazio para manter">
+      </div>
+      <button class="btn btn-primary" type="submit">Salvar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

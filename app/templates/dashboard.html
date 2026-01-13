@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">Resumo rapido dos seus alertas e resultados.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('rules.create_rule') }}">Nova regra</a>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Regras ativas</div>
+    <div class="stat-value">{{ active_rules }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Alertas hoje</div>
+    <div class="stat-value">{{ alerts_today }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Greens hoje</div>
+    <div class="stat-value text-success">{{ greens }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Reds hoje</div>
+    <div class="stat-value text-danger">{{ reds }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Pendentes</div>
+    <div class="stat-value">{{ pending_alerts }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ultimo alerta</div>
+    <div class="stat-sub">{{ last_alert.created_at.strftime('%d/%m %H:%M') if last_alert else '-' }}</div>
+    <div class="stat-small">{{ last_alert.home_team if last_alert else '' }} {{ 'x' if last_alert else '' }} {{ last_alert.away_team if last_alert else '' }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ultimo GREEN</div>
+    <div class="stat-sub">{{ last_green.created_at.strftime('%d/%m %H:%M') if last_green else '-' }}</div>
+    <div class="stat-small">{{ last_green.home_team if last_green else '' }} {{ 'x' if last_green else '' }} {{ last_green.away_team if last_green else '' }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ultimo RED</div>
+    <div class="stat-sub">{{ last_red.created_at.strftime('%d/%m %H:%M') if last_red else '-' }}</div>
+    <div class="stat-small">{{ last_red.home_team if last_red else '' }} {{ 'x' if last_red else '' }} {{ last_red.away_team if last_red else '' }}</div>
+  </div>
+</div>
+
+<div class="row g-3 mt-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Alertas da semana</h5>
+          <small class="text-muted">Greens / Reds / Pendentes</small>
+        </div>
+        <div class="d-flex gap-2 align-items-end" style="height: 160px;">
+          {% for item in chart_days %}
+          {% set green_h = (item.counts.green / max_count) * 100 %}
+          {% set red_h = (item.counts.red / max_count) * 100 %}
+          {% set pending_h = (item.counts.pending / max_count) * 100 %}
+          <div class="text-center flex-fill">
+            <div class="chart-bar">
+              <div class="bar bg-success" style="height: {{ green_h }}%"></div>
+              <div class="bar bg-danger" style="height: {{ red_h }}%"></div>
+              <div class="bar bg-warning" style="height: {{ pending_h }}%"></div>
+            </div>
+            <div class="small text-muted mt-1">{{ item.day }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h5>Atalhos rapidos</h5>
+        <div class="d-grid gap-2">
+          <a class="btn btn-primary" href="{{ url_for('rules.create_rule') }}">Nova regra</a>
+          <a class="btn btn-outline-secondary" href="{{ url_for('history.history') }}">Historico</a>
+          <a class="btn btn-outline-secondary" href="{{ url_for('settings.settings') }}">Configuracoes</a>
+        </div>
+        <div class="mt-3 small text-muted">
+          Ultima atualizacao: {{ worker_status.last_cycle or 'aguardando' }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body">
+        <h5>Ultimos alertas</h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-clean">
+            <thead>
+              <tr>
+                <th>Regra</th>
+                <th>Jogo</th>
+                <th>Status</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in recent_alerts %}
+              <tr>
+                <td>{{ alert.rule.name }}</td>
+                <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
+                <td>{{ alert.status }}</td>
+                <td>{{ alert.created_at.strftime('%d/%m %H:%M') }}</td>
+              </tr>
+              {% endfor %}
+              {% if recent_alerts|length == 0 %}
+              <tr><td colspan="4" class="text-muted">Sem alertas ainda.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h5>Top regras (win rate)</h5>
+        {% if top_rules %}
+          <ul class="list-group list-group-flush">
+            {% for item in top_rules %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ item.rule.name }}</span>
+                <span class="badge bg-success">{{ item.win_rate }}%</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted">Sem dados suficientes.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if (not current_user.telegram_token or not current_user.telegram_chat_id) or total_rules == 0 %}
+<div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h5 class="card-title">Primeiros passos</h5>
+      <ol class="mb-0">
+        {% if not current_user.telegram_token or not current_user.telegram_chat_id %}
+        <li>Configure seu Telegram em <a href="{{ url_for('settings.settings') }}">Configuracoes</a>.</li>
+      {% endif %}
+      {% if total_rules == 0 %}
+        <li>Crie sua primeira regra em <a href="{{ url_for('rules.create_rule') }}">Regras</a>.</li>
+      {% endif %}
+      <li>Use o botao "Testar regra" para validar antes de ativar.</li>
+    </ol>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

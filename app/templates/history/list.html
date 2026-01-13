@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Historico{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Historico</div>
+    <div class="page-subtitle">Acompanhe alertas, greens e reds por periodo.</div>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="{{ url_for('history.send_report') }}">
+      <button class="btn btn-outline-secondary" type="submit">Enviar relatorio</button>
+    </form>
+  </div>
+</div>
+
+<div class="stat-grid mb-3">
+  <div class="stat-card">
+    <div class="stat-label">Total</div>
+    <div class="stat-value">{{ total_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Greens</div>
+    <div class="stat-value text-success">{{ green_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Reds</div>
+    <div class="stat-value text-danger">{{ red_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Win rate</div>
+    <div class="stat-value">{{ win_rate }}%</div>
+  </div>
+</div>
+
+{% if green_count + red_count > 0 %}
+  {% set green_pct = (green_count * 100) // (green_count + red_count) %}
+  <div class="progress mb-3" style="height: 10px;">
+    <div class="progress-bar bg-success" style="width: {{ green_pct }}%"></div>
+    <div class="progress-bar bg-danger" style="width: {{ 100 - green_pct }}%"></div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="filter-card">
+      <div class="fw-semibold mb-2">Filtros</div>
+      <form method="get" class="d-grid gap-2">
+        <div>
+          <label class="form-label">Regra</label>
+          <select class="form-select" name="rule_id">
+            <option value="">Todas</option>
+            {% for rule in rules %}
+              <option value="{{ rule.id }}" {% if request.args.get('rule_id', type=int) == rule.id %}selected{% endif %}>{{ rule.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Status</label>
+          <select class="form-select" name="status">
+            <option value="">Todos</option>
+            {% for s in ["pending","green","red"] %}
+              <option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">De</label>
+          <input class="form-control" type="date" name="from" value="{{ request.args.get('from','') }}">
+        </div>
+        <div>
+          <label class="form-label">Ate</label>
+          <input class="form-control" type="date" name="to" value="{{ request.args.get('to','') }}">
+        </div>
+        <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+      </form>
+      <div class="mt-3">
+        <form method="post" action="{{ url_for('history.send_report') }}">
+          <button class="btn btn-outline-success w-100" type="submit">Enviar relatorio</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-9">
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Regra</th>
+              <th>Jogo</th>
+              <th>Status</th>
+              <th>Min alerta</th>
+              <th>HT</th>
+              <th>FT</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for alert in pagination.items %}
+            <tr>
+              <td>{{ alert.rule.name }}</td>
+              <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
+              <td>
+                {% if alert.status == "green" %}
+                  <span class="badge-status badge-on">Green</span>
+                {% elif alert.status == "red" %}
+                  <span class="badge-status badge-off">Red</span>
+                {% else %}
+                  <span class="badge-status badge-wait">Pendente</span>
+                {% endif %}
+              </td>
+              <td>{{ alert.alert_minute }}</td>
+              <td>{{ alert.ht_score or '-' }}</td>
+              <td>{{ alert.ft_score or '-' }}</td>
+              <td>{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <nav class="mt-3">
+      <ul class="pagination mb-0">
+        {% if pagination.has_prev %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('history.history', page=pagination.prev_num, **query_args) }}">Anterior</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Pagina {{ pagination.page }} de {{ pagination.pages }}</span></li>
+        {% if pagination.has_next %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('history.history', page=pagination.next_num, **query_args) }}">Proxima</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
+{% endblock %}

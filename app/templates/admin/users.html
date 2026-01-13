@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Usuarios</div>
+    <div class="page-subtitle">Gerencie contas, regras e acessos.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Email</th>
+            <th>Admin</th>
+            <th>Regras</th>
+            <th>Alertas</th>
+            <th>Criado em</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in users %}
+          <tr>
+            <td>{{ row.user.username }}</td>
+            <td>{{ row.user.email or '-' }}</td>
+            <td>
+              {% if row.user.is_admin_user %}
+                <span class="badge-status badge-on">Admin</span>
+              {% else %}
+                <span class="badge-status badge-wait">Usuario</span>
+              {% endif %}
+            </td>
+            <td>{{ row.rules }}</td>
+            <td>{{ row.alerts }}</td>
+            <td>{{ row.user.created_at.strftime('%d/%m/%Y') }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if users|length == 0 %}
+          <tr><td colspan="7" class="text-muted">Sem usuarios ainda.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

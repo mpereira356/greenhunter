@@ -1,0 +1,1419 @@
+{% extends "base.html" %}
+{% block title %}Regra{% endblock %}
+{% block content %}
+{% set default_message = '*{rule}*\nJogo: {home_team} x {away_team}\nMinuto: {minute} | Placar: *{score}*\nLiga: {league}\nLink: {url}' %}
+<div class="builder-shell rule-editor">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% if rule %}Editar regra{% else %}Nova regra{% endif %}</div>
+      <div class="page-subtitle">Crie alertas em menos de 30 segundos.</div>
+    </div>
+    <div class="page-actions">
+      <div class="mode-toggle">
+        <button type="button" class="btn btn-outline-secondary mode-btn active" data-mode="simple">Modo simples</button>
+        <button type="button" class="btn btn-outline-secondary mode-btn" data-mode="advanced">Modo avancado</button>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" id="rule-form" class="rule-form">
+    <div class="simple-builder" data-mode="simple">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <span class="section-pill">1</span>
+            <span class="section-title">Perguntas rapidas</span>
+          </div>
+          <span class="section-subtitle">Responda e gere a regra automaticamente</span>
+        </div>
+        <div class="section-body">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">O que quer monitorar?</label>
+              <select class="form-select" id="simple-stat">
+                <option value="Score">Placar</option>
+                <option value="Goals">Gols</option>
+                <option value="Corners">Escanteios</option>
+                <option value="Corners (Half)">Escanteios (1o tempo)</option>
+                <option value="Yellow Card">Cartoes amarelos</option>
+                <option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+                <option value="Red Card">Cartoes vermelhos</option>
+                <option value="Penalties">Penaltis</option>
+                <option value="Ball Safe">Bola segura</option>
+                <option value="Substitutions">Substituicoes</option>
+                <option value="Attacks">Ataques</option>
+                <option value="Dangerous Attacks">Ataques perigosos</option>
+                <option value="On Target">Chutes no alvo</option>
+                <option value="Off Target">Chutes para fora</option>
+                <option value="Possession">Posse de bola</option>
+              </select>
+            </div>
+            <div class="col-md-3" id="simple-side-wrap">
+              <label class="form-label">De quem?</label>
+              <div class="segmented" id="simple-side">
+                <button type="button" class="seg-btn active" data-value="home">Casa</button>
+                <button type="button" class="seg-btn" data-value="away">Fora</button>
+                <button type="button" class="seg-btn" data-value="total">Total</button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Quanto? (minimo)</label>
+              <div class="input-group">
+                <span class="input-group-text">No minimo</span>
+                <input class="form-control" type="number" min="0" id="simple-value" value="3">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Ate (minuto)</label>
+              <input class="form-control" type="number" min="0" id="simple-time-to" value="30">
+            </div>
+          </div>
+
+          <div class="row g-3 mt-2">
+            <div class="col-md-3">
+              <label class="form-label">De (minuto)</label>
+              <input class="form-control" type="number" min="0" id="simple-time-from" value="0">
+              <div class="form-text">Ex: 1 para comecar do inicio, 46 para 2o tempo.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tempo exato?</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="simple-minute-toggle">
+                <label class="form-check-label" for="simple-minute-toggle">Sim, minuto exato</label>
+              </div>
+            </div>
+            <div class="col-md-3" id="simple-minute-wrap">
+              <label class="form-label">Minuto exato</label>
+              <input class="form-control" type="number" min="0" id="simple-minute-exact" value="70">
+            </div>
+            <div class="col-md-3" id="simple-second-half-wrap">
+              <label class="form-label">2o tempo?</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="second_half_only" id="simple-second-half" {% if rule and rule.second_half_only %}checked{% endif %}>
+                <label class="form-check-label" for="simple-second-half">Somente 2o tempo</label>
+              </div>
+              <div class="form-text">Sugere 46 a 90 (editavel).</div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-2" id="simple-score-row">
+            <div class="col-md-3">
+              <label class="form-label">Placar Casa</label>
+              <input class="form-control" type="number" min="0" id="simple-score-home" value="0">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Placar Visitante</label>
+              <input class="form-control" type="number" min="0" id="simple-score-away" value="0">
+            </div>
+          </div>
+
+          <div class="summary-card mt-3">
+            <div class="summary-title">Resumo da regra</div>
+            <div class="summary-text" id="simple-summary">Avisar quando Escanteios TOTAL >= 3 ate 30'.</div>
+          </div>
+          <div id="simple-hidden-conditions" class="d-none"></div>
+
+          <div class="mt-3">
+            <button type="button" class="btn btn-link p-0 text-decoration-none mode-link" data-mode="advanced">
+              Quero usar o modo avancado
+            </button>
+          </div>
+
+          <div class="row g-3 mt-3">
+            <div class="col-md-6">
+              <label class="form-label">Nome da regra</label>
+              <input class="form-control" name="name" id="simple-name" value="{{ rule.name if rule else '' }}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tempo limite (min)</label>
+              <input class="form-control" name="time_limit_min" id="simple-time-limit" type="number" min="1" value="{{ rule.time_limit_min if rule else 30 }}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if rule is none or rule.is_active %}checked{% endif %}>
+                <label class="form-check-label" for="is_active">Ativa</label>
+              </div>
+              <div class="form-text">Desative para pausar sem apagar.</div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Mensagem personalizada (opcional)</label>
+            <textarea class="form-control message-template" name="message_template" rows="4">{{ rule.message_template if rule and rule.message_template else default_message }}</textarea>
+            <div class="form-text">
+              Ex: "{rule} - {home_team} x {away_team} ({minute}') {score} - {league} - {url}"
+            </div>
+            <div class="form-text">
+              Variaveis disponiveis: {rule}, {home_team}, {away_team}, {minute}, {score}, {league}, {url}
+            </div>
+            <div class="mt-2">
+              <div class="form-text">Preview:</div>
+              <div class="form-control bg-light message-preview"></div>
+            </div>
+          </div>
+
+          <div class="row mt-3">
+            <div class="col-md-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="follow_ht" id="follow_ht" {% if rule is none or rule.follow_ht %}checked{% endif %}>
+                <label class="form-check-label" for="follow_ht">Acompanhar ate HT</label>
+              </div>
+              <div class="form-text">HT: decide GREEN/RED no intervalo.</div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="follow_ft" id="follow_ft" {% if rule is none or rule.follow_ft %}checked{% endif %}>
+                <label class="form-check-label" for="follow_ft">Salvar FT</label>
+              </div>
+              <div class="form-text">FT: salva placar final e stats.</div>
+            </div>
+          </div>
+          <div class="section-card mt-4">
+            <div class="section-header">
+              <div>
+                <span class="section-pill">2</span>
+                <span class="section-title">Resultado (GREEN/RED)</span>
+              </div>
+              <span class="section-subtitle">Escolha o que define GREEN</span>
+            </div>
+            <div class="section-body">
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Como definir?</label>
+                  <select class="form-select" id="simple-outcome-mode">
+                    <option value="goal">GREEN por gol (padrao)</option>
+                    <option value="stat">GREEN por estatistica</option>
+                  </select>
+                </div>
+                <div class="col-md-8" id="simple-outcome-stat-row">
+                  <div class="row g-2">
+                    <div class="col-md-5">
+                      <label class="form-label">Stat</label>
+                      <select class="form-select" id="simple-outcome-stat">
+                        <option value="Goals">Gols</option>
+                        <option value="Corners">Escanteios</option>
+                        <option value="Corners (Half)">Escanteios (1o tempo)</option>
+                        <option value="Yellow Card">Cartoes amarelos</option>
+                        <option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+                        <option value="Red Card">Cartoes vermelhos</option>
+                        <option value="Penalties">Penaltis</option>
+                        <option value="Ball Safe">Bola segura</option>
+                        <option value="Substitutions">Substituicoes</option>
+                        <option value="Attacks">Ataques</option>
+                        <option value="Dangerous Attacks">Ataques perigosos</option>
+                        <option value="On Target">Chutes no alvo</option>
+                        <option value="Off Target">Chutes para fora</option>
+                        <option value="Possession">Posse de bola</option>
+                        <option value="Minute">Minuto</option>
+                      </select>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Lado</label>
+                      <select class="form-select" id="simple-outcome-side">
+                        <option value="home">Casa</option>
+                        <option value="away">Fora</option>
+                        <option value="total" selected>Total</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Valor</label>
+                      <div class="input-group">
+                        <select class="form-select" id="simple-outcome-operator">
+                          <option value=">=">>= (maior ou igual)</option>
+                          <option value=">">> (maior)</option>
+                          <option value="==">== (igual)</option>
+                          <option value="<="><= (menor ou igual)</option>
+                          <option value="<">< (menor)</option>
+                        </select>
+                        <input class="form-control" type="number" min="0" id="simple-outcome-value" value="1">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-text">Ex: Escanteios total >= 7 no HT.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <button class="btn btn-success" type="submit">Salvar</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('rules.list_rules') }}">Cancelar</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="advanced-builder" data-mode="advanced">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <span class="section-pill">1</span>
+            <span class="section-title">Dados basicos</span>
+          </div>
+          <span class="section-subtitle">Nome, mensagem e janela de tempo</span>
+        </div>
+        <div class="section-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nome da regra</label>
+              <input class="form-control" name="name" value="{{ rule.name if rule else '' }}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tempo limite (min)</label>
+              <input class="form-control" name="time_limit_min" type="number" min="1" value="{{ rule.time_limit_min if rule else 30 }}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active" {% if rule is none or rule.is_active %}checked{% endif %}>
+                <label class="form-check-label">Ativa</label>
+              </div>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-md-4">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="second_half_only" id="advanced-second-half" {% if rule and rule.second_half_only %}checked{% endif %}>
+                <label class="form-check-label" for="advanced-second-half">Somente 2o tempo (delta HT)</label>
+              </div>
+              <div class="form-text">Conta stats a partir do intervalo.</div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Mensagem personalizada (opcional)</label>
+            <textarea class="form-control message-template" name="message_template" rows="4">{{ rule.message_template if rule and rule.message_template else default_message }}</textarea>
+            <div class="form-text">
+              Ex: "{rule} - {home_team} x {away_team} ({minute}') {score} - {league} - {url}"
+            </div>
+            <div class="form-text">
+              Variaveis disponiveis: {rule}, {home_team}, {away_team}, {minute}, {score}, {league}, {url}
+            </div>
+            <div class="mt-2">
+              <div class="form-text">Preview:</div>
+              <div class="form-control bg-light message-preview"></div>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-md-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="follow_ht" {% if rule is none or rule.follow_ht %}checked{% endif %}>
+                <label class="form-check-label">Acompanhar ate HT</label>
+              </div>
+              <div class="form-text">HT: decide GREEN/RED no intervalo.</div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="follow_ft" {% if rule is none or rule.follow_ft %}checked{% endif %}>
+                <label class="form-check-label">Salvar FT</label>
+              </div>
+              <div class="form-text">FT: salva placar final e stats.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <span class="section-pill">2</span>
+            <span class="section-title">Resultado</span>
+          </div>
+          <span class="section-subtitle">Defina o que e GREEN e RED</span>
+        </div>
+        <div class="section-body">
+          <div class="row g-3 mb-2">
+            <div class="col-md-6">
+              <label class="form-label">GREEN acontece em</label>
+              <select class="form-select" name="outcome_green_stage">
+                <option value="HT" {% if rule is none or rule.outcome_green_stage == 'HT' %}selected{% endif %}>HT (intervalo)</option>
+                <option value="FT" {% if rule and rule.outcome_green_stage == 'FT' %}selected{% endif %}>FT (fim do jogo)</option>
+              </select>
+              <div class="form-text">Define quando o GREEN sera avaliado.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">RED acontece em</label>
+              <select class="form-select" name="outcome_red_stage">
+                <option value="HT" {% if rule is none or rule.outcome_red_stage == 'HT' %}selected{% endif %}>HT (intervalo)</option>
+                <option value="FT" {% if rule and rule.outcome_red_stage == 'FT' %}selected{% endif %}>FT (fim do jogo)</option>
+              </select>
+              <div class="form-text">Define quando o RED sera avaliado.</div>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="outcome-card outcome-green">
+                <div class="outcome-title">Condicoes de GREEN</div>
+                <div id="outcome-green">
+                  {% set green_conditions = rule.outcome_conditions if rule else [] %}
+                  {% for cond in green_conditions if cond.outcome_type == 'green' %}
+                    <div class="row g-2 condition-row align-items-end mb-2">
+                      <div class="col-md-4">
+                        <label class="form-label">Stat</label>
+                        <select class="form-select" name="outcome-green-{{ loop.index0 }}-stat_key" required>
+                          <option value="Goals">Gols</option>
+<option value="Corners">Escanteios</option>
+<option value="Corners (Half)">Escanteios (1o tempo)</option>
+<option value="Yellow Card">Cartoes amarelos</option>
+<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+<option value="Red Card">Cartoes vermelhos</option>
+<option value="Penalties">Penaltis</option>
+<option value="Ball Safe">Bola segura</option>
+<option value="Substitutions">Substituicoes</option>
+<option value="Attacks">Ataques</option>
+<option value="Dangerous Attacks">Ataques perigosos</option>
+<option value="On Target">Chutes no alvo</option>
+<option value="Off Target">Chutes para fora</option>
+<option value="Possession">Posse de bola</option>
+<option value="Minute">Minuto</option>
+                        </select>
+                        <div class="form-text">Ex: Escanteios total >= 7</div>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Lado</label>
+                        <select class="form-select" name="outcome-green-{{ loop.index0 }}-side">
+                          <option value="home" {% if cond.side == 'home' %}selected{% endif %}>home</option>
+                          <option value="away" {% if cond.side == 'away' %}selected{% endif %}>away</option>
+                          <option value="total" {% if cond.side == 'total' %}selected{% endif %}>total</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Operador</label>
+                        <select class="form-select" name="outcome-green-{{ loop.index0 }}-operator">
+                          {% for op in ['>=','>','==','<=','<'] %}
+                          <option value="{{ op }}" {% if cond.operator == op %}selected{% endif %}>{{ op }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Valor</label>
+                        <input class="form-control" type="number" min="0" name="outcome-green-{{ loop.index0 }}-value" value="{{ cond.value }}" required>
+                      </div>
+                      <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-danger btn-icon remove-condition">X</button>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-outline-success" data-target="outcome-green">Adicionar GREEN</button>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="outcome-card outcome-red">
+                <div class="outcome-title">Condicoes de RED</div>
+                <div id="outcome-red">
+                  {% set red_conditions = rule.outcome_conditions if rule else [] %}
+                  {% for cond in red_conditions if cond.outcome_type == 'red' %}
+                    <div class="row g-2 condition-row align-items-end mb-2">
+                      <div class="col-md-4">
+                        <label class="form-label">Stat</label>
+                        <select class="form-select" name="outcome-red-{{ loop.index0 }}-stat_key" required>
+                          <option value="Goals">Gols</option>
+<option value="Corners">Escanteios</option>
+<option value="Corners (Half)">Escanteios (1o tempo)</option>
+<option value="Yellow Card">Cartoes amarelos</option>
+<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+<option value="Red Card">Cartoes vermelhos</option>
+<option value="Penalties">Penaltis</option>
+<option value="Ball Safe">Bola segura</option>
+<option value="Substitutions">Substituicoes</option>
+<option value="Attacks">Ataques</option>
+<option value="Dangerous Attacks">Ataques perigosos</option>
+<option value="On Target">Chutes no alvo</option>
+<option value="Off Target">Chutes para fora</option>
+<option value="Possession">Posse de bola</option>
+<option value="Minute">Minuto</option>
+                        </select>
+                        <div class="form-text">Ex: Escanteios total < 7</div>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Lado</label>
+                        <select class="form-select" name="outcome-red-{{ loop.index0 }}-side">
+                          <option value="home" {% if cond.side == 'home' %}selected{% endif %}>home</option>
+                          <option value="away" {% if cond.side == 'away' %}selected{% endif %}>away</option>
+                          <option value="total" {% if cond.side == 'total' %}selected{% endif %}>total</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Operador</label>
+                        <select class="form-select" name="outcome-red-{{ loop.index0 }}-operator">
+                          {% for op in ['>=','>','==','<=','<'] %}
+                          <option value="{{ op }}" {% if cond.operator == op %}selected{% endif %}>{{ op }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">Valor</label>
+                        <input class="form-control" type="number" min="0" name="outcome-red-{{ loop.index0 }}-value" value="{{ cond.value }}" required>
+                      </div>
+                      <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-danger btn-icon remove-condition">X</button>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-outline-danger" data-target="outcome-red">Adicionar RED</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <span class="section-pill">3</span>
+            <span class="section-title">Condicoes de alerta</span>
+          </div>
+          <span class="section-subtitle">O que dispara o alerta</span>
+        </div>
+        <div class="section-body">
+          <div class="row g-3 mb-3 align-items-end">
+            <div class="col-md-2">
+              <label class="form-label">Placar Casa</label>
+              <input class="form-control" type="number" min="0" id="adv-score-home" value="0">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Placar Fora</label>
+              <input class="form-control" type="number" min="0" id="adv-score-away" value="0">
+            </div>
+            <div class="col-md-3">
+              <button type="button" class="btn btn-outline-secondary" id="add-score-adv">Adicionar placar ao grupo</button>
+            </div>
+          </div>
+          <div id="alert-groups">
+            {% set conditions = rule.conditions if rule else [] %}
+            {% set ns = namespace(groups={}) %}
+            {% for cond in conditions %}
+              {% set gid = cond.group_id if cond.group_id is not none else 0 %}
+              {% if ns.groups.update({gid: (ns.groups.get(gid, []) + [cond])}) %}{% endif %}
+            {% endfor %}
+            {% if ns.groups|length == 0 %}
+              {% set ns.groups = {0: []} %}
+            {% endif %}
+            {% for gid, group in ns.groups.items() %}
+              <div class="alert-group" data-group="{{ gid }}">
+                <div class="alert-group-header">
+                  <div class="alert-group-title">Grupo {{ loop.index }} (OU)</div>
+                  {% if ns.groups|length > 1 %}
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover grupo</button>
+                  {% endif %}
+                </div>
+                <div class="alert-group-body">
+                  <div class="conditions-list">
+                    {% for cond in group %}
+                      <div class="row g-2 condition-row align-items-end mb-2">
+                        <div class="col-md-4">
+                          <label class="form-label">Stat</label>
+                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-stat_key" required>
+                            <option value="Goals">Gols</option>
+<option value="Corners">Escanteios</option>
+<option value="Corners (Half)">Escanteios (1o tempo)</option>
+<option value="Yellow Card">Cartoes amarelos</option>
+<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+<option value="Red Card">Cartoes vermelhos</option>
+<option value="Penalties">Penaltis</option>
+<option value="Ball Safe">Bola segura</option>
+<option value="Substitutions">Substituicoes</option>
+<option value="Attacks">Ataques</option>
+<option value="Dangerous Attacks">Ataques perigosos</option>
+<option value="On Target">Chutes no alvo</option>
+<option value="Off Target">Chutes para fora</option>
+<option value="Possession">Posse de bola</option>
+<option value="Minute">Minuto</option>
+</select>
+                          <div class="form-text">Ex: Escanteios total >= 4</div>
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label">Lado</label>
+                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-side">
+                            <option value="home" {% if cond.side == 'home' %}selected{% endif %}>home</option>
+                            <option value="away" {% if cond.side == 'away' %}selected{% endif %}>away</option>
+                            <option value="total" {% if cond.side == 'total' %}selected{% endif %}>total</option>
+                          </select>
+                          <div class="form-text">home=casa, away=fora, total=soma</div>
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label">Operador</label>
+                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-operator">
+                            {% for op in ['>=','>','==','<=','<'] %}
+                            <option value="{{ op }}" {% if cond.operator == op %}selected{% endif %}>{{ op }}</option>
+                            {% endfor %}
+                          </select>
+                          <div class="form-text">Ex: use ">=" para "pelo menos".</div>
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label">Valor</label>
+                          <input class="form-control" type="number" min="0" name="group-{{ gid }}-cond-{{ loop.index0 }}-value" value="{{ cond.value }}" required>
+                          <div class="form-text">Numero inteiro, ex: 25</div>
+                        </div>
+                        <div class="col-md-2">
+                          <button type="button" class="btn btn-outline-danger btn-icon remove-condition">X</button>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <button type="button" class="btn btn-outline-secondary add-condition" data-group="{{ gid }}">Adicionar condicao</button>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <button type="button" class="btn btn-outline-dark" id="add-group">Adicionar grupo (OU)</button>
+          <button type="button" class="btn btn-outline-primary ms-2" id="test-rule">Testar regra</button>
+          <div class="mt-4">
+            <button class="btn btn-success" type="submit">Salvar</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('rules.list_rules') }}">Cancelar</a>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Preview</label>
+            <div class="form-control bg-light" id="rule-preview"></div>
+          </div>
+
+          <div class="mt-3" id="test-results" style="display:none;">
+            <label class="form-label">Resultado do teste</label>
+            <div class="alert alert-info mb-0" id="test-results-body"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const groupsContainer = document.getElementById("alert-groups");
+  const addGroupBtn = document.getElementById("add-group");
+  const advScoreHome = document.getElementById("adv-score-home");
+  const advScoreAway = document.getElementById("adv-score-away");
+  const addScoreAdv = document.getElementById("add-score-adv");
+  const outcomeGreen = document.getElementById("outcome-green");
+  const outcomeRed = document.getElementById("outcome-red");
+  const modeButtons = document.querySelectorAll(".mode-btn");
+  const simpleSection = document.querySelector(".simple-builder");
+  const advancedSection = document.querySelector(".advanced-builder");
+
+  function switchMode(mode) {
+    modeButtons.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
+    if (mode === "simple") {
+      simpleSection.style.display = "block";
+      advancedSection.style.display = "none";
+    } else {
+      simpleSection.style.display = "none";
+      advancedSection.style.display = "block";
+    }
+    setSectionState(simpleSection, mode === "simple");
+    setSectionState(advancedSection, mode === "advanced");
+  }
+
+  function setSectionState(section, enabled) {
+    if (!section) return;
+    section.querySelectorAll("input, select, textarea, button").forEach((el) => {
+      if (el.closest(".mode-toggle")) return;
+      if (el.type === "submit") return;
+      if (enabled) {
+        if (el.dataset.required === "true") {
+          el.required = true;
+        }
+        el.disabled = false;
+      } else {
+        if (el.required) {
+          el.dataset.required = "true";
+          el.required = false;
+        }
+        if (el.dataset.required !== "true") {
+          el.required = false;
+        }
+        el.disabled = true;
+      }
+    });
+  }
+
+  modeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => switchMode(btn.dataset.mode));
+  });
+  document.querySelectorAll(".mode-link").forEach((btn) => {
+    btn.addEventListener("click", () => switchMode(btn.dataset.mode));
+  });
+  switchMode("simple");
+
+  function updateIndexes() {
+    const groups = groupsContainer.querySelectorAll(".alert-group");
+    groups.forEach((groupEl) => {
+      const gid = groupEl.dataset.group;
+      const rows = groupEl.querySelectorAll(".condition-row");
+      rows.forEach((row, idx) => {
+        row.querySelectorAll("input, select").forEach((input) => {
+          const parts = input.name.split("-");
+          const suffix = parts[4] || parts[parts.length - 1];
+          input.name = `group-${gid}-cond-${idx}-${suffix}`;
+        });
+      });
+    });
+    updateOutcomeIndexes(outcomeGreen, "outcome-green");
+    updateOutcomeIndexes(outcomeRed, "outcome-red");
+    updatePreview();
+  }
+
+  function updateMinuteSideLock() {
+    groupsContainer.querySelectorAll(".condition-row").forEach((row) => {
+      const stat = row.querySelector("[name$='stat_key']");
+      const side = row.querySelector("[name$='side']");
+      if (!stat || !side) return;
+      if (stat.value === "Minute") {
+        side.value = "total";
+        side.disabled = true;
+      } else {
+        side.disabled = false;
+      }
+    });
+    outcomeGreen.querySelectorAll(".condition-row").forEach((row) => {
+      const stat = row.querySelector("[name$='stat_key']");
+      const side = row.querySelector("[name$='side']");
+      if (!stat || !side) return;
+      if (stat.value === "Minute") {
+        side.value = "total";
+        side.disabled = true;
+      } else {
+        side.disabled = false;
+      }
+    });
+    outcomeRed.querySelectorAll(".condition-row").forEach((row) => {
+      const stat = row.querySelector("[name$='stat_key']");
+      const side = row.querySelector("[name$='side']");
+      if (!stat || !side) return;
+      if (stat.value === "Minute") {
+        side.value = "total";
+        side.disabled = true;
+      } else {
+        side.disabled = false;
+      }
+    });
+  }
+
+  function updateOutcomeIndexes(wrapper, prefix) {
+    if (!wrapper) return;
+    const rows = wrapper.querySelectorAll(".condition-row");
+    rows.forEach((row, idx) => {
+      row.querySelectorAll("input, select").forEach((input) => {
+        const parts = input.name.split("-");
+        const suffix = parts[3] || parts[parts.length - 1];
+        input.name = `${prefix}-${idx}-${suffix}`;
+      });
+    });
+  }
+  function createGroup(groupId) {
+    const div = document.createElement("div");
+    div.className = "alert-group";
+    div.dataset.group = groupId;
+    div.innerHTML = `
+      <div class="alert-group-header">
+        <div class="alert-group-title">Grupo ${groupId + 1} (OU)</div>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover grupo</button>
+      </div>
+      <div class="alert-group-body">
+        <div class="conditions-list"></div>
+        <button type="button" class="btn btn-outline-secondary add-condition" data-group="${groupId}">Adicionar condicao</button>
+      </div>
+    `;
+    return div;
+  }
+
+  function addCondition(groupEl) {
+    const gid = groupEl.dataset.group;
+    const list = groupEl.querySelector(".conditions-list");
+    const idx = list.querySelectorAll(".condition-row").length;
+    const div = document.createElement("div");
+    div.className = "row g-2 condition-row align-items-end mb-2";
+    div.innerHTML = `
+      <div class="col-md-4">
+        <label class="form-label">Stat</label>
+        <select class="form-select" name="group-${gid}-cond-${idx}-stat_key" required>
+          <option value="Goals">Gols</option>
+<option value="Corners">Escanteios</option>
+<option value="Corners (Half)">Escanteios (1o tempo)</option>
+<option value="Yellow Card">Cartoes amarelos</option>
+<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+<option value="Red Card">Cartoes vermelhos</option>
+<option value="Penalties">Penaltis</option>
+<option value="Ball Safe">Bola segura</option>
+<option value="Substitutions">Substituicoes</option>
+<option value="Attacks">Ataques</option>
+<option value="Dangerous Attacks">Ataques perigosos</option>
+<option value="On Target">Chutes no alvo</option>
+<option value="Off Target">Chutes para fora</option>
+<option value="Possession">Posse de bola</option>
+<option value="Minute">Minuto</option>
+</select>
+        <div class="form-text">Ex: Escanteios total >= 4</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Lado</label>
+        <select class="form-select" name="group-${gid}-cond-${idx}-side">
+          <option value="home">home</option>
+          <option value="away">away</option>
+          <option value="total">total</option>
+        </select>
+        <div class="form-text">home=casa, away=fora, total=soma</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Operador</label>
+        <select class="form-select" name="group-${gid}-cond-${idx}-operator">
+          <option value=">=">>=</option>
+          <option value=">">></option>
+          <option value="==">==</option>
+          <option value="<="><=</option>
+          <option value="<"><</option>
+        </select>
+        <div class="form-text">Ex: use ">=" para "pelo menos".</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Valor</label>
+        <input class="form-control" type="number" min="0" name="group-${gid}-cond-${idx}-value" required>
+        <div class="form-text">Numero inteiro, ex: 25</div>
+      </div>
+      <div class="col-md-2">
+        <button type="button" class="btn btn-outline-danger btn-icon remove-condition">X</button>
+      </div>
+    `;
+    list.appendChild(div);
+    updatePreview();
+    updateMinuteSideLock();
+  }
+
+  function addGroup() {
+    const groups = groupsContainer.querySelectorAll(".alert-group");
+    let maxId = -1;
+    groups.forEach((g) => {
+      const gid = parseInt(g.dataset.group, 10);
+      if (gid > maxId) maxId = gid;
+    });
+    const nextId = maxId + 1;
+    const groupEl = createGroup(nextId);
+    groupsContainer.appendChild(groupEl);
+    addCondition(groupEl);
+    updateIndexes();
+    updateMinuteSideLock();
+  }
+
+  function addOutcomeRow(wrapper, prefix) {
+    const idx = wrapper.querySelectorAll(".condition-row").length;
+    const div = document.createElement("div");
+    div.className = "row g-2 condition-row align-items-end mb-2";
+    div.innerHTML = `
+      <div class="col-md-4">
+        <label class="form-label">Stat</label>
+        <select class="form-select" name="${prefix}-${idx}-stat_key" required>
+          <option value="Goals">Gols</option>
+<option value="Corners">Escanteios</option>
+<option value="Corners (Half)">Escanteios (1o tempo)</option>
+<option value="Yellow Card">Cartoes amarelos</option>
+<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
+<option value="Red Card">Cartoes vermelhos</option>
+<option value="Penalties">Penaltis</option>
+<option value="Ball Safe">Bola segura</option>
+<option value="Substitutions">Substituicoes</option>
+<option value="Attacks">Ataques</option>
+<option value="Dangerous Attacks">Ataques perigosos</option>
+<option value="On Target">Chutes no alvo</option>
+<option value="Off Target">Chutes para fora</option>
+<option value="Possession">Posse de bola</option>
+<option value="Minute">Minuto</option>
+</select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Lado</label>
+        <select class="form-select" name="${prefix}-${idx}-side">
+          <option value="home">home</option>
+          <option value="away">away</option>
+          <option value="total">total</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Operador</label>
+        <select class="form-select" name="${prefix}-${idx}-operator">
+          <option value=">=">>=</option>
+          <option value=">">></option>
+          <option value="==">==</option>
+          <option value="<="><=</option>
+          <option value="<"><</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Valor</label>
+        <input class="form-control" type="number" min="0" name="${prefix}-${idx}-value" required>
+      </div>
+      <div class="col-md-2">
+        <button type="button" class="btn btn-outline-danger btn-icon remove-condition">X</button>
+      </div>
+    `;
+    wrapper.appendChild(div);
+  }
+
+  groupsContainer.addEventListener("click", (event) => {
+    if (event.target.classList.contains("remove-condition")) {
+      event.target.closest(".condition-row").remove();
+      updateIndexes();
+      updateMinuteSideLock();
+    }
+    if (event.target.classList.contains("add-condition")) {
+      const gid = event.target.dataset.group;
+      const groupEl = groupsContainer.querySelector(`.alert-group[data-group='${gid}']`);
+      if (groupEl) {
+        addCondition(groupEl);
+        updateIndexes();
+        updateMinuteSideLock();
+      }
+    }
+    if (event.target.classList.contains("remove-group")) {
+      const groupEl = event.target.closest(".alert-group");
+      if (groupEl) {
+        groupEl.remove();
+        updateIndexes();
+        updateMinuteSideLock();
+      }
+    }
+  });
+
+  [outcomeGreen, outcomeRed].forEach((wrapper) => {
+    if (!wrapper) return;
+    wrapper.addEventListener("click", (event) => {
+      if (event.target.classList.contains("remove-condition")) {
+        event.target.closest(".condition-row").remove();
+        updateIndexes();
+      }
+    });
+  });
+
+  addGroupBtn.addEventListener("click", () => addGroup());
+  addScoreAdv.addEventListener("click", () => {
+    let groupEl = groupsContainer.querySelector(".alert-group");
+    if (!groupEl) {
+      addGroup();
+      groupEl = groupsContainer.querySelector(".alert-group");
+    }
+    const home = advScoreHome.value || 0;
+    const away = advScoreAway.value || 0;
+    addCondition(groupEl);
+    addCondition(groupEl);
+    const rows = groupEl.querySelectorAll(".condition-row");
+    const rowHome = rows[rows.length - 2];
+    const rowAway = rows[rows.length - 1];
+    rowHome.querySelector("[name$='stat_key']").value = "Goals";
+    rowHome.querySelector("[name$='side']").value = "home";
+    rowHome.querySelector("[name$='operator']").value = "==";
+    rowHome.querySelector("[name$='value']").value = home;
+    rowAway.querySelector("[name$='stat_key']").value = "Goals";
+    rowAway.querySelector("[name$='side']").value = "away";
+    rowAway.querySelector("[name$='operator']").value = "==";
+    rowAway.querySelector("[name$='value']").value = away;
+    updateIndexes();
+    updateMinuteSideLock();
+  });
+
+  document.querySelectorAll("[data-target]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-target");
+      const wrapper = document.getElementById(targetId);
+      if (wrapper) {
+        addOutcomeRow(wrapper, targetId);
+        updateIndexes();
+      }
+    });
+  });
+
+  if (groupsContainer.children.length === 0) {
+    addGroup();
+  }
+
+  function updatePreview() {
+    const name = document.querySelector("input[name='name']").value || "Regra";
+    const limit = document.querySelector("input[name='time_limit_min']").value || "?";
+    const groupParts = [];
+    groupsContainer.querySelectorAll(".alert-group").forEach((groupEl) => {
+      const parts = [];
+      groupEl.querySelectorAll(".condition-row").forEach((row) => {
+        const stat = row.querySelector("[name$='stat_key']").value;
+        const side = row.querySelector("[name$='side']").value;
+        const op = row.querySelector("[name$='operator']").value;
+        const val = row.querySelector("[name$='value']").value;
+        if (stat && side && op && val) {
+          parts.push(`${stat} (${side}) ${op} ${val}`);
+        }
+      });
+      if (parts.length) {
+        groupParts.push(parts.join(" E "));
+      }
+    });
+    const preview = groupParts.length ? groupParts.join(" OU ") : "Sem condicoes";
+    document.getElementById("rule-preview").textContent = `${name}: ${preview} ate ${limit}min`;
+  }
+
+  document.getElementById("rule-form").addEventListener("input", updatePreview);
+  document.getElementById("rule-form").addEventListener("input", updateMinuteSideLock);
+  updatePreview();
+  document.getElementById("test-rule").addEventListener("click", async () => {
+    const form = document.getElementById("rule-form");
+    const data = new FormData(form);
+    const resultBox = document.getElementById("test-results");
+    const resultBody = document.getElementById("test-results-body");
+    resultBox.style.display = "block";
+    resultBody.textContent = "Testando...";
+    const resp = await fetch("{{ url_for('rules.test_rule') }}", {
+      method: "POST",
+      body: data
+    });
+    const payload = await resp.json();
+    if (!payload.ok) {
+      resultBody.textContent = payload.message || "Falha ao testar.";
+      return;
+    }
+    if (!payload.matches.length) {
+      resultBody.textContent = "Nenhum jogo ao vivo bateu com essa regra agora.";
+      return;
+    }
+    const lines = payload.matches.map((m) => `${m.league} - ${m.home_team} x ${m.away_team} (${m.minute}'): ${m.score}`);
+    resultBody.textContent = lines.join("\n");
+  });
+
+  const simpleStat = document.getElementById("simple-stat");
+  const simpleValue = document.getElementById("simple-value");
+  const simpleTimeTo = document.getElementById("simple-time-to");
+  const simpleTimeFrom = document.getElementById("simple-time-from");
+  const simpleSummary = document.getElementById("simple-summary");
+  const simpleName = document.getElementById("simple-name");
+  const simpleTimeLimit = document.getElementById("simple-time-limit");
+  const simpleScoreHome = document.getElementById("simple-score-home");
+  const simpleScoreAway = document.getElementById("simple-score-away");
+  const simpleScoreRow = document.getElementById("simple-score-row");
+  const simpleSideWrap = document.getElementById("simple-side-wrap");
+  const simpleMinuteWrap = document.getElementById("simple-minute-wrap");
+  const simpleSecondHalfWrap = document.getElementById("simple-second-half-wrap");
+  const simpleMinuteToggle = document.getElementById("simple-minute-toggle");
+  const simpleMinuteExact = document.getElementById("simple-minute-exact");
+  const simpleHidden = document.getElementById("simple-hidden-conditions");
+  const simpleSecondHalf = document.getElementById("simple-second-half");
+  const advancedSecondHalf = document.getElementById("advanced-second-half");
+  const simpleOutcomeMode = document.getElementById("simple-outcome-mode");
+  const simpleOutcomeStatRow = document.getElementById("simple-outcome-stat-row");
+  const simpleOutcomeStat = document.getElementById("simple-outcome-stat");
+  const simpleOutcomeSide = document.getElementById("simple-outcome-side");
+  const simpleOutcomeOperator = document.getElementById("simple-outcome-operator");
+  const simpleOutcomeValue = document.getElementById("simple-outcome-value");
+  const hasExistingRule = {{ 'true' if rule and rule.conditions else 'false' }};
+  let allowSync = !hasExistingRule;
+
+  function getSimpleSide() {
+    const btn = document.querySelector("#simple-side .seg-btn.active");
+    return btn ? btn.dataset.value : "total";
+  }
+
+  function updateSummary() {
+    const statLabel = simpleStat.options[simpleStat.selectedIndex].text;
+    const side = getSimpleSide().toUpperCase();
+    const value = simpleValue.value || 0;
+    updateSimpleLocks();
+    const timeFrom = simpleTimeFrom.value || 0;
+    const timeTo = simpleTimeTo.value;
+    const secondHalfText = simpleSecondHalf && simpleSecondHalf.checked ? " no 2o tempo" : "";
+    if (simpleStat.value === "Score") {
+      const home = simpleScoreHome.value || 0;
+      const away = simpleScoreAway.value || 0;
+      if (simpleMinuteToggle.checked) {
+        const exact = simpleMinuteExact.value || timeTo;
+        simpleSummary.textContent = `Avisar quando placar for Casa ${home} x ${away} no minuto ${exact}${secondHalfText}.`;
+        simpleName.value = `Placar Casa ${home} x ${away} no minuto ${exact}${secondHalfText}`;
+      } else {
+        if (parseInt(timeFrom, 10) > 0) {
+          simpleSummary.textContent = `Avisar quando placar for Casa ${home} x ${away} de ${timeFrom}' ate ${timeTo}'${secondHalfText}.`;
+          simpleName.value = `Placar Casa ${home} x ${away} de ${timeFrom} a ${timeTo}min${secondHalfText}`;
+        } else {
+          simpleSummary.textContent = `Avisar quando placar for Casa ${home} x ${away} ate ${timeTo}'${secondHalfText}.`;
+          simpleName.value = `Placar Casa ${home} x ${away} ate ${timeTo}min${secondHalfText}`;
+        }
+      }
+    } else {
+      if (simpleMinuteToggle.checked) {
+        const exact = simpleMinuteExact.value || timeTo;
+        simpleSummary.textContent = `Avisar quando ${statLabel} ${side} >= ${value} no minuto ${exact}${secondHalfText}.`;
+        simpleName.value = `${statLabel} ${side} >= ${value} no minuto ${exact}${secondHalfText}`;
+      } else {
+        if (parseInt(timeFrom, 10) > 0) {
+          simpleSummary.textContent = `Avisar quando ${statLabel} ${side} >= ${value} de ${timeFrom}' ate ${timeTo}'${secondHalfText}.`;
+          simpleName.value = `${statLabel} ${side} >= ${value} de ${timeFrom} a ${timeTo}min${secondHalfText}`;
+        } else {
+          simpleSummary.textContent = `Avisar quando ${statLabel} ${side} >= ${value} ate ${timeTo}'${secondHalfText}.`;
+          simpleName.value = `${statLabel} ${side} >= ${value} ate ${timeTo}min${secondHalfText}`;
+        }
+      }
+    }
+    const timeToUse = simpleMinuteToggle.checked ? (simpleMinuteExact.value || simpleTimeTo.value) : simpleTimeTo.value;
+    simpleTimeLimit.value = timeToUse;
+    buildHiddenConditions();
+    if (allowSync) {
+      syncAdvancedFromSimple();
+    }
+  }
+
+  function buildHiddenConditions() {
+    const entries = [];
+    if (simpleStat.value === "Score") {
+      const home = simpleScoreHome.value || 0;
+      const away = simpleScoreAway.value || 0;
+      entries.push({ stat: "Goals", side: "home", op: "==", value: home });
+      entries.push({ stat: "Goals", side: "away", op: "==", value: away });
+    } else {
+      entries.push({
+        stat: simpleStat.value,
+        side: getSimpleSide(),
+        op: ">=",
+        value: simpleValue.value || 0
+      });
+    }
+    if (simpleMinuteToggle.checked) {
+      entries.push({
+        stat: "Minute",
+        side: "total",
+        op: "==",
+        value: simpleMinuteExact.value || simpleTimeTo.value
+      });
+    } else {
+      const fromVal = simpleTimeFrom.value || 0;
+      const toVal = simpleTimeTo.value;
+      if (fromVal && parseInt(fromVal, 10) > 0) {
+        entries.push({ stat: "Minute", side: "total", op: ">=", value: fromVal });
+      }
+      if (toVal) {
+        entries.push({ stat: "Minute", side: "total", op: "<=", value: toVal });
+      }
+    }
+    const inputs = entries.map((item, idx) => {
+      return [
+        `<input type="hidden" name="group-0-cond-${idx}-stat_key" value="${item.stat}">`,
+        `<input type="hidden" name="group-0-cond-${idx}-side" value="${item.side}">`,
+        `<input type="hidden" name="group-0-cond-${idx}-operator" value="${item.op}">`,
+        `<input type="hidden" name="group-0-cond-${idx}-value" value="${item.value}">`
+      ].join("");
+    }).join("");
+    simpleHidden.innerHTML = inputs;
+  }
+
+  function updateOutcomeMode() {
+    if (!simpleOutcomeMode || !simpleOutcomeStatRow) return;
+    simpleOutcomeStatRow.style.display = simpleOutcomeMode.value === "stat" ? "block" : "none";
+    if (simpleOutcomeMode.value !== "stat") {
+      syncOutcomeToAdvanced([]);
+      return;
+    }
+    if (simpleOutcomeStat.value === "Minute") {
+      simpleOutcomeSide.value = "total";
+    }
+    const stat = simpleOutcomeStat.value;
+    const side = simpleOutcomeSide.value;
+    const operator = simpleOutcomeOperator ? simpleOutcomeOperator.value : ">=";
+    const value = simpleOutcomeValue.value || 1;
+    syncOutcomeToAdvanced([
+      { stat_key: stat, side: side, operator: operator, value: parseInt(value, 10) }
+    ]);
+  }
+
+  function syncOutcomeToAdvanced(conditions) {
+    if (!outcomeGreen) return;
+    outcomeGreen.innerHTML = "";
+    outcomeRed.innerHTML = "";
+    conditions.forEach((cond) => {
+      addOutcomeRow(outcomeGreen, "outcome-green");
+      const idx = outcomeGreen.querySelectorAll(".condition-row").length - 1;
+      outcomeGreen.querySelector(`[name='outcome-green-${idx}-stat_key']`).value = cond.stat_key;
+      outcomeGreen.querySelector(`[name='outcome-green-${idx}-side']`).value = cond.side;
+      outcomeGreen.querySelector(`[name='outcome-green-${idx}-operator']`).value = cond.operator;
+      outcomeGreen.querySelector(`[name='outcome-green-${idx}-value']`).value = cond.value;
+    });
+    updateOutcomeIndexes(outcomeGreen, "outcome-green");
+  }
+
+  function updateSimpleLocks() {
+    const isScore = simpleStat.value === "Score";
+    simpleValue.disabled = isScore;
+    document.querySelectorAll("#simple-side .seg-btn").forEach((btn) => {
+      btn.disabled = isScore;
+    });
+    if (simpleSideWrap) {
+      simpleSideWrap.style.display = isScore ? "none" : "block";
+    }
+    if (simpleScoreRow) {
+      simpleScoreRow.style.display = isScore ? "flex" : "none";
+    }
+    const minuteExact = simpleMinuteToggle.checked;
+    simpleTimeTo.disabled = minuteExact;
+    simpleTimeFrom.disabled = minuteExact;
+    if (simpleMinuteWrap) {
+      simpleMinuteWrap.style.display = minuteExact ? "block" : "none";
+    }
+    if (simpleSecondHalfWrap) {
+      simpleSecondHalfWrap.style.display = minuteExact ? "none" : "block";
+    }
+    if (!minuteExact && simpleTimeFrom.value === "") {
+      simpleTimeFrom.value = "0";
+    }
+  }
+
+  function onSecondHalfToggle() {
+    if (!simpleSecondHalf) return;
+    const isSecondHalf = simpleSecondHalf.checked;
+    const minFrom = isSecondHalf ? 46 : 1;
+    const maxTo = isSecondHalf ? 90 : 45;
+    simpleTimeFrom.min = String(minFrom);
+    simpleTimeTo.max = String(maxTo);
+    simpleMinuteExact.min = String(minFrom);
+    simpleMinuteExact.max = String(maxTo);
+    if (simpleMinuteToggle.checked) {
+      const exact = parseInt(simpleMinuteExact.value || "0", 10);
+      if (!exact || exact < minFrom || exact > maxTo) {
+        simpleMinuteExact.value = String(minFrom);
+      }
+    } else {
+      const fromVal = parseInt(simpleTimeFrom.value || "0", 10);
+      const toVal = parseInt(simpleTimeTo.value || "0", 10);
+      if (!fromVal || fromVal < minFrom || fromVal > maxTo) {
+        simpleTimeFrom.value = String(minFrom);
+      }
+      if (!toVal || toVal < minFrom || toVal > maxTo) {
+        simpleTimeTo.value = String(maxTo);
+      }
+    }
+  }
+
+  function syncAdvancedFromSimple() {
+    const stat = simpleStat.value;
+    const side = getSimpleSide();
+    const value = simpleValue.value || 0;
+    const timeTo = simpleTimeTo.value;
+    const timeFrom = simpleTimeFrom.value || 0;
+    const exactMinute = simpleMinuteExact.value || timeTo;
+    groupsContainer.innerHTML = "";
+    const groupEl = createGroup(0);
+    groupsContainer.appendChild(groupEl);
+    if (simpleStat.value === "Score") {
+      const home = simpleScoreHome.value || 0;
+      const away = simpleScoreAway.value || 0;
+      addCondition(groupEl);
+      addCondition(groupEl);
+      const rows = groupEl.querySelectorAll(".condition-row");
+      rows[0].querySelector("[name$='stat_key']").value = "Goals";
+      rows[0].querySelector("[name$='side']").value = "home";
+      rows[0].querySelector("[name$='operator']").value = "==";
+      rows[0].querySelector("[name$='value']").value = home;
+      rows[1].querySelector("[name$='stat_key']").value = "Goals";
+      rows[1].querySelector("[name$='side']").value = "away";
+      rows[1].querySelector("[name$='operator']").value = "==";
+      rows[1].querySelector("[name$='value']").value = away;
+    } else {
+      addCondition(groupEl);
+      groupEl.querySelector("[name$='stat_key']").value = stat;
+      groupEl.querySelector("[name$='side']").value = side;
+      groupEl.querySelector("[name$='operator']").value = ">=";
+      groupEl.querySelector("[name$='value']").value = value;
+    }
+    if (simpleMinuteToggle.checked) {
+      addCondition(groupEl);
+      const rows = groupEl.querySelectorAll(".condition-row");
+      const minuteRow = rows[rows.length - 1];
+      minuteRow.querySelector("[name$='stat_key']").value = "Minute";
+      minuteRow.querySelector("[name$='side']").value = "total";
+      minuteRow.querySelector("[name$='operator']").value = "==";
+      minuteRow.querySelector("[name$='value']").value = exactMinute;
+    } else {
+      if (timeFrom && parseInt(timeFrom, 10) > 0) {
+        addCondition(groupEl);
+        const rows = groupEl.querySelectorAll(".condition-row");
+        const minuteRow = rows[rows.length - 1];
+        minuteRow.querySelector("[name$='stat_key']").value = "Minute";
+        minuteRow.querySelector("[name$='side']").value = "total";
+        minuteRow.querySelector("[name$='operator']").value = ">=";
+        minuteRow.querySelector("[name$='value']").value = timeFrom;
+      }
+      if (timeTo) {
+        addCondition(groupEl);
+        const rows = groupEl.querySelectorAll(".condition-row");
+        const minuteRow = rows[rows.length - 1];
+        minuteRow.querySelector("[name$='stat_key']").value = "Minute";
+        minuteRow.querySelector("[name$='side']").value = "total";
+        minuteRow.querySelector("[name$='operator']").value = "<=";
+        minuteRow.querySelector("[name$='value']").value = timeTo;
+      }
+    }
+    document.querySelector("input[name='time_limit_min']").value = simpleMinuteToggle.checked ? exactMinute : timeTo;
+    if (advancedSecondHalf) {
+      advancedSecondHalf.checked = simpleSecondHalf.checked;
+    }
+    updateOutcomeMode();
+    updateIndexes();
+  }
+
+  function updateSimpleFromAdvanced() {
+    const rows = groupsContainer.querySelectorAll(".condition-row");
+    if (!rows.length) return;
+    const goalsRows = Array.from(rows).filter((row) => {
+      return row.querySelector("[name$='stat_key']").value === "Goals"
+        && row.querySelector("[name$='operator']").value === "==";
+    });
+    const minuteEqRow = Array.from(rows).find((row) => {
+      return row.querySelector("[name$='stat_key']").value === "Minute"
+        && row.querySelector("[name$='operator']").value === "==";
+    });
+    const minuteMinRow = Array.from(rows).find((row) => {
+      return row.querySelector("[name$='stat_key']").value === "Minute"
+        && row.querySelector("[name$='operator']").value === ">=";
+    });
+    const minuteMaxRow = Array.from(rows).find((row) => {
+      return row.querySelector("[name$='stat_key']").value === "Minute"
+        && row.querySelector("[name$='operator']").value === "<=";
+    });
+    const hasScore = goalsRows.length >= 2;
+    if (hasScore) {
+      simpleStat.value = "Score";
+      const homeRow = goalsRows.find((row) => row.querySelector("[name$='side']").value === "home");
+      const awayRow = goalsRows.find((row) => row.querySelector("[name$='side']").value === "away");
+      if (homeRow) simpleScoreHome.value = homeRow.querySelector("[name$='value']").value || 0;
+      if (awayRow) simpleScoreAway.value = awayRow.querySelector("[name$='value']").value || 0;
+    } else {
+      const firstRow = rows[0];
+      simpleStat.value = firstRow.querySelector("[name$='stat_key']").value;
+      const sideValue = firstRow.querySelector("[name$='side']").value;
+      document.querySelectorAll("#simple-side .seg-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.value === sideValue);
+      });
+      simpleValue.value = firstRow.querySelector("[name$='value']").value || 0;
+    }
+    simpleMinuteToggle.checked = Boolean(minuteEqRow);
+    if (minuteEqRow) {
+      simpleMinuteExact.value = minuteEqRow.querySelector("[name$='value']").value || 0;
+    } else {
+      if (minuteMinRow) {
+        simpleTimeFrom.value = minuteMinRow.querySelector("[name$='value']").value || 0;
+      }
+      if (minuteMaxRow) {
+        simpleTimeTo.value = minuteMaxRow.querySelector("[name$='value']").value || 30;
+      }
+    }
+    if (!minuteMinRow && !minuteMaxRow && !minuteEqRow) {
+      simpleTimeFrom.value = "0";
+    }
+    if (!minuteMaxRow) {
+      simpleTimeTo.value = document.querySelector("input[name='time_limit_min']").value || 30;
+    }
+    if (advancedSecondHalf && simpleSecondHalf) {
+      simpleSecondHalf.checked = advancedSecondHalf.checked;
+    }
+    const outcomeRows = outcomeGreen ? outcomeGreen.querySelectorAll(".condition-row") : [];
+    if (simpleOutcomeMode) {
+      if (outcomeRows && outcomeRows.length) {
+        const row = outcomeRows[0];
+        simpleOutcomeMode.value = "stat";
+        if (simpleOutcomeStat) {
+          simpleOutcomeStat.value = row.querySelector("[name$='stat_key']").value;
+        }
+        if (simpleOutcomeSide) {
+          simpleOutcomeSide.value = row.querySelector("[name$='side']").value;
+        }
+        if (simpleOutcomeOperator) {
+          simpleOutcomeOperator.value = row.querySelector("[name$='operator']").value;
+        }
+        if (simpleOutcomeValue) {
+          simpleOutcomeValue.value = row.querySelector("[name$='value']").value;
+        }
+      } else {
+        simpleOutcomeMode.value = "goal";
+      }
+    }
+    updateSummary();
+    allowSync = true;
+  }
+  document.querySelectorAll("#simple-side .seg-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#simple-side .seg-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      updateSummary();
+    });
+  });
+
+  [simpleStat, simpleValue, simpleTimeTo, simpleTimeFrom].forEach((el) => {
+    el.addEventListener("input", updateSummary);
+  });
+  [simpleScoreHome, simpleScoreAway, simpleMinuteToggle, simpleMinuteExact].forEach((el) => {
+    el.addEventListener("input", () => {
+      updateSummary();
+    });
+  });
+  if (simpleSecondHalf) {
+    simpleSecondHalf.addEventListener("change", () => {
+      onSecondHalfToggle();
+      updateSummary();
+    });
+  }
+  [simpleOutcomeMode, simpleOutcomeStat, simpleOutcomeSide, simpleOutcomeOperator, simpleOutcomeValue].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("input", updateOutcomeMode);
+  });
+
+  if (hasExistingRule) {
+    updateSimpleFromAdvanced();
+  } else {
+    updateSummary();
+  }
+  onSecondHalfToggle();
+  updateOutcomeMode();
+
+  function updateMessagePreviews() {
+    const nameInput = document.querySelector("input[name='name']");
+    const ruleName = nameInput && nameInput.value ? nameInput.value : "Regra";
+    const toValue = simpleTimeTo.value || 30;
+    const minute = simpleMinuteToggle.checked ? (simpleMinuteExact.value || toValue) : toValue;
+    const scoreText = simpleStat.value === "Score"
+      ? `${simpleScoreHome.value || 0} x ${simpleScoreAway.value || 0}`
+      : "0 x 0";
+    const data = {
+      rule: ruleName,
+      home_team: "Time Casa",
+      away_team: "Time Fora",
+      minute: minute,
+      score: scoreText,
+      league: "Liga",
+      url: "https://pt.betsapi.com/r/12345"
+    };
+    document.querySelectorAll(".message-template").forEach((textarea) => {
+      const preview = textarea.closest(".mt-3").querySelector(".message-preview");
+      if (!preview) return;
+      let text = textarea.value || "";
+      Object.keys(data).forEach((key) => {
+        const token = new RegExp(`\\{${key}\\}`, "g");
+        text = text.replace(token, data[key]);
+      });
+      preview.textContent = text;
+    });
+  }
+
+  document.querySelectorAll(".message-template").forEach((textarea) => {
+    textarea.addEventListener("input", updateMessagePreviews);
+  });
+  document.querySelectorAll("input[name='name']").forEach((input) => {
+    input.addEventListener("input", updateMessagePreviews);
+  });
+  updateMessagePreviews();
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+

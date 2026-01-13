@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Regras{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Minhas Regras</div>
+    <div class="page-subtitle">Organize seus bots e acompanhe o desempenho.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('rules.create_rule') }}">+ Nova regra</a>
+  </div>
+</div>
+{% if rules %}
+  <div class="table-card">
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tempo limite</th>
+            <th>Status</th>
+            <th>Greens</th>
+            <th>Reds</th>
+            <th>Ultimo alerta</th>
+            <th class="text-end">Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rule in rules %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ rule.name }}</div>
+              <div class="small text-muted">{{ rule.conditions|length }} condicoes</div>
+            </td>
+            <td>{{ rule.time_limit_min }} min</td>
+            <td>
+              {% if rule.is_active %}
+                <span class="badge-status badge-on">Ativa</span>
+              {% else %}
+                <span class="badge-status badge-off">Inativa</span>
+              {% endif %}
+            </td>
+            <td>{{ rule_stats.get(rule.id, {}).get("green", 0) }}</td>
+            <td>{{ rule_stats.get(rule.id, {}).get("red", 0) }}</td>
+            <td>{{ rule.last_alert_at.strftime('%d/%m %H:%M') if rule.last_alert_at else '-' }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
+                <button class="btn btn-sm btn-outline-secondary">
+                  {% if rule.is_active %}Desativar{% else %}Ativar{% endif %}
+                </button>
+              </form>
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
+              <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline" onsubmit="return confirm('Excluir regra?');">
+                <button class="btn btn-sm btn-outline-danger">Excluir</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% else %}
+  <div class="card-soft p-4">
+    <div class="fw-semibold mb-1">Voce ainda nao criou regras.</div>
+    <div class="text-muted">Crie sua primeira regra para comecar a receber alertas.</div>
+  </div>
+{% endif %}
+{% endblock %}
