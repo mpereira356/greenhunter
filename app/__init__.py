@@ -47,6 +47,7 @@ def create_app():
         _ensure_user_columns()
         _ensure_rule_columns()
         _ensure_rule_condition_columns()
+        _ensure_alert_columns()
 
     if os.environ.get("DISABLE_WORKER") != "1":
         start_worker(app)
@@ -119,4 +120,18 @@ def _ensure_user_columns():
         for col, col_type in columns.items():
             if col not in existing:
                 conn.execute(text(f"ALTER TABLE user ADD COLUMN {col} {col_type}"))
+        conn.commit()
+
+
+def _ensure_alert_columns():
+    columns = {
+        "result_minute": "INTEGER",
+        "result_time_hhmm": "VARCHAR(8)",
+    }
+    with db.engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info('match_alert')"))
+        existing = {row[1] for row in result}
+        for col, col_type in columns.items():
+            if col not in existing:
+                conn.execute(text(f"ALTER TABLE match_alert ADD COLUMN {col} {col_type}"))
         conn.commit()

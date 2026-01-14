@@ -92,6 +92,8 @@ class MatchAlert(db.Model):
     status = db.Column(db.String(20), default="pending", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     alert_minute = db.Column(db.Integer)
+    result_minute = db.Column(db.Integer)
+    result_time_hhmm = db.Column(db.String(8))
     initial_score = db.Column(db.String(20))
     ht_score = db.Column(db.String(20))
     ft_score = db.Column(db.String(20))

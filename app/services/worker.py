@@ -369,10 +369,12 @@ def follow_alerts(session):
             if is_half_time(time_text, minute):
                 outcome = evaluate_outcome(rule, alert, stats_payload, "HT")
                 if outcome:
-                    alert.status = outcome
-                    alert.ht_score = current_score or alert.initial_score
-                    alert.ht_stats_json = stats_to_json(stats_payload["stats"])
-                    db.session.commit()
+                alert.status = outcome
+                alert.result_minute = minute
+                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+                alert.ht_score = current_score or alert.initial_score
+                alert.ht_stats_json = stats_to_json(stats_payload["stats"])
+                db.session.commit()
                     export_alert(alert, alert.rule.name, EXPORT_DIR)
                     status_icon = "✅" if outcome == "green" else "❌"
                     send_message(
@@ -391,6 +393,8 @@ def follow_alerts(session):
                 and is_first_half_goal(time_text, minute)
             ):
                 alert.status = "green"
+                alert.result_minute = minute
+                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
                 alert.ht_score = current_score
                 alert.ht_stats_json = stats_to_json(stats_payload["stats"])
                 db.session.commit()
@@ -408,6 +412,8 @@ def follow_alerts(session):
 
             if is_half_time(time_text, minute):
                 alert.status = "red"
+                alert.result_minute = minute
+                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
                 alert.ht_score = current_score or alert.initial_score
                 alert.ht_stats_json = stats_to_json(stats_payload["stats"])
                 db.session.commit()
@@ -445,6 +451,8 @@ def finalize_full_time(session):
             outcome = evaluate_outcome(rule, alert, stats_payload, "FT")
             if outcome:
                 alert.status = outcome
+                alert.result_minute = minute
+                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
         db.session.commit()
         export_alert(alert, alert.rule.name, EXPORT_DIR)
         if rule_has_custom_outcomes(rule) and alert.status in ("green", "red"):
