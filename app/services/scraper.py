@@ -125,7 +125,10 @@ def parse_minutes(time_text: str):
 
 
 def fetch_live_games(session):
-    resp = get_with_fallback(session, BASE_URL)
+    try:
+        resp = get_with_fallback(session, BASE_URL)
+    except requests.RequestException:
+        return [], None
     if resp.status_code != 200:
         return [], resp.status_code
     soup = BeautifulSoup(resp.text, "html.parser")

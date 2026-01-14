@@ -18,6 +18,7 @@ GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
 EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
+API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
 
@@ -26,6 +27,30 @@ def update_api_status(ok: bool, code: int | None):
     API_STATUS["ok"] = ok
     API_STATUS["code"] = code
     API_STATUS["checked_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    notify_api_status(ok, code)
+
+
+def notify_api_status(ok: bool, code: int | None):
+    last_ok = API_ALERT_STATE.get("last_ok")
+    if last_ok is None:
+        API_ALERT_STATE["last_ok"] = ok
+        return
+    if last_ok == ok:
+        return
+    API_ALERT_STATE["last_ok"] = ok
+    from ..models import User
+    users = User.query.filter_by(telegram_verified=True).all()
+    if not users:
+        return
+    if ok:
+        message = "API voltou ao normal (status 200)."
+    else:
+        reason = f"HTTP {code}" if code else "erro de conexao/anti-bot"
+        message = f"API OFF: possivel anti-bot ativo ({reason})."
+    for user in users:
+        if not user.telegram_token or not user.telegram_chat_id:
+            continue
+        send_message(user.telegram_token, user.telegram_chat_id, message)
 
 
 def get_api_status():
