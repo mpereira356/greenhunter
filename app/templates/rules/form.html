@@ -936,8 +936,11 @@
   }
 
   function updatePreview() {
-    const name = document.querySelector("input[name='name']").value || "Regra";
-    const limit = document.querySelector("input[name='time_limit_min']").value || "?";
+    const activeSection = (advancedSection && advancedSection.style.display !== "none") ? advancedSection : simpleSection;
+    const nameInput = activeSection ? activeSection.querySelector("input[name='name']") : null;
+    const limitInput = activeSection ? activeSection.querySelector("input[name='time_limit_min']") : null;
+    const name = nameInput && nameInput.value ? nameInput.value : "Regra";
+    const limit = limitInput && limitInput.value ? limitInput.value : "?";
     const groupParts = [];
     groupsContainer.querySelectorAll(".alert-group").forEach((groupEl) => {
       const parts = [];
