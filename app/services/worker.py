@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
 from ..models import MatchAlert, Rule, User
-from .evaluator import compare, evaluate_conditions, evaluate_rule, render_message, stats_to_json
+from .evaluator import compare, evaluate_rule, render_message, stats_to_json
 from .exporter import export_alert
 from .scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
 from .telegram import send_message
@@ -42,17 +42,21 @@ def notify_api_status(ok: bool, code: int | None):
             if user.telegram_token and user.telegram_chat_id:
                 send_message(user.telegram_token, user.telegram_chat_id, message)
         return
+
     if last_ok == ok:
         return
+
     API_ALERT_STATE["last_ok"] = ok
     users = User.query.filter_by(telegram_verified=True).all()
     if not users:
         return
+
     if ok:
         message = "API voltou ao normal (status 200)."
     else:
         reason = f"HTTP {code}" if code else "erro de conexao/anti-bot"
         message = f"API OFF: possivel anti-bot ativo ({reason})."
+
     for user in users:
         if not user.telegram_token or not user.telegram_chat_id:
             continue
@@ -83,7 +87,7 @@ def is_full_time(time_text: str, minute: int) -> bool:
         return True
     if "fim" in text or "encerrado" in text or "final" in text:
         return True
-    return minute >= 90 and minute <= 130
+    return 90 <= minute <= 130
 
 
 def parse_score(score_text: str):
@@ -104,6 +108,7 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         return
     if game_id in SECOND_HALF_BASELINES:
         return
+
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     if is_half_time(time_text, minute) or minute >= 46:
@@ -118,70 +123,18 @@ def apply_second_half_delta(stats, baseline):
         if key in NON_DELTA_KEYS:
             adjusted[key] = value.copy()
             continue
+
         base = baseline.get(key)
         if not base:
             adjusted[key] = value.copy()
             continue
+
         adjusted[key] = {
             "home": max(0, value.get("home", 0) - base.get("home", 0)),
             "away": max(0, value.get("away", 0) - base.get("away", 0)),
             "total": max(0, value.get("total", 0) - base.get("total", 0)),
         }
     return adjusted
-
-
-def get_outcome_conditions(rule, outcome_type: str):
-    return [c for c in rule.outcome_conditions if c.outcome_type == outcome_type]
-
-
-def evaluate_outcome(rule, alert, stats_payload, stage: str):
-    green_conditions = get_outcome_conditions(rule, "green")
-    red_conditions = get_outcome_conditions(rule, "red")
-
-    green_stage = rule.outcome_green_stage
-    red_stage = rule.outcome_red_stage
-
-    def evaluate_outcome_conditions(conditions):
-        stats = stats_payload["stats"]
-        init_home, init_away = parse_score(alert.initial_score or "0 x 0")
-        init_total = init_home + init_away
-        for cond in conditions:
-            key = normalize_stat_key(cond.stat_key)
-            if key == "Goals":
-                current = stats.get("Goals")
-                if not current:
-                    return False
-                if cond.side == "home":
-                    value = max(0, current["home"] - init_home)
-                elif cond.side == "away":
-                    value = max(0, current["away"] - init_away)
-                else:
-                    value = max(0, current["total"] - init_total)
-            else:
-                if key not in stats:
-                    return False
-                value = stats[key].get(cond.side)
-                if value is None:
-                    return False
-            if not compare(cond.operator, value, cond.value):
-                return False
-        return True
-
-    green_match = False
-    red_match = False
-    if green_conditions and green_stage == stage:
-        green_match = evaluate_outcome_conditions(green_conditions)
-    if red_conditions and red_stage == stage:
-        red_match = evaluate_outcome_conditions(red_conditions)
-
-    if green_match:
-        return "green"
-    if red_match:
-        return "red"
-
-    if not red_conditions and green_conditions and stage == red_stage:
-        return "red"
-    return None
 
 
 def rule_has_custom_outcomes(rule):
@@ -203,6 +156,7 @@ def run_worker(app):
                 finalize_full_time(session)
             except Exception as exc:
                 print(f"[worker] erro: {exc}")
+
             API_STATUS["last_cycle"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             time.sleep(POLL_INTERVAL)
 
@@ -210,17 +164,23 @@ def run_worker(app):
 def process_live_games(session):
     games, status_code = fetch_live_games(session)
     update_api_status(status_code == 200, status_code)
+
     if not games:
         return
+
     active_rules = Rule.query.filter_by(is_active=True).all()
+
     for game in games:
         minute = game.get("minute")
         if minute is None:
             continue
+
         candidate_rules = [r for r in active_rules if minute <= r.time_limit_min]
         if not candidate_rules:
             continue
+
         candidate_ids = [r.id for r in candidate_rules]
+
         existing = (
             MatchAlert.query.filter(
                 MatchAlert.game_id == game["game_id"],
@@ -229,22 +189,30 @@ def process_live_games(session):
             .with_entities(MatchAlert.rule_id)
             .all()
         )
+
         existing_ids = {row.rule_id for row in existing}
 
         stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
             continue
+
         ensure_second_half_baseline(game["game_id"], stats_payload)
+
         match_desc = f"{stats_payload.get('home_team')} vs {stats_payload.get('away_team')}"
         now = datetime.utcnow()
+
         for rule in candidate_rules:
             rule.last_checked_at = now
             rule.last_match_desc = match_desc
+
         db.session.commit()
+
         for rule in candidate_rules:
             if rule.id in existing_ids:
                 continue
+
             stats_for_rule = stats_payload["stats"]
+
             if rule.second_half_only:
                 if minute < 46:
                     continue
@@ -252,8 +220,10 @@ def process_live_games(session):
                 if not baseline:
                     continue
                 stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
+
             if not evaluate_rule(rule, stats_for_rule):
                 continue
+
             user = rule.user
             if not user or not user.telegram_token or not user.telegram_chat_id:
                 continue
@@ -271,12 +241,15 @@ def process_live_games(session):
                 home_team=stats_payload.get("home_team"),
                 away_team=stats_payload.get("away_team"),
             )
+
             db.session.add(alert)
+
             try:
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
                 continue
+
             rule.last_alert_at = datetime.utcnow()
             rule.last_alert_desc = match_desc
             db.session.commit()
@@ -285,11 +258,13 @@ def process_live_games(session):
             message = render_message(rule, meta)
             send_message(user.telegram_token, user.telegram_chat_id, message)
             export_alert(alert, rule.name, EXPORT_DIR)
+
         time.sleep(GAME_DELAY)
 
 
 def build_message_meta(rule, stats_payload, game):
     stats = stats_payload.get("stats", {})
+
     def stat_value(key, side):
         value = stats.get(key)
         if not value:
@@ -311,160 +286,112 @@ def build_message_meta(rule, stats_payload, game):
         "corners_home": stat_value("Corners", "home"),
         "corners_away": stat_value("Corners", "away"),
         "corners_total": stat_value("Corners", "total"),
-        "corners_half_home": stat_value("Corners (Half)", "home"),
-        "corners_half_away": stat_value("Corners (Half)", "away"),
-        "corners_half_total": stat_value("Corners (Half)", "total"),
         "on_target_home": stat_value("On Target", "home"),
         "on_target_away": stat_value("On Target", "away"),
         "on_target_total": stat_value("On Target", "total"),
-        "off_target_home": stat_value("Off Target", "home"),
-        "off_target_away": stat_value("Off Target", "away"),
-        "off_target_total": stat_value("Off Target", "total"),
         "dangerous_attacks_home": stat_value("Dangerous Attacks", "home"),
         "dangerous_attacks_away": stat_value("Dangerous Attacks", "away"),
         "dangerous_attacks_total": stat_value("Dangerous Attacks", "total"),
-        "attacks_home": stat_value("Attacks", "home"),
-        "attacks_away": stat_value("Attacks", "away"),
-        "attacks_total": stat_value("Attacks", "total"),
-        "yellow_cards_home": stat_value("Yellow Card", "home"),
-        "yellow_cards_away": stat_value("Yellow Card", "away"),
-        "yellow_cards_total": stat_value("Yellow Card", "total"),
-        "red_cards_home": stat_value("Red Card", "home"),
-        "red_cards_away": stat_value("Red Card", "away"),
-        "red_cards_total": stat_value("Red Card", "total"),
-        "yellow_red_cards_home": stat_value("Yellow/Red Card", "home"),
-        "yellow_red_cards_away": stat_value("Yellow/Red Card", "away"),
-        "yellow_red_cards_total": stat_value("Yellow/Red Card", "total"),
-        "penalties_home": stat_value("Penalties", "home"),
-        "penalties_away": stat_value("Penalties", "away"),
-        "penalties_total": stat_value("Penalties", "total"),
-        "ball_safe_home": stat_value("Ball Safe", "home"),
-        "ball_safe_away": stat_value("Ball Safe", "away"),
-        "ball_safe_total": stat_value("Ball Safe", "total"),
-        "substitutions_home": stat_value("Substitutions", "home"),
-        "substitutions_away": stat_value("Substitutions", "away"),
-        "substitutions_total": stat_value("Substitutions", "total"),
-        "possession_home": stat_value("Possession", "home"),
-        "possession_away": stat_value("Possession", "away"),
-        "possession_total": stat_value("Possession", "total"),
     }
+
     return meta
 
 
 def follow_alerts(session):
     pending_alerts = MatchAlert.query.filter_by(status="pending").all()
+
     for alert in pending_alerts:
         rule = alert.rule
         if rule and not rule.follow_ht:
             continue
+
         stats_payload = fetch_match_stats(session, alert.url)
         if not stats_payload:
             continue
+
         ensure_second_half_baseline(alert.game_id, stats_payload)
+
         time_text = stats_payload.get("time_text", "")
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
 
-        if rule_has_custom_outcomes(rule):
-            if is_half_time(time_text, minute):
-                outcome = evaluate_outcome(rule, alert, stats_payload, "HT")
-                if outcome:
-                alert.status = outcome
-                alert.result_minute = minute
-                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
-                alert.ht_score = current_score or alert.initial_score
-                alert.ht_stats_json = stats_to_json(stats_payload["stats"])
-                db.session.commit()
-                    export_alert(alert, alert.rule.name, EXPORT_DIR)
-                    status_icon = "✅" if outcome == "green" else "❌"
-                    send_message(
-                        alert.user.telegram_token,
-                        alert.user.telegram_chat_id,
-                        f"{status_icon} {outcome.upper()} - {rule.name}\n"
-                        f"{alert.home_team} vs {alert.away_team}\n"
-                        f"Tempo: HT\n"
-                        f"Placar: {alert.ht_score}\n"
-                        f"Link: {alert.url}",
-                    )
-        else:
-            if (
-                alert.initial_score
-                and current_score != alert.initial_score
-                and is_first_half_goal(time_text, minute)
-            ):
-                alert.status = "green"
-                alert.result_minute = minute
-                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
-                alert.ht_score = current_score
-                alert.ht_stats_json = stats_to_json(stats_payload["stats"])
-                db.session.commit()
-                export_alert(alert, alert.rule.name, EXPORT_DIR)
-                send_message(
-                    alert.user.telegram_token,
-                    alert.user.telegram_chat_id,
-                    f"✅ GREEN - gol no 1o tempo\n"
-                    f"{alert.home_team} vs {alert.away_team}\n"
-                    f"Tempo: {minute}'\n"
-                    f"Placar: {current_score}\n"
-                    f"Link: {alert.url}",
-                )
-                continue
+        # GREEN se saiu gol no 1º tempo
+        if (
+            alert.initial_score
+            and current_score != alert.initial_score
+            and is_first_half_goal(time_text, minute)
+        ):
+            alert.status = "green"
+            alert.result_minute = minute
+            alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+            alert.ht_score = current_score
+            alert.ht_stats_json = stats_to_json(stats_payload["stats"])
+            db.session.commit()
 
-            if is_half_time(time_text, minute):
-                alert.status = "red"
-                alert.result_minute = minute
-                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
-                alert.ht_score = current_score or alert.initial_score
-                alert.ht_stats_json = stats_to_json(stats_payload["stats"])
-                db.session.commit()
-                export_alert(alert, alert.rule.name, EXPORT_DIR)
-                send_message(
-                    alert.user.telegram_token,
-                    alert.user.telegram_chat_id,
-                    f"❌ RED - fim do 1o tempo sem gol\n"
-                    f"{alert.home_team} vs {alert.away_team}\n"
-                    f"Tempo: HT\n"
-                    f"Placar: {alert.ht_score}\n"
-                    f"Link: {alert.url}",
-                )
+            export_alert(alert, alert.rule.name, EXPORT_DIR)
+
+            send_message(
+                alert.user.telegram_token,
+                alert.user.telegram_chat_id,
+                f"✅ GREEN - gol no 1o tempo\n"
+                f"{alert.home_team} vs {alert.away_team}\n"
+                f"Tempo: {minute}'\n"
+                f"Placar: {current_score}\n"
+                f"Link: {alert.url}",
+            )
+            continue
+
+        # RED no intervalo
+        if is_half_time(time_text, minute):
+            alert.status = "red"
+            alert.result_minute = minute
+            alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+            alert.ht_score = current_score or alert.initial_score
+            alert.ht_stats_json = stats_to_json(stats_payload["stats"])
+            db.session.commit()
+
+            export_alert(alert, alert.rule.name, EXPORT_DIR)
+
+            send_message(
+                alert.user.telegram_token,
+                alert.user.telegram_chat_id,
+                f"❌ RED - fim do 1o tempo sem gol\n"
+                f"{alert.home_team} vs {alert.away_team}\n"
+                f"Tempo: HT\n"
+                f"Placar: {alert.ht_score}\n"
+                f"Link: {alert.url}",
+            )
+
         time.sleep(0.4)
 
 
 def finalize_full_time(session):
     candidates = MatchAlert.query.filter_by(ft_completed=False).all()
+
     for alert in candidates:
         rule = alert.rule
         if rule and not rule.follow_ft:
             continue
+
         stats_payload = fetch_match_stats(session, alert.url)
         if not stats_payload:
             continue
+
         ensure_second_half_baseline(alert.game_id, stats_payload)
+
         time_text = stats_payload.get("time_text", "")
         minute = stats_payload.get("minute") or 0
+
         if not is_full_time(time_text, minute):
             continue
+
         alert.ft_score = stats_payload.get("score")
         alert.ft_stats_json = stats_to_json(stats_payload["stats"])
         alert.ft_completed = True
-        if rule_has_custom_outcomes(rule) and alert.status == "pending":
-            outcome = evaluate_outcome(rule, alert, stats_payload, "FT")
-            if outcome:
-                alert.status = outcome
-                alert.result_minute = minute
-                alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
         db.session.commit()
+
         export_alert(alert, alert.rule.name, EXPORT_DIR)
-        if rule_has_custom_outcomes(rule) and alert.status in ("green", "red"):
-            status_icon = "✅" if alert.status == "green" else "❌"
-            send_message(
-                alert.user.telegram_token,
-                alert.user.telegram_chat_id,
-                f"{status_icon} {alert.status.upper()} - {rule.name}\n"
-                f"{alert.home_team} vs {alert.away_team}\n"
-                f"Tempo: FT\n"
-                f"Placar: {alert.ft_score}\n"
-                f"Link: {alert.url}",
-            )
+
         SECOND_HALF_BASELINES.pop(alert.game_id, None)
+
         time.sleep(0.4)
