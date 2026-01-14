@@ -34,6 +34,12 @@ def notify_api_status(ok: bool, code: int | None):
     last_ok = API_ALERT_STATE.get("last_ok")
     if last_ok is None:
         API_ALERT_STATE["last_ok"] = ok
+        if not ok:
+            reason = f"HTTP {code}" if code else "erro de conexao/anti-bot"
+            message = f"API OFF: possivel anti-bot ativo ({reason})."
+            for user in User.query.filter_by(telegram_verified=True).all():
+                if user.telegram_token and user.telegram_chat_id:
+                    send_message(user.telegram_token, user.telegram_chat_id, message)
         return
     if last_ok == ok:
         return

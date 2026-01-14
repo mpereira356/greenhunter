@@ -84,6 +84,12 @@
         {% endif %}
       {% endwith %}
 
+      {% if active_broadcast %}
+        <div class="alert alert-info">
+          {{ active_broadcast.message }}
+        </div>
+      {% endif %}
+
       {% if current_user.is_authenticated and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified) %}
         <div class="alert alert-warning">
           Configure e teste seu Telegram em <a href="{{ url_for('settings.settings') }}">Configuracoes</a> para receber alertas.

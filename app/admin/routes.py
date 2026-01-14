@@ -5,7 +5,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import case, func
 
 from ..extensions import db
-from ..models import LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..models import AdminBroadcast, LoginAttempt, MatchAlert, Rule, RuleCondition, User
 from ..services.worker import get_api_status
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -143,6 +143,7 @@ def dashboard():
         risk_users=risk_users,
         alerts_per_hour_threshold=ALERTS_PER_HOUR_THRESHOLD,
         login_attempts=LoginAttempt.query.order_by(LoginAttempt.created_at.desc()).limit(20).all(),
+        broadcasts=AdminBroadcast.query.order_by(AdminBroadcast.created_at.desc()).limit(5).all(),
         api_status=get_api_status(),
     )
 
@@ -268,3 +269,24 @@ def toggle_rule(rule_id):
     db.session.commit()
     flash("Status da regra atualizado.", "success")
     return redirect(request.referrer or url_for("admin.dashboard"))
+
+
+@admin_bp.route("/broadcast", methods=["POST"])
+@login_required
+def broadcast():
+    _require_admin()
+    message = (request.form.get("message") or "").strip()
+    send_telegram = bool(request.form.get("send_telegram"))
+    if not message:
+        flash("Mensagem obrigatoria.", "warning")
+        return redirect(url_for("admin.dashboard"))
+    AdminBroadcast.query.update({"is_active": False})
+    db.session.add(AdminBroadcast(message=message, is_active=True))
+    db.session.commit()
+    if send_telegram:
+        users = User.query.filter_by(telegram_verified=True).all()
+        for user in users:
+            if user.telegram_token and user.telegram_chat_id:
+                send_message(user.telegram_token, user.telegram_chat_id, message)
+    flash("Mensagem enviada para o painel.", "success")
+    return redirect(url_for("admin.dashboard"))

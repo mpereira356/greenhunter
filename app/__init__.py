@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from .extensions import db, login_manager
-from .models import User
+from .models import AdminBroadcast, User
 from .services.worker import start_worker
 
 
@@ -49,6 +49,11 @@ def create_app():
 
     if os.environ.get("DISABLE_WORKER") != "1":
         start_worker(app)
+
+    @app.context_processor
+    def inject_broadcast():
+        broadcast = AdminBroadcast.query.filter_by(is_active=True).order_by(AdminBroadcast.created_at.desc()).first()
+        return {"active_broadcast": broadcast}
 
     return app
 
