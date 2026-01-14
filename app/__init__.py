@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from dotenv import load_dotenv
 from flask import Flask
+from flask_login import current_user
 
 from .extensions import db, login_manager
 from .models import AdminBroadcast, AdminBroadcastView, User
