@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from .extensions import db, login_manager
-from .models import AdminBroadcast, User
+from .models import AdminBroadcast, AdminBroadcastView, User
 from .services.worker import start_worker
 
 
@@ -52,7 +52,22 @@ def create_app():
 
     @app.context_processor
     def inject_broadcast():
-        broadcast = AdminBroadcast.query.filter_by(is_active=True).order_by(AdminBroadcast.created_at.desc()).first()
+        if not getattr(current_user, "is_authenticated", False):
+            return {"active_broadcast": None}
+        broadcast = (
+            AdminBroadcast.query.filter_by(is_active=True)
+            .order_by(AdminBroadcast.created_at.desc())
+            .first()
+        )
+        if not broadcast:
+            return {"active_broadcast": None}
+        seen = AdminBroadcastView.query.filter_by(
+            broadcast_id=broadcast.id, user_id=current_user.id
+        ).first()
+        if seen:
+            return {"active_broadcast": None}
+        db.session.add(AdminBroadcastView(broadcast_id=broadcast.id, user_id=current_user.id))
+        db.session.commit()
         return {"active_broadcast": broadcast}
 
     return app

@@ -120,3 +120,14 @@ class AdminBroadcast(db.Model):
     message = db.Column(db.Text, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AdminBroadcastView(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    broadcast_id = db.Column(db.Integer, db.ForeignKey("admin_broadcast.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("broadcast_id", "user_id", name="uix_broadcast_user"),
+    )
