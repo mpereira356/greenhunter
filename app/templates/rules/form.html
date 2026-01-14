@@ -499,7 +499,7 @@
             {% for gid, group in ns.groups.items() %}
               <div class="alert-group" data-group="{{ gid }}">
                 <div class="alert-group-header">
-                  <div class="alert-group-title">Grupo {{ loop.index }} (OU)</div>
+                  <div class="alert-group-title">Grupo {{ loop.index }} (E)</div>
                   {% if ns.groups|length > 1 %}
                     <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover grupo</button>
                   {% endif %}
@@ -564,7 +564,7 @@
             {% endfor %}
           </div>
 
-          <button type="button" class="btn btn-outline-dark" id="add-group">Adicionar grupo (OU)</button>
+          <button type="button" class="btn btn-outline-dark" id="add-group">Adicionar grupo (E)</button>
           <button type="button" class="btn btn-outline-primary ms-2" id="test-rule">Testar regra</button>
           <div class="mt-4">
             <button class="btn btn-success" type="submit">Salvar</button>
