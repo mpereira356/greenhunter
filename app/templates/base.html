@@ -31,6 +31,9 @@
           <a class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
             <span class="nav-icon">D</span> Dashboard
           </a>
+          <a class="nav-link {% if request.endpoint == 'main.live' %}active{% endif %}" href="{{ url_for('main.live') }}">
+            <span class="nav-icon">L</span> Ao Vivo
+          </a>
           {% if current_user.is_admin_user %}
           <a class="nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}" href="{{ url_for('admin.dashboard') }}">
             <span class="nav-icon">A</span> Admin

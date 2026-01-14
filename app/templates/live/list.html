@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Ao Vivo{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Jogos ao vivo</div>
+    <div class="page-subtitle">Monitoramento em tempo real (somente leitura).</div>
+  </div>
+  <div class="page-actions">
+    <form method="get" class="d-flex gap-2">
+      <input class="form-control" type="text" name="q" placeholder="Buscar time ou liga" value="{{ query }}">
+      <button class="btn btn-primary" type="submit">Buscar</button>
+    </form>
+  </div>
+</div>
+
+{% if status_code != 200 %}
+  <div class="alert alert-warning">API OFF (HTTP {{ status_code }}). Tente novamente.</div>
+{% endif %}
+
+{% if matches %}
+  <div class="table-card">
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Liga</th>
+            <th>Jogo</th>
+            <th>Min</th>
+            <th>Placar</th>
+            <th>Chutes no alvo</th>
+            <th>Escanteios</th>
+            <th>Ataques perigosos</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in matches %}
+          <tr>
+            <td>{{ item.league }}</td>
+            <td>{{ item.home_team }} vs {{ item.away_team }}</td>
+            <td>{{ item.minute }}</td>
+            <td>{{ item.score }}</td>
+            <td>{{ item.on_target_home }} x {{ item.on_target_away }}</td>
+            <td>{{ item.corners_home }} x {{ item.corners_away }}</td>
+            <td>{{ item.dangerous_home }} x {{ item.dangerous_away }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% else %}
+  <div class="card-soft p-4">
+    <div class="fw-semibold mb-1">Nenhum jogo encontrado.</div>
+    <div class="text-muted">Tente ajustar o filtro ou aguarde novos jogos ao vivo.</div>
+  </div>
+{% endif %}
+{% endblock %}

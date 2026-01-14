@@ -343,10 +343,15 @@ def follow_alerts(session):
                     alert.ht_stats_json = stats_to_json(stats_payload["stats"])
                     db.session.commit()
                     export_alert(alert, alert.rule.name, EXPORT_DIR)
+                    status_icon = "✅" if outcome == "green" else "❌"
                     send_message(
                         alert.user.telegram_token,
                         alert.user.telegram_chat_id,
-                        f"{outcome.upper()}: regra {rule.name}\n{alert.home_team} vs {alert.away_team}\nPlacar: {alert.ht_score}",
+                        f"{status_icon} {outcome.upper()} - {rule.name}\n"
+                        f"{alert.home_team} vs {alert.away_team}\n"
+                        f"Tempo: HT\n"
+                        f"Placar: {alert.ht_score}\n"
+                        f"Link: {alert.url}",
                     )
         else:
             if (
@@ -362,7 +367,11 @@ def follow_alerts(session):
                 send_message(
                     alert.user.telegram_token,
                     alert.user.telegram_chat_id,
-                    f"GREEN: gol no 1o tempo\n{alert.home_team} vs {alert.away_team}\nPlacar: {current_score}",
+                    f"✅ GREEN - gol no 1o tempo\n"
+                    f"{alert.home_team} vs {alert.away_team}\n"
+                    f"Tempo: {minute}'\n"
+                    f"Placar: {current_score}\n"
+                    f"Link: {alert.url}",
                 )
                 continue
 
@@ -375,7 +384,11 @@ def follow_alerts(session):
                 send_message(
                     alert.user.telegram_token,
                     alert.user.telegram_chat_id,
-                    f"RED: fim do 1o tempo sem gol\n{alert.home_team} vs {alert.away_team}\nPlacar: {alert.ht_score}",
+                    f"❌ RED - fim do 1o tempo sem gol\n"
+                    f"{alert.home_team} vs {alert.away_team}\n"
+                    f"Tempo: HT\n"
+                    f"Placar: {alert.ht_score}\n"
+                    f"Link: {alert.url}",
                 )
         time.sleep(0.4)
 
@@ -404,10 +417,15 @@ def finalize_full_time(session):
         db.session.commit()
         export_alert(alert, alert.rule.name, EXPORT_DIR)
         if rule_has_custom_outcomes(rule) and alert.status in ("green", "red"):
+            status_icon = "✅" if alert.status == "green" else "❌"
             send_message(
                 alert.user.telegram_token,
                 alert.user.telegram_chat_id,
-                f"{alert.status.upper()}: regra {rule.name}\n{alert.home_team} vs {alert.away_team}\nPlacar: {alert.ft_score}",
+                f"{status_icon} {alert.status.upper()} - {rule.name}\n"
+                f"{alert.home_team} vs {alert.away_team}\n"
+                f"Tempo: FT\n"
+                f"Placar: {alert.ft_score}\n"
+                f"Link: {alert.url}",
             )
         SECOND_HALF_BASELINES.pop(alert.game_id, None)
         time.sleep(0.4)

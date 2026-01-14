@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import MatchAlert, Rule
 from ..services.worker import get_api_status
+from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
 
 main_bp = Blueprint("main", __name__)
 
@@ -121,3 +122,48 @@ def dashboard():
 @main_bp.route("/api/status")
 def api_status():
     return jsonify(get_api_status())
+
+
+@main_bp.route("/live")
+@login_required
+def live():
+    query = (request.args.get("q") or "").strip().lower()
+    limit = 12
+    session = make_session()
+    games, status_code = fetch_live_games(session)
+    matches = []
+    if status_code != 200:
+        return render_template("live/list.html", matches=[], query=query, status_code=status_code)
+    for game in games:
+        if len(matches) >= limit:
+            break
+        stats_payload = fetch_match_stats(session, game["url"])
+        if not stats_payload:
+            continue
+        hay = " ".join(
+            [
+                stats_payload.get("league", ""),
+                stats_payload.get("home_team", ""),
+                stats_payload.get("away_team", ""),
+            ]
+        ).lower()
+        if query and query not in hay:
+            continue
+        stats = stats_payload.get("stats", {})
+        matches.append(
+            {
+                "league": stats_payload.get("league"),
+                "home_team": stats_payload.get("home_team"),
+                "away_team": stats_payload.get("away_team"),
+                "minute": stats_payload.get("minute"),
+                "score": stats_payload.get("score"),
+                "url": game["url"],
+                "on_target_home": stats.get("On Target", {}).get("home"),
+                "on_target_away": stats.get("On Target", {}).get("away"),
+                "corners_home": stats.get("Corners", {}).get("home"),
+                "corners_away": stats.get("Corners", {}).get("away"),
+                "dangerous_home": stats.get("Dangerous Attacks", {}).get("home"),
+                "dangerous_away": stats.get("Dangerous Attacks", {}).get("away"),
+            }
+        )
+    return render_template("live/list.html", matches=matches, query=query, status_code=200)
