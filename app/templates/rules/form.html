@@ -599,17 +599,21 @@
   const modeButtons = document.querySelectorAll(".mode-btn");
   const simpleSection = document.querySelector(".simple-builder");
   const advancedSection = document.querySelector(".advanced-builder");
-
+  let allowSync = true;
+  let currentMode = "simple";
   function switchMode(mode) {
+    currentMode = mode;
     modeButtons.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.mode === mode);
     });
     if (mode === "simple") {
       simpleSection.style.display = "block";
       advancedSection.style.display = "none";
+      allowSync = true;
     } else {
       simpleSection.style.display = "none";
       advancedSection.style.display = "block";
+      allowSync = false;
     }
     setSectionState(simpleSection, mode === "simple");
     setSectionState(advancedSection, mode === "advanced");
@@ -617,7 +621,7 @@
 
   function setSectionState(section, enabled) {
     if (!section) return;
-    section.querySelectorAll("input, select, textarea, button").forEach((el) => {
+    section.querySelectorAll("input, select, textarea").forEach((el) => {
       if (el.closest(".mode-toggle")) return;
       if (el.type === "submit") return;
       if (enabled) {
@@ -936,7 +940,7 @@
   }
 
   function updatePreview() {
-    const activeSection = (advancedSection && advancedSection.style.display !== "none") ? advancedSection : simpleSection;
+    const activeSection = currentMode === "advanced" ? advancedSection : simpleSection;
     const nameInput = activeSection ? activeSection.querySelector("input[name='name']") : null;
     const limitInput = activeSection ? activeSection.querySelector("input[name='time_limit_min']") : null;
     const name = nameInput && nameInput.value ? nameInput.value : "Regra";
@@ -1013,7 +1017,7 @@
   const simpleOutcomeOperator = document.getElementById("simple-outcome-operator");
   const simpleOutcomeValue = document.getElementById("simple-outcome-value");
   const hasExistingRule = {{ 'true' if rule and rule.conditions else 'false' }};
-  let allowSync = !hasExistingRule;
+  allowSync = !hasExistingRule;
 
   function getSimpleSide() {
     const btn = document.querySelector("#simple-side .seg-btn.active");
@@ -1021,6 +1025,9 @@
   }
 
   function updateSummary() {
+    if (currentMode !== "simple") {
+      return;
+    }
     const statLabel = simpleStat.options[simpleStat.selectedIndex].text;
     const side = getSimpleSide().toUpperCase();
     const value = simpleValue.value || 0;
@@ -1427,6 +1434,9 @@
   updateMessagePreviews();
 
   document.getElementById("rule-form").addEventListener("submit", () => {
+    if (currentMode !== "simple") {
+      return;
+    }
     if (simpleMinuteToggle.checked) {
       if (!simpleMinuteExact.value) {
         simpleMinuteExact.value = simpleSecondHalf && simpleSecondHalf.checked ? "46" : "1";
