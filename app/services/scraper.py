@@ -75,11 +75,15 @@ def normalize_stat_key(name: str) -> str:
             return "Off Target"
     if "dangerous" in raw and "attack" in raw:
         return "Dangerous Attacks"
+    if "ataques perigosos" in raw or "ataque perigoso" in raw:
+        return "Dangerous Attacks"
     if "corners" in raw and "half" in raw:
         return "Corners (Half)"
     if raw == "corners" or "corner" in raw:
         return "Corners"
     if raw == "attacks" or "attack" in raw:
+        return "Attacks"
+    if raw in ("ataques", "ataque"):
         return "Attacks"
     if "possession" in raw:
         return "Possession"

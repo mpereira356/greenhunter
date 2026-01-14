@@ -150,6 +150,20 @@ def live():
         if query and query not in hay:
             continue
         stats = stats_payload.get("stats", {})
+        raw_stats = stats_payload.get("raw_stats", {})
+        raw_dangerous = raw_stats.get("Dangerous Attacks", ("-", "-"))
+        raw_on_target = raw_stats.get("On Target", ("-", "-"))
+        raw_corners = raw_stats.get("Corners", ("-", "-"))
+        stats_list = []
+        for key, values in sorted(raw_stats.items()):
+            home_val, away_val = values
+            stats_list.append(
+                {
+                    "key": key,
+                    "home": home_val or "-",
+                    "away": away_val or "-",
+                }
+            )
         matches.append(
             {
                 "league": stats_payload.get("league"),
@@ -158,12 +172,13 @@ def live():
                 "minute": stats_payload.get("minute"),
                 "score": stats_payload.get("score"),
                 "url": game["url"],
-                "on_target_home": stats.get("On Target", {}).get("home"),
-                "on_target_away": stats.get("On Target", {}).get("away"),
-                "corners_home": stats.get("Corners", {}).get("home"),
-                "corners_away": stats.get("Corners", {}).get("away"),
-                "dangerous_home": stats.get("Dangerous Attacks", {}).get("home"),
-                "dangerous_away": stats.get("Dangerous Attacks", {}).get("away"),
+                "on_target_home": stats.get("On Target", {}).get("home", raw_on_target[0] or "-"),
+                "on_target_away": stats.get("On Target", {}).get("away", raw_on_target[1] or "-"),
+                "corners_home": stats.get("Corners", {}).get("home", raw_corners[0] or "-"),
+                "corners_away": stats.get("Corners", {}).get("away", raw_corners[1] or "-"),
+                "dangerous_home": stats.get("Dangerous Attacks", {}).get("home", raw_dangerous[0] or "-"),
+                "dangerous_away": stats.get("Dangerous Attacks", {}).get("away", raw_dangerous[1] or "-"),
+                "stats_list": stats_list,
             }
         )
     return render_template("live/list.html", matches=matches, query=query, status_code=200)
