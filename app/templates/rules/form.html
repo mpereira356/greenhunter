@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Regra{% endblock %}
 {% block content %}
-{% set default_message = '*{rule}*\nJogo: {home_team} x {away_team}\nMinuto: {minute} | Placar: *{score}*\nLiga: {league}\nLink: {url}' %}
+{% set default_message = '📢 {rule}\n⏱️ Tempo: {minute}\' (Máx: {time_limit} min)\n🏟️ {home_team} vs {away_team}\n🥅 Placar: {score}\n🎯 À Baliza: {on_target_home} x {on_target_away}\n🚩 Escanteios: {corners_home} x {corners_away}\n🔗 Abrir no site ({url})' %}
 <div class="builder-shell rule-editor">
   <div class="page-header">
     <div>
@@ -142,10 +142,13 @@
             <label class="form-label">Mensagem personalizada (opcional)</label>
             <textarea class="form-control message-template" name="message_template" rows="4">{{ rule.message_template if rule and rule.message_template else default_message }}</textarea>
             <div class="form-text">
-              Ex: "{rule} - {home_team} x {away_team} ({minute}') {score} - {league} - {url}"
+              Ex: "📢 {rule} - {home_team} x {away_team} ({minute}') {score}"
             </div>
             <div class="form-text">
-              Variaveis disponiveis: {rule}, {home_team}, {away_team}, {minute}, {score}, {league}, {url}
+              Variaveis: {rule}, {home_team}, {away_team}, {minute}, {time_limit}, {score}, {league}, {url}
+            </div>
+            <div class="form-text">
+              Stats: {on_target_home}/{on_target_away}/{on_target_total}, {corners_home}/{corners_away}/{corners_total}, {dangerous_attacks_home}/{dangerous_attacks_away}/{dangerous_attacks_total}, {attacks_home}/{attacks_away}/{attacks_total}, {off_target_home}/{off_target_away}/{off_target_total}, {yellow_cards_home}/{yellow_cards_away}/{yellow_cards_total}, {red_cards_home}/{red_cards_away}/{red_cards_total}
             </div>
             <div class="mt-2">
               <div class="form-text">Preview:</div>
@@ -284,10 +287,13 @@
             <label class="form-label">Mensagem personalizada (opcional)</label>
             <textarea class="form-control message-template" name="message_template" rows="4">{{ rule.message_template if rule and rule.message_template else default_message }}</textarea>
             <div class="form-text">
-              Ex: "{rule} - {home_team} x {away_team} ({minute}') {score} - {league} - {url}"
+              Ex: "📢 {rule} - {home_team} x {away_team} ({minute}') {score}"
             </div>
             <div class="form-text">
-              Variaveis disponiveis: {rule}, {home_team}, {away_team}, {minute}, {score}, {league}, {url}
+              Variaveis: {rule}, {home_team}, {away_team}, {minute}, {time_limit}, {score}, {league}, {url}
+            </div>
+            <div class="form-text">
+              Stats: {on_target_home}/{on_target_away}/{on_target_total}, {corners_home}/{corners_away}/{corners_total}, {dangerous_attacks_home}/{dangerous_attacks_away}/{dangerous_attacks_total}, {attacks_home}/{attacks_away}/{attacks_total}, {off_target_home}/{off_target_away}/{off_target_total}, {yellow_cards_home}/{yellow_cards_away}/{yellow_cards_total}, {red_cards_home}/{red_cards_away}/{red_cards_total}
             </div>
             <div class="mt-2">
               <div class="form-text">Preview:</div>

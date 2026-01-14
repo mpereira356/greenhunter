@@ -250,18 +250,74 @@ def process_live_games(session):
             rule.last_alert_desc = match_desc
             db.session.commit()
 
-            meta = {
-                "rule": rule.name,
-                "home_team": stats_payload.get("home_team"),
-                "away_team": stats_payload.get("away_team"),
-                "minute": minute,
-                "score": stats_payload.get("score"),
-                "url": game["url"],
-            }
+            meta = build_message_meta(rule, stats_payload, game)
             message = render_message(rule, meta)
             send_message(user.telegram_token, user.telegram_chat_id, message)
             export_alert(alert, rule.name, EXPORT_DIR)
         time.sleep(GAME_DELAY)
+
+
+def build_message_meta(rule, stats_payload, game):
+    stats = stats_payload.get("stats", {})
+    def stat_value(key, side):
+        value = stats.get(key)
+        if not value:
+            return ""
+        return value.get(side, "")
+
+    meta = {
+        "rule": rule.name,
+        "home_team": stats_payload.get("home_team"),
+        "away_team": stats_payload.get("away_team"),
+        "minute": stats_payload.get("minute"),
+        "score": stats_payload.get("score"),
+        "url": game.get("url"),
+        "league": stats_payload.get("league"),
+        "time_limit": rule.time_limit_min,
+        "goals_home": stat_value("Goals", "home"),
+        "goals_away": stat_value("Goals", "away"),
+        "goals_total": stat_value("Goals", "total"),
+        "corners_home": stat_value("Corners", "home"),
+        "corners_away": stat_value("Corners", "away"),
+        "corners_total": stat_value("Corners", "total"),
+        "corners_half_home": stat_value("Corners (Half)", "home"),
+        "corners_half_away": stat_value("Corners (Half)", "away"),
+        "corners_half_total": stat_value("Corners (Half)", "total"),
+        "on_target_home": stat_value("On Target", "home"),
+        "on_target_away": stat_value("On Target", "away"),
+        "on_target_total": stat_value("On Target", "total"),
+        "off_target_home": stat_value("Off Target", "home"),
+        "off_target_away": stat_value("Off Target", "away"),
+        "off_target_total": stat_value("Off Target", "total"),
+        "dangerous_attacks_home": stat_value("Dangerous Attacks", "home"),
+        "dangerous_attacks_away": stat_value("Dangerous Attacks", "away"),
+        "dangerous_attacks_total": stat_value("Dangerous Attacks", "total"),
+        "attacks_home": stat_value("Attacks", "home"),
+        "attacks_away": stat_value("Attacks", "away"),
+        "attacks_total": stat_value("Attacks", "total"),
+        "yellow_cards_home": stat_value("Yellow Card", "home"),
+        "yellow_cards_away": stat_value("Yellow Card", "away"),
+        "yellow_cards_total": stat_value("Yellow Card", "total"),
+        "red_cards_home": stat_value("Red Card", "home"),
+        "red_cards_away": stat_value("Red Card", "away"),
+        "red_cards_total": stat_value("Red Card", "total"),
+        "yellow_red_cards_home": stat_value("Yellow/Red Card", "home"),
+        "yellow_red_cards_away": stat_value("Yellow/Red Card", "away"),
+        "yellow_red_cards_total": stat_value("Yellow/Red Card", "total"),
+        "penalties_home": stat_value("Penalties", "home"),
+        "penalties_away": stat_value("Penalties", "away"),
+        "penalties_total": stat_value("Penalties", "total"),
+        "ball_safe_home": stat_value("Ball Safe", "home"),
+        "ball_safe_away": stat_value("Ball Safe", "away"),
+        "ball_safe_total": stat_value("Ball Safe", "total"),
+        "substitutions_home": stat_value("Substitutions", "home"),
+        "substitutions_away": stat_value("Substitutions", "away"),
+        "substitutions_total": stat_value("Substitutions", "total"),
+        "possession_home": stat_value("Possession", "home"),
+        "possession_away": stat_value("Possession", "away"),
+        "possession_total": stat_value("Possession", "total"),
+    }
+    return meta
 
 
 def follow_alerts(session):

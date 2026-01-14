@@ -48,6 +48,11 @@ def evaluate_rule(rule, stats: dict) -> bool:
     return False
 
 
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return ""
+
+
 def render_message(rule, meta: dict) -> str:
     default_msg = (
         f"Alerta: {rule.name}\n"
@@ -58,7 +63,7 @@ def render_message(rule, meta: dict) -> str:
     if not rule.message_template:
         return default_msg
     try:
-        return rule.message_template.format(**meta)
+        return rule.message_template.format_map(_SafeDict(meta))
     except Exception:
         return default_msg
 
