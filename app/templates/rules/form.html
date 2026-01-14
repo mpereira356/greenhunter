@@ -1061,7 +1061,7 @@
     const timeToUse = simpleMinuteToggle.checked ? (simpleMinuteExact.value || simpleTimeTo.value) : simpleTimeTo.value;
     simpleTimeLimit.value = timeToUse;
     buildHiddenConditions();
-    if (allowSync) {
+    if (allowSync && simpleSection && simpleSection.style.display !== "none") {
       syncAdvancedFromSimple();
     }
   }
