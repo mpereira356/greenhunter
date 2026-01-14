@@ -496,21 +496,21 @@
                         <div class="col-md-4">
                           <label class="form-label">Stat</label>
                           <select class="form-select" name="group-0-cond-{{ loop.index0 }}-stat_key" required>
-                            <option value="Goals">Gols</option>
-<option value="Corners">Escanteios</option>
-<option value="Corners (Half)">Escanteios (1o tempo)</option>
-<option value="Yellow Card">Cartoes amarelos</option>
-<option value="Yellow/Red Card">Cartao amarelo/vermelho</option>
-<option value="Red Card">Cartoes vermelhos</option>
-<option value="Penalties">Penaltis</option>
-<option value="Ball Safe">Bola segura</option>
-<option value="Substitutions">Substituicoes</option>
-<option value="Attacks">Ataques</option>
-<option value="Dangerous Attacks">Ataques perigosos</option>
-<option value="On Target">Chutes no alvo</option>
-<option value="Off Target">Chutes para fora</option>
-<option value="Possession">Posse de bola</option>
-<option value="Minute">Minuto</option>
+                            <option value="Goals" {% if cond.stat_key == 'Goals' %}selected{% endif %}>Gols</option>
+<option value="Corners" {% if cond.stat_key == 'Corners' %}selected{% endif %}>Escanteios</option>
+<option value="Corners (Half)" {% if cond.stat_key == 'Corners (Half)' %}selected{% endif %}>Escanteios (1o tempo)</option>
+<option value="Yellow Card" {% if cond.stat_key == 'Yellow Card' %}selected{% endif %}>Cartoes amarelos</option>
+<option value="Yellow/Red Card" {% if cond.stat_key == 'Yellow/Red Card' %}selected{% endif %}>Cartao amarelo/vermelho</option>
+<option value="Red Card" {% if cond.stat_key == 'Red Card' %}selected{% endif %}>Cartoes vermelhos</option>
+<option value="Penalties" {% if cond.stat_key == 'Penalties' %}selected{% endif %}>Penaltis</option>
+<option value="Ball Safe" {% if cond.stat_key == 'Ball Safe' %}selected{% endif %}>Bola segura</option>
+<option value="Substitutions" {% if cond.stat_key == 'Substitutions' %}selected{% endif %}>Substituicoes</option>
+<option value="Attacks" {% if cond.stat_key == 'Attacks' %}selected{% endif %}>Ataques</option>
+<option value="Dangerous Attacks" {% if cond.stat_key == 'Dangerous Attacks' %}selected{% endif %}>Ataques perigosos</option>
+<option value="On Target" {% if cond.stat_key == 'On Target' %}selected{% endif %}>Chutes no alvo</option>
+<option value="Off Target" {% if cond.stat_key == 'Off Target' %}selected{% endif %}>Chutes para fora</option>
+<option value="Possession" {% if cond.stat_key == 'Possession' %}selected{% endif %}>Posse de bola</option>
+<option value="Minute" {% if cond.stat_key == 'Minute' %}selected{% endif %}>Minuto</option>
 </select>
                           <div class="form-text">Ex: Escanteios total >= 4</div>
                         </div>
@@ -1211,10 +1211,19 @@
     const isSecondHalf = simpleSecondHalf.checked;
     const minFrom = isSecondHalf ? 46 : 1;
     const maxTo = isSecondHalf ? 90 : 45;
+    if (isSecondHalf) {
+      simpleTimeTo.min = "46";
+    } else {
+      simpleTimeTo.min = "1";
+    }
     simpleTimeFrom.min = String(minFrom);
     simpleTimeTo.max = String(maxTo);
     simpleMinuteExact.min = String(minFrom);
     simpleMinuteExact.max = String(maxTo);
+    const active = document.activeElement;
+    if (active === simpleTimeFrom || active === simpleTimeTo || active === simpleMinuteExact) {
+      return;
+    }
     if (simpleMinuteToggle.checked) {
       const exact = parseInt(simpleMinuteExact.value || "0", 10);
       if (!exact || exact < minFrom || exact > maxTo) {
@@ -1391,6 +1400,12 @@
   });
   [simpleScoreHome, simpleScoreAway, simpleMinuteToggle, simpleMinuteExact].forEach((el) => {
     el.addEventListener("input", () => {
+      updateSummary();
+    });
+  });
+  [simpleTimeFrom, simpleTimeTo, simpleMinuteExact].forEach((el) => {
+    el.addEventListener("blur", () => {
+      enforceTimeBounds();
       updateSummary();
     });
   });
