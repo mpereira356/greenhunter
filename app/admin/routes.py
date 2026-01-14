@@ -6,6 +6,7 @@ from sqlalchemy import case, func
 
 from ..extensions import db
 from ..models import AdminBroadcast, LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..services.telegram import send_message
 from ..services.worker import get_api_status
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
