@@ -488,29 +488,14 @@
           </div>
           <div id="alert-groups">
             {% set conditions = rule.conditions if rule else [] %}
-            {% set ns = namespace(groups={}) %}
-            {% for cond in conditions %}
-              {% set gid = cond.group_id if cond.group_id is not none else 0 %}
-              {% if ns.groups.update({gid: (ns.groups.get(gid, []) + [cond])}) %}{% endif %}
-            {% endfor %}
-            {% if ns.groups|length == 0 %}
-              {% set ns.groups = {0: []} %}
-            {% endif %}
-            {% for gid, group in ns.groups.items() %}
-              <div class="alert-group" data-group="{{ gid }}">
-                <div class="alert-group-header">
-                  <div class="alert-group-title">Grupo {{ loop.index }} (E)</div>
-                  {% if ns.groups|length > 1 %}
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover grupo</button>
-                  {% endif %}
-                </div>
-                <div class="alert-group-body">
-                  <div class="conditions-list">
-                    {% for cond in group %}
+            <div class="alert-group" data-group="0">
+              <div class="alert-group-body">
+                <div class="conditions-list">
+                    {% for cond in conditions %}
                       <div class="row g-2 condition-row align-items-end mb-2">
                         <div class="col-md-4">
                           <label class="form-label">Stat</label>
-                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-stat_key" required>
+                          <select class="form-select" name="group-0-cond-{{ loop.index0 }}-stat_key" required>
                             <option value="Goals">Gols</option>
 <option value="Corners">Escanteios</option>
 <option value="Corners (Half)">Escanteios (1o tempo)</option>
@@ -531,7 +516,7 @@
                         </div>
                         <div class="col-md-2">
                           <label class="form-label">Lado</label>
-                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-side">
+                        <select class="form-select" name="group-0-cond-{{ loop.index0 }}-side">
                             <option value="home" {% if cond.side == 'home' %}selected{% endif %}>home</option>
                             <option value="away" {% if cond.side == 'away' %}selected{% endif %}>away</option>
                             <option value="total" {% if cond.side == 'total' %}selected{% endif %}>total</option>
@@ -540,7 +525,7 @@
                         </div>
                         <div class="col-md-2">
                           <label class="form-label">Operador</label>
-                          <select class="form-select" name="group-{{ gid }}-cond-{{ loop.index0 }}-operator">
+                        <select class="form-select" name="group-0-cond-{{ loop.index0 }}-operator">
                             {% for op in ['>=','>','==','<=','<'] %}
                             <option value="{{ op }}" {% if cond.operator == op %}selected{% endif %}>{{ op }}</option>
                             {% endfor %}
@@ -549,7 +534,7 @@
                         </div>
                         <div class="col-md-2">
                           <label class="form-label">Valor</label>
-                          <input class="form-control" type="number" min="0" name="group-{{ gid }}-cond-{{ loop.index0 }}-value" value="{{ cond.value }}" required>
+                        <input class="form-control" type="number" min="0" name="group-0-cond-{{ loop.index0 }}-value" value="{{ cond.value }}" required>
                           <div class="form-text">Numero inteiro, ex: 25</div>
                         </div>
                         <div class="col-md-2">
@@ -557,14 +542,13 @@
                         </div>
                       </div>
                     {% endfor %}
-                  </div>
-                  <button type="button" class="btn btn-outline-secondary add-condition" data-group="{{ gid }}">Adicionar condicao</button>
                 </div>
+                <button type="button" class="btn btn-outline-secondary add-condition" data-group="0">Adicionar condicao</button>
               </div>
-            {% endfor %}
+            </div>
           </div>
 
-          <button type="button" class="btn btn-outline-dark" id="add-group">Adicionar grupo (E)</button>
+          <!-- grupos desativados: sempre AND em uma lista -->
           <button type="button" class="btn btn-outline-primary ms-2" id="test-rule">Testar regra</button>
           <div class="mt-4">
             <button class="btn btn-success" type="submit">Salvar</button>
@@ -617,6 +601,8 @@
     }
     setSectionState(simpleSection, mode === "simple");
     setSectionState(advancedSection, mode === "advanced");
+    updatePreview();
+    updateMessagePreviews();
   }
 
   function setSectionState(section, enabled) {
@@ -648,7 +634,6 @@
   document.querySelectorAll(".mode-link").forEach((btn) => {
     btn.addEventListener("click", () => switchMode(btn.dataset.mode));
   });
-  switchMode("simple");
 
   function updateIndexes() {
     const groups = groupsContainer.querySelectorAll(".alert-group");
@@ -720,10 +705,6 @@
     div.className = "alert-group";
     div.dataset.group = groupId;
     div.innerHTML = `
-      <div class="alert-group-header">
-        <div class="alert-group-title">Grupo ${groupId + 1} (OU)</div>
-        <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover grupo</button>
-      </div>
       <div class="alert-group-body">
         <div class="conditions-list"></div>
         <button type="button" class="btn btn-outline-secondary add-condition" data-group="${groupId}">Adicionar condicao</button>
@@ -863,30 +844,43 @@
     wrapper.appendChild(div);
   }
 
-  groupsContainer.addEventListener("click", (event) => {
-    if (event.target.classList.contains("remove-condition")) {
-      event.target.closest(".condition-row").remove();
+  function handleAddCondition(groupId) {
+    if (!groupsContainer) return;
+    const groupEl = groupsContainer.querySelector(`.alert-group[data-group='${groupId}']`);
+    if (groupEl) {
+      addCondition(groupEl);
       updateIndexes();
       updateMinuteSideLock();
     }
-    if (event.target.classList.contains("add-condition")) {
-      const gid = event.target.dataset.group;
-      const groupEl = groupsContainer.querySelector(`.alert-group[data-group='${gid}']`);
-      if (groupEl) {
-        addCondition(groupEl);
+  }
+
+  function bindAddConditionButtons() {
+    if (!groupsContainer) return;
+    groupsContainer.querySelectorAll(".add-condition").forEach((btn) => {
+      btn.addEventListener("click", () => handleAddCondition(btn.dataset.group));
+    });
+  }
+
+  if (groupsContainer) {
+    groupsContainer.addEventListener("click", (event) => {
+      if (event.target.classList.contains("remove-condition")) {
+        event.target.closest(".condition-row").remove();
         updateIndexes();
         updateMinuteSideLock();
       }
-    }
-    if (event.target.classList.contains("remove-group")) {
-      const groupEl = event.target.closest(".alert-group");
-      if (groupEl) {
-        groupEl.remove();
-        updateIndexes();
-        updateMinuteSideLock();
+      if (event.target.classList.contains("add-condition")) {
+        handleAddCondition(event.target.dataset.group);
       }
-    }
-  });
+      if (event.target.classList.contains("remove-group")) {
+        const groupEl = event.target.closest(".alert-group");
+        if (groupEl) {
+          groupEl.remove();
+          updateIndexes();
+          updateMinuteSideLock();
+        }
+      }
+    });
+  }
 
   [outcomeGreen, outcomeRed].forEach((wrapper) => {
     if (!wrapper) return;
@@ -898,13 +892,19 @@
     });
   });
 
-  addGroupBtn.addEventListener("click", () => addGroup());
-  addScoreAdv.addEventListener("click", () => {
-    let groupEl = groupsContainer.querySelector(".alert-group");
-    if (!groupEl) {
+  if (addGroupBtn) {
+    addGroupBtn.addEventListener("click", () => {
       addGroup();
-      groupEl = groupsContainer.querySelector(".alert-group");
-    }
+      bindAddConditionButtons();
+    });
+  }
+  if (addScoreAdv) {
+    addScoreAdv.addEventListener("click", () => {
+      let groupEl = groupsContainer.querySelector(".alert-group");
+      if (!groupEl) {
+        addGroup();
+        groupEl = groupsContainer.querySelector(".alert-group");
+      }
     const home = advScoreHome.value || 0;
     const away = advScoreAway.value || 0;
     addCondition(groupEl);
@@ -920,9 +920,10 @@
     rowAway.querySelector("[name$='side']").value = "away";
     rowAway.querySelector("[name$='operator']").value = "==";
     rowAway.querySelector("[name$='value']").value = away;
-    updateIndexes();
-    updateMinuteSideLock();
-  });
+      updateIndexes();
+      updateMinuteSideLock();
+    });
+  }
 
   document.querySelectorAll("[data-target]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -935,14 +936,18 @@
     });
   });
 
-  if (groupsContainer.children.length === 0) {
+  if (groupsContainer && groupsContainer.children.length === 0) {
     addGroup();
   }
+  bindAddConditionButtons();
 
   function updatePreview() {
     const activeSection = currentMode === "advanced" ? advancedSection : simpleSection;
-    const nameInput = activeSection ? activeSection.querySelector("input[name='name']") : null;
-    const limitInput = activeSection ? activeSection.querySelector("input[name='time_limit_min']") : null;
+    if (!activeSection || !groupsContainer) {
+      return;
+    }
+    const nameInput = activeSection.querySelector("input[name='name']");
+    const limitInput = activeSection.querySelector("input[name='time_limit_min']");
     const name = nameInput && nameInput.value ? nameInput.value : "Regra";
     const limit = limitInput && limitInput.value ? limitInput.value : "?";
     const groupParts = [];
@@ -961,20 +966,34 @@
         groupParts.push(parts.join(" E "));
       }
     });
-    const preview = groupParts.length ? groupParts.join(" OU ") : "Sem condicoes";
-    document.getElementById("rule-preview").textContent = `${name}: ${preview} ate ${limit}min`;
+    const preview = groupParts.length ? groupParts.join(" E ") : "Sem condicoes";
+    const previewEl = document.getElementById("rule-preview");
+    if (previewEl) {
+      previewEl.textContent = `${name}: ${preview} ate ${limit}min`;
+    }
   }
 
-  document.getElementById("rule-form").addEventListener("input", updatePreview);
-  document.getElementById("rule-form").addEventListener("input", updateMinuteSideLock);
+  const ruleForm = document.getElementById("rule-form");
+  if (ruleForm) {
+    ruleForm.addEventListener("input", updatePreview);
+    ruleForm.addEventListener("input", updateMinuteSideLock);
+  }
   updatePreview();
-  document.getElementById("test-rule").addEventListener("click", async () => {
-    const form = document.getElementById("rule-form");
-    const data = new FormData(form);
-    const resultBox = document.getElementById("test-results");
-    const resultBody = document.getElementById("test-results-body");
-    resultBox.style.display = "block";
-    resultBody.textContent = "Testando...";
+  const testRuleBtn = document.getElementById("test-rule");
+  if (testRuleBtn) {
+    testRuleBtn.addEventListener("click", async () => {
+      const form = document.getElementById("rule-form");
+      if (!form) {
+        return;
+      }
+      const data = new FormData(form);
+      const resultBox = document.getElementById("test-results");
+      const resultBody = document.getElementById("test-results-body");
+      if (!resultBox || !resultBody) {
+        return;
+      }
+      resultBox.style.display = "block";
+      resultBody.textContent = "Testando...";
     const resp = await fetch("{{ url_for('rules.test_rule') }}", {
       method: "POST",
       body: data
@@ -989,8 +1008,9 @@
       return;
     }
     const lines = payload.matches.map((m) => `${m.league} - ${m.home_team} x ${m.away_team} (${m.minute}'): ${m.score}`);
-    resultBody.textContent = lines.join("\n");
-  });
+      resultBody.textContent = lines.join("\n");
+    });
+  }
 
   const simpleStat = document.getElementById("simple-stat");
   const simpleValue = document.getElementById("simple-value");
@@ -1071,9 +1091,6 @@
     const timeToUse = simpleMinuteToggle.checked ? (simpleMinuteExact.value || simpleTimeTo.value) : simpleTimeTo.value;
     simpleTimeLimit.value = timeToUse;
     buildHiddenConditions();
-    if (allowSync && simpleSection && simpleSection.style.display !== "none") {
-      syncAdvancedFromSimple();
-    }
   }
 
   function buildHiddenConditions() {
@@ -1396,25 +1413,82 @@
   onSecondHalfToggle();
   updateOutcomeMode();
 
+  function findMinuteConditionValue(operator) {
+    if (!groupsContainer) {
+      return "";
+    }
+    const rows = groupsContainer.querySelectorAll(".condition-row");
+    for (const row of rows) {
+      const stat = row.querySelector("[name$='stat_key']").value;
+      const op = row.querySelector("[name$='operator']").value;
+      const value = row.querySelector("[name$='value']").value;
+      if (stat === "Minute" && op === operator && value) {
+        return value;
+      }
+    }
+    return "";
+  }
+
+  function findScoreConditionValue() {
+    if (!groupsContainer) {
+      return "0 x 0";
+    }
+    let home = null;
+    let away = null;
+    const rows = groupsContainer.querySelectorAll(".condition-row");
+    rows.forEach((row) => {
+      const stat = row.querySelector("[name$='stat_key']").value;
+      const side = row.querySelector("[name$='side']").value;
+      const op = row.querySelector("[name$='operator']").value;
+      const value = row.querySelector("[name$='value']").value;
+      if (stat === "Goals" && op === "==") {
+        if (side === "home") home = value;
+        if (side === "away") away = value;
+      }
+    });
+    if (home !== null || away !== null) {
+      return `${home || 0} x ${away || 0}`;
+    }
+    if (advScoreHome && advScoreHome.value !== "") {
+      return `${advScoreHome.value || 0} x ${advScoreAway.value || 0}`;
+    }
+    return "0 x 0";
+  }
+
   function updateMessagePreviews() {
-    const nameInput = document.querySelector("input[name='name']");
+    const activeSection = currentMode === "advanced" ? advancedSection : simpleSection;
+    const nameInput = activeSection ? activeSection.querySelector("input[name='name']") : null;
+    const limitInput = activeSection ? activeSection.querySelector("input[name='time_limit_min']") : null;
     const ruleName = nameInput && nameInput.value ? nameInput.value : "Regra";
-    const toValue = simpleTimeTo.value || 30;
-    const minute = simpleMinuteToggle.checked ? (simpleMinuteExact.value || toValue) : toValue;
-    const scoreText = simpleStat.value === "Score"
-      ? `${simpleScoreHome.value || 0} x ${simpleScoreAway.value || 0}`
-      : "0 x 0";
+    const limitValue = limitInput && limitInput.value ? limitInput.value : 30;
+    let minuteValue = limitValue;
+    let scoreText = "0 x 0";
+    if (currentMode === "simple") {
+      const toValue = simpleTimeTo.value || 30;
+      minuteValue = simpleMinuteToggle.checked ? (simpleMinuteExact.value || toValue) : toValue;
+      if (simpleStat.value === "Score") {
+        scoreText = `${simpleScoreHome.value || 0} x ${simpleScoreAway.value || 0}`;
+      }
+    } else {
+      const minuteExact = findMinuteConditionValue("==");
+      const minuteMax = findMinuteConditionValue("<=");
+      minuteValue = minuteExact || minuteMax || limitValue;
+      scoreText = findScoreConditionValue();
+    }
     const data = {
       rule: ruleName,
       home_team: "Time Casa",
       away_team: "Time Fora",
-      minute: minute,
+      minute: minuteValue,
+      time_limit: limitValue,
       score: scoreText,
       league: "Liga",
       url: "https://pt.betsapi.com/r/12345"
     };
     document.querySelectorAll(".message-template").forEach((textarea) => {
-      const preview = textarea.closest(".mt-3").querySelector(".message-preview");
+      const container = textarea.closest(".mt-3");
+      if (!container) return;
+      const preview = container.querySelector(".message-preview");
       if (!preview) return;
       let text = textarea.value || "";
       Object.keys(data).forEach((key) => {
@@ -1431,7 +1505,11 @@
   document.querySelectorAll("input[name='name']").forEach((input) => {
     input.addEventListener("input", updateMessagePreviews);
   });
+  if (ruleForm) {
+    ruleForm.addEventListener("input", updateMessagePreviews);
+  }
   updateMessagePreviews();
+  switchMode("simple");
 
   document.getElementById("rule-form").addEventListener("submit", () => {
     if (currentMode !== "simple") {

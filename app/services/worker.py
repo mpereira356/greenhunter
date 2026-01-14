@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
-from ..models import MatchAlert, Rule
+from ..models import MatchAlert, Rule, User
 from .evaluator import compare, evaluate_conditions, evaluate_rule, render_message, stats_to_json
 from .exporter import export_alert
 from .scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
@@ -34,17 +34,17 @@ def notify_api_status(ok: bool, code: int | None):
     last_ok = API_ALERT_STATE.get("last_ok")
     if last_ok is None:
         API_ALERT_STATE["last_ok"] = ok
-        if not ok:
-            reason = f"HTTP {code}" if code else "erro de conexao/anti-bot"
-            message = f"API OFF: possivel anti-bot ativo ({reason})."
-            for user in User.query.filter_by(telegram_verified=True).all():
-                if user.telegram_token and user.telegram_chat_id:
-                    send_message(user.telegram_token, user.telegram_chat_id, message)
+        if ok:
+            return
+        reason = f"HTTP {code}" if code else "erro de conexao/anti-bot"
+        message = f"API OFF: possivel anti-bot ativo ({reason})."
+        for user in User.query.filter_by(telegram_verified=True).all():
+            if user.telegram_token and user.telegram_chat_id:
+                send_message(user.telegram_token, user.telegram_chat_id, message)
         return
     if last_ok == ok:
         return
     API_ALERT_STATE["last_ok"] = ok
-    from ..models import User
     users = User.query.filter_by(telegram_verified=True).all()
     if not users:
         return
