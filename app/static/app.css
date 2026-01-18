@@ -227,6 +227,7 @@ a:hover {
 }
 
 .menu-toggle {
+  display: none;
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
   border-radius: 8px;
@@ -480,6 +481,16 @@ a:hover {
   .main-area {
     margin-left: 80px;
   }
+  .sidebar-open .sidebar {
+    width: 260px;
+  }
+  .sidebar-open .sidebar .brand-text,
+  .sidebar-open .sidebar .nav-link span:not(.nav-icon) {
+    display: inline;
+  }
+  .sidebar-open .main-area {
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -489,6 +500,16 @@ a:hover {
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     z-index: 110;
+  }
+  .menu-toggle {
+    display: inline-flex;
+  }
+  .topbar-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .status-block {
+    margin-left: auto;
   }
   .sidebar-open .sidebar {
     transform: translateX(0);
