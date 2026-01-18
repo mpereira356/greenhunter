@@ -10,12 +10,50 @@
 
 <div class="row g-4">
   <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title d-flex align-items-center gap-2">
+          <span>U</span> Dados pessoais
+        </h5>
+        <form method="post" class="mt-4">
+          <input type="hidden" name="form_type" value="profile">
+          <div class="mb-3">
+            <label class="form-label">ID do usuario</label>
+            <input class="form-control" value="{{ current_user.id }}" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nome de usuario</label>
+            <input class="form-control" name="username" value="{{ current_user.username or '' }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input class="form-control" name="email" value="{{ current_user.email or '' }}" placeholder="nome@exemplo.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Senha atual</label>
+            <input type="password" class="form-control" name="current_password" placeholder="Obrigatoria para trocar senha">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nova senha</label>
+            <input type="password" class="form-control" name="new_password" placeholder="Deixe vazio para manter">
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Confirmar nova senha</label>
+            <input type="password" class="form-control" name="confirm_password" placeholder="Repita a nova senha">
+          </div>
+          <div class="d-grid gap-2">
+            <button class="btn btn-primary" type="submit">Salvar dados</button>
+          </div>
+        </form>
+      </div>
+    </div>
     <div class="card border-0 shadow-sm">
       <div class="card-body">
         <h5 class="card-title d-flex align-items-center gap-2">
           <span>📱</span> Integração Telegram
         </h5>
         <form method="post" class="mt-4">
+          <input type="hidden" name="form_type" value="telegram">
           <div class="mb-3">
             <label class="form-label">Telegram Bot Token</label>
             <input class="form-control" name="telegram_token" value="{{ current_user.telegram_token or '' }}" placeholder="Ex: 123456789:ABCdef...">

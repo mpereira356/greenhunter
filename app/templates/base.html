@@ -64,7 +64,12 @@
       
       <div class="main-area">
         <header class="topbar">
-          <div class="topbar-left">
+          <div class="topbar-left d-flex align-items-center gap-2">
+            <button class="menu-toggle d-inline-flex d-md-none" type="button" id="mobile-menu-toggle" aria-label="Abrir menu">
+              <span class="menu-toggle-bar"></span>
+              <span class="menu-toggle-bar"></span>
+              <span class="menu-toggle-bar"></span>
+            </button>
             <div class="status-block d-flex align-items-center gap-2">
               <span class="text-muted small fw-bold">API STATUS:</span>
               <span class="status-pill status-wait" id="api-status">Verificando</span>
@@ -118,6 +123,7 @@
     {% if current_user.is_authenticated %}
       </div>
     </div>
+    <div class="sidebar-backdrop d-md-none" id="sidebar-backdrop"></div>
     {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -126,6 +132,8 @@
     <script>
       const bodyEl = document.body;
       const themeToggle = document.getElementById("theme-toggle");
+      const mobileMenuToggle = document.getElementById("mobile-menu-toggle");
+      const sidebarBackdrop = document.getElementById("sidebar-backdrop");
       
       function setTheme(mode) {
         if (mode === "dark") {
@@ -171,6 +179,27 @@
       }
       refreshApiStatus();
       setInterval(refreshApiStatus, 30000);
+
+      function closeSidebar() {
+        document.body.classList.remove("sidebar-open");
+      }
+
+      if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener("click", () => {
+          document.body.classList.toggle("sidebar-open");
+        });
+      }
+
+      if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener("click", closeSidebar);
+      }
+
+      if (mobileMenuToggle) {
+        const sidebarLinks = document.querySelectorAll(".sidebar .nav-link");
+        sidebarLinks.forEach((link) => {
+          link.addEventListener("click", closeSidebar);
+        });
+      }
     </script>
     {% endif %}
   </body>

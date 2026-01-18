@@ -226,6 +226,36 @@ a:hover {
   z-index: 90;
 }
 
+.menu-toggle {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  width: 42px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.menu-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background-color: var(--text-main);
+  border-radius: 999px;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 95;
+}
+
 .content {
   padding: 2rem;
   max-width: 1400px;
@@ -454,7 +484,18 @@ a:hover {
 
 @media (max-width: 768px) {
   .sidebar {
-    display: none;
+    display: flex;
+    width: 260px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 110;
+  }
+  .sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+  .sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
   .main-area {
     margin-left: 0;
@@ -463,6 +504,82 @@ a:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+  }
+  .content {
+    padding: 1.25rem;
+  }
+  .auth-shell {
+    max-width: 100%;
+    margin: 6vh auto;
+    padding: 1rem;
+  }
+  .card-body {
+    padding: 1.25rem;
+  }
+  .topbar {
+    height: auto;
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .user-chip .user-name {
+    display: none;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-title {
+    font-size: 1.5rem;
+  }
+  .page-subtitle {
+    font-size: 0.95rem;
+  }
+  .btn-lg {
+    padding: 0.65rem 1rem;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tbody td {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 0.75rem;
+    border-bottom: 0;
+  }
+  .table tbody tr {
+    display: block;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+    background-color: var(--bg-card);
+  }
+  .table-clean tbody tr:hover {
+    background-color: var(--bg-card);
+  }
+  .table-responsive {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 1rem;
+  }
+  .card {
+    border-radius: 10px;
+  }
+  .nav-link {
+    padding: 0.65rem 0.75rem;
+  }
+  .form-control,
+  .form-select {
+    padding: 0.55rem 0.85rem;
   }
 }
 
