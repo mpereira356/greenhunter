@@ -16,7 +16,8 @@ def create_app():
     app = Flask(__name__)
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
-    default_db_path = os.path.abspath(os.path.join(app.root_path, "..", "data", "app.db"))
+    data_dir = os.path.abspath(os.path.join(app.root_path, "..", "data"))
+    default_db_path = os.path.join(data_dir, "app.db")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL", f"sqlite:///{default_db_path}"
     )
@@ -41,8 +42,8 @@ def create_app():
     app.register_blueprint(admin_bp)
 
     with app.app_context():
-        os.makedirs("data", exist_ok=True)
-        os.makedirs("data/exports", exist_ok=True)
+        os.makedirs(data_dir, exist_ok=True)
+        os.makedirs(os.path.join(data_dir, "exports"), exist_ok=True)
         db.create_all()
         _ensure_user_columns()
         _ensure_rule_columns()
