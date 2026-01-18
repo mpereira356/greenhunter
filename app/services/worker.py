@@ -388,7 +388,7 @@ def finalize_full_time(session):
         alert.ft_score = stats_payload.get("score")
         alert.ft_stats_json = stats_to_json(stats_payload["stats"])
         alert.ft_completed = True
-                db.session.commit()
+        db.session.commit()
 
         export_alert(alert, alert.rule.name, EXPORT_DIR)
 
