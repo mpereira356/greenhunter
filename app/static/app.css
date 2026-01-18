@@ -34,6 +34,66 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
 }
 
+.theme-dark .text-muted,
+.theme-dark .text-body-secondary,
+.theme-dark .form-label,
+.theme-dark .table thead th,
+.theme-dark .table tbody td,
+.theme-dark .btn-outline-secondary,
+.theme-dark .btn-outline-secondary:hover {
+  color: var(--text-muted) !important;
+}
+
+.theme-dark .card,
+.theme-dark .topbar,
+.theme-dark .form-control,
+.theme-dark .form-select {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
+.theme-dark .form-control::placeholder,
+.theme-dark .form-select::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.theme-dark .bg-light,
+.theme-dark .bg-white {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main);
+}
+
+.theme-dark .border,
+.theme-dark .border-top,
+.theme-dark .border-bottom,
+.theme-dark .border-start,
+.theme-dark .border-end {
+  border-color: var(--border-color) !important;
+}
+
+.theme-dark .card-header {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border-bottom-color: var(--border-color);
+}
+
+.theme-dark .table {
+  color: var(--text-main);
+}
+
+.theme-dark .alert {
+  background-color: #0b1220;
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.theme-dark .badge.bg-light {
+  background-color: #1f2937 !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
 /* Reset e Base */
 * {
   box-sizing: border-box;

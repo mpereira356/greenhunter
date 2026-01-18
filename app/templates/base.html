@@ -23,7 +23,11 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <div class="brand-icon">G</div>
+          <div class="brand-icon" style="background: transparent; border-radius: 0;">
+            <img src="{{ url_for('static', filename='img/greenhunter.png') }}"
+                 alt="GreenHunter"
+                 style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          </div>
           <div class="brand-text">
             <div class="brand-title">GreenHunter</div>
             <div class="brand-sub">Bet Intelligence</div>
