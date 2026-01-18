@@ -12,17 +12,15 @@
   <div class="col-lg-5">
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
-        <h5 class="card-title d-flex align-items-center gap-2">
-          <span>U</span> Dados pessoais
-        </h5>
+        <h5 class="card-title">Dados pessoais</h5>
         <form method="post" class="mt-4">
           <input type="hidden" name="form_type" value="profile">
           <div class="mb-3">
-            <label class="form-label">ID do usuario</label>
-            <input class="form-control" value="{{ current_user.id }}" readonly>
+            <label class="form-label">ID do usuário</label>
+            <input class="form-control text-muted bg-light" value="{{ current_user.id }}" readonly disabled>
           </div>
           <div class="mb-3">
-            <label class="form-label">Nome de usuario</label>
+            <label class="form-label">Nome de usuário</label>
             <input class="form-control" name="username" value="{{ current_user.username or '' }}" required>
           </div>
           <div class="mb-3">
@@ -31,7 +29,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Senha atual</label>
-            <input type="password" class="form-control" name="current_password" placeholder="Obrigatoria para trocar senha">
+            <input type="password" class="form-control" name="current_password" placeholder="Obrigatória para trocar senha">
           </div>
           <div class="mb-3">
             <label class="form-label">Nova senha</label>
@@ -47,11 +45,12 @@
         </form>
       </div>
     </div>
-    <div class="card border-0 shadow-sm">
+  </div>
+  
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
-        <h5 class="card-title d-flex align-items-center gap-2">
-          <span>📱</span> Integração Telegram
-        </h5>
+        <h5 class="card-title">Integração Telegram</h5>
         <form method="post" class="mt-4">
           <input type="hidden" name="form_type" value="telegram">
           <div class="mb-3">
@@ -66,28 +65,24 @@
             <div class="p-2 rounded bg-light border small d-flex justify-content-between align-items-center">
               <span class="text-muted fw-bold">STATUS:</span>
               {% if current_user.telegram_verified %}
-                <span class="text-success fw-bold">✓ Verificado</span>
+                <span class="text-success fw-bold">Verificado</span>
               {% else %}
-                <span class="text-danger fw-bold">✗ Não Verificado</span>
+                <span class="text-danger fw-bold">Não verificado</span>
               {% endif %}
             </div>
           </div>
           <div class="d-grid gap-2">
-            <button class="btn btn-primary" type="submit">Salvar Alterações</button>
-            <button class="btn btn-outline-secondary" form="test-telegram-form" type="submit">Enviar Mensagem de Teste</button>
+            <button class="btn btn-primary" type="submit">Salvar alterações</button>
+            <button class="btn btn-outline-secondary" form="test-telegram-form" type="submit">Enviar mensagem de teste</button>
           </div>
         </form>
         <form id="test-telegram-form" method="post" action="{{ url_for('settings.test_telegram') }}"></form>
       </div>
     </div>
-  </div>
-  
-  <div class="col-lg-7">
-    <div class="card border-0 shadow-sm h-100">
+
+    <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <h5 class="card-title d-flex align-items-center gap-2">
-          <span>📖</span> Guia de Configuração
-        </h5>
+        <h5 class="card-title">Passo a passo do Telegram</h5>
         <div class="mt-4">
           <div class="d-flex gap-3 mb-4">
             <div class="brand-icon flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.9rem;">1</div>
@@ -108,8 +103,8 @@
           <div class="d-flex gap-3">
             <div class="brand-icon flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.9rem;">3</div>
             <div>
-              <h6 class="fw-bold mb-1">Vincule e Teste</h6>
-              <p class="text-muted small mb-0">Insira os dados ao lado, salve e clique em "Testar Telegram" para confirmar se está tudo funcionando.</p>
+              <h6 class="fw-bold mb-1">Vincule e teste</h6>
+              <p class="text-muted small mb-0">Insira os dados acima, salve e clique em "Enviar mensagem de teste" para confirmar se está tudo funcionando.</p>
             </div>
           </div>
         </div>
