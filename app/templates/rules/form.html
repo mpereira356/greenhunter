@@ -5,28 +5,27 @@
 <div class="builder-shell rule-editor">
   <div class="page-header">
     <div>
-      <div class="page-title">{% if rule %}Editar regra{% else %}Nova regra{% endif %}</div>
-      <div class="page-subtitle">Crie alertas em menos de 30 segundos.</div>
+      <h1 class="page-title">{% if rule %}Editar Regra{% else %}Nova Regra{% endif %}</h1>
+      <p class="page-subtitle">Configure seus critérios de monitoramento e receba alertas instantâneos.</p>
     </div>
     <div class="page-actions">
-      <div class="mode-toggle">
-        <button type="button" class="btn btn-outline-secondary mode-btn active" data-mode="simple">Modo simples</button>
-        <button type="button" class="btn btn-outline-secondary mode-btn" data-mode="advanced">Modo avancado</button>
+      <div class="mode-toggle d-flex gap-2 p-1 bg-light rounded-3 border">
+        <button type="button" class="btn btn-sm mode-btn active" data-mode="simple" style="border:none;">Modo Simples</button>
+        <button type="button" class="btn btn-sm mode-btn" data-mode="advanced" style="border:none;">Modo Avançado</button>
       </div>
     </div>
   </div>
 
   <form method="post" id="rule-form" class="rule-form" novalidate>
     <div class="simple-builder" data-mode="simple">
-      <div class="section-card">
-        <div class="section-header">
-          <div>
-            <span class="section-pill">1</span>
-            <span class="section-title">Perguntas rapidas</span>
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="brand-icon" style="width: 28px; height: 28px; font-size: 0.8rem;">1</span>
+            <h5 class="mb-0 fw-bold">Configuração Rápida</h5>
           </div>
-          <span class="section-subtitle">Responda e gere a regra automaticamente</span>
         </div>
-        <div class="section-body">
+        <div class="card-body">
           <div class="row g-3">
             <div class="col-md-3">
               <label class="form-label">O que quer monitorar?</label>
@@ -107,9 +106,9 @@
             </div>
           </div>
 
-          <div class="summary-card mt-3">
-            <div class="summary-title">Resumo da regra</div>
-            <div class="summary-text" id="simple-summary">Avisar quando Escanteios TOTAL >= 3 ate 30'.</div>
+          <div class="p-3 rounded-3 bg-light border mt-4">
+            <div class="small fw-bold text-muted text-uppercase mb-1">Resumo da Regra</div>
+            <div class="fw-bold text-primary" id="simple-summary">Avisar quando Escanteios TOTAL >= 3 ate 30'.</div>
           </div>
           <div id="simple-hidden-conditions" class="d-none"></div>
 
@@ -172,15 +171,14 @@
               <div class="form-text">FT: salva placar final e stats.</div>
             </div>
           </div>
-          <div class="section-card mt-4">
-            <div class="section-header">
-              <div>
-                <span class="section-pill">2</span>
-                <span class="section-title">Resultado (GREEN/RED)</span>
+          <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white border-bottom py-3">
+              <div class="d-flex align-items-center gap-2">
+                <span class="brand-icon" style="width: 28px; height: 28px; font-size: 0.8rem;">2</span>
+                <h5 class="mb-0 fw-bold">Definição de Resultado (GREEN/RED)</h5>
               </div>
-              <span class="section-subtitle">Escolha o que define GREEN</span>
             </div>
-            <div class="section-body">
+            <div class="card-body">
               <div class="row g-3">
                 <div class="col-md-4">
                   <label class="form-label">Como definir?</label>
@@ -248,15 +246,15 @@
     </div>
 
     <div class="advanced-builder" data-mode="advanced">
-      <div class="section-card">
-        <div class="section-header">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-3">
           <div>
-            <span class="section-pill">1</span>
-            <span class="section-title">Dados basicos</span>
+            <span class="brand-icon" style="width: 28px; height: 28px; font-size: 0.8rem;">1</span>
+            <h5 class="mb-0 fw-bold d-inline ms-2">Dados Básicos</h5>
           </div>
-          <span class="section-subtitle">Nome, mensagem e janela de tempo</span>
+          <p class="text-muted small mb-0 ms-5">Nome, mensagem e janela de tempo</p>
         </div>
-        <div class="section-body">
+        <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Nome da regra</label>
@@ -318,15 +316,14 @@
           </div>
         </div>
       </div>
-      <div class="section-card">
-        <div class="section-header">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-3">
           <div>
-            <span class="section-pill">2</span>
-            <span class="section-title">Resultado</span>
-          </div>
-          <span class="section-subtitle">Defina o que e GREEN e RED</span>
+            <span class="brand-icon" style="width: 28px; height: 28px; font-size: 0.8rem;">2</span>
+            <h5 class="mb-0 fw-bold d-inline ms-2">Resultado</h5>
+      <p class="text-muted small mb-0 ms-5">Defina o que é GREEN e RED</p>
         </div>
-        <div class="section-body">
+        <div class="card-body">
           <div class="row g-3 mb-2">
             <div class="col-md-6">
               <label class="form-label">GREEN acontece em</label>
@@ -464,15 +461,14 @@
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-header">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-3">
           <div>
-            <span class="section-pill">3</span>
-            <span class="section-title">Condicoes de alerta</span>
-          </div>
-          <span class="section-subtitle">O que dispara o alerta</span>
+            <span class="brand-icon" style="width: 28px; height: 28px; font-size: 0.8rem;">3</span>
+            <h5 class="mb-0 fw-bold d-inline ms-2">Condições de Alerta</h5>
+          <p class="text-muted small mb-0 ms-5">O que dispara o alerta</p>
         </div>
-        <div class="section-body">
+        <div class="card-body">
           <div class="row g-3 mb-3 align-items-end">
             <div class="col-md-2">
               <label class="form-label">Placar Casa</label>

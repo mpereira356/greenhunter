@@ -1,57 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Ao Vivo{% endblock %}
+{% block title %}Jogos ao Vivo | GreenHunter{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="page-title">Jogos ao vivo</div>
-    <div class="page-subtitle">Monitoramento em tempo real (somente leitura).</div>
+    <h1 class="page-title">Jogos ao Vivo</h1>
+    <p class="page-subtitle">Monitoramento em tempo real das partidas e estatísticas.</p>
   </div>
   <div class="page-actions">
     <form method="get" class="d-flex gap-2">
-      <input class="form-control" type="text" name="q" placeholder="Buscar time ou liga" value="{{ query }}">
-      <button class="btn btn-primary" type="submit">Buscar</button>
+      <div class="input-group shadow-sm">
+        <input class="form-control" type="text" name="q" placeholder="Buscar time ou liga..." value="{{ query }}">
+        <button class="btn btn-primary" type="submit">Buscar</button>
+      </div>
     </form>
   </div>
 </div>
 
 {% if status_code != 200 %}
-  <div class="alert alert-warning">API OFF (HTTP {{ status_code }}). Tente novamente.</div>
+  <div class="alert alert-warning shadow-sm border-0" style="border-left: 4px solid var(--warning) !important;">
+    <strong>API Offline:</strong> Ocorreu um problema ao buscar os dados (HTTP {{ status_code }}). Por favor, tente novamente em instantes.
+  </div>
 {% endif %}
 
 {% if matches %}
-  <div class="table-card">
+  <div class="card border-0 shadow-sm">
     <div class="table-responsive">
       <table class="table table-clean align-middle mb-0">
         <thead>
           <tr>
-            <th>Liga</th>
-            <th>Jogo</th>
-            <th>Min</th>
-            <th>Placar</th>
-            <th>Chutes no alvo</th>
-            <th>Escanteios</th>
-            <th>Ataques perigosos</th>
-            <th>Stats</th>
-            <th></th>
+            <th>Liga / Jogo</th>
+            <th class="text-center">Min</th>
+            <th class="text-center">Placar</th>
+            <th class="text-center">Chutes (Alvo)</th>
+            <th class="text-center">Escanteios</th>
+            <th class="text-center">Ataques Perigosos</th>
+            <th class="text-end">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for item in matches %}
           <tr>
-            <td>{{ item.league }}</td>
-            <td>{{ item.home_team }} vs {{ item.away_team }}</td>
-            <td>{{ item.minute }}</td>
-            <td>{{ item.score }}</td>
-            <td>{{ item.on_target_home }} x {{ item.on_target_away }}</td>
-            <td>{{ item.corners_home }} x {{ item.corners_away }}</td>
-            <td>{{ item.dangerous_home }} x {{ item.dangerous_away }}</td>
             <td>
-              <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#statsModal{{ loop.index }}">
-                Ver stats
-              </button>
+              <div class="small text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">{{ item.league }}</div>
+              <div class="fw-bold text-main">{{ item.home_team }} <span class="text-muted small">vs</span> {{ item.away_team }}</div>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-light text-primary border fw-bold">{{ item.minute }}'</span>
+            </td>
+            <td class="text-center fw-bold" style="font-size: 1.1rem;">{{ item.score }}</td>
+            <td class="text-center">
+              <div class="small fw-bold">{{ item.on_target_home }} <span class="text-muted">x</span> {{ item.on_target_away }}</div>
+            </td>
+            <td class="text-center">
+              <div class="small fw-bold">{{ item.corners_home }} <span class="text-muted">x</span> {{ item.corners_away }}</div>
+            </td>
+            <td class="text-center">
+              <div class="small fw-bold">{{ item.dangerous_home }} <span class="text-muted">x</span> {{ item.dangerous_away }}</div>
             </td>
             <td class="text-end">
-              <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir</a>
+              <div class="d-flex justify-content-end gap-2">
+                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#statsModal{{ loop.index }}">
+                  Estatísticas
+                </button>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">
+                  Abrir
+                </a>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -59,49 +73,68 @@
       </table>
     </div>
   </div>
+
   {% for item in matches %}
-  <div class="modal fade" id="statsModal{{ loop.index }}" tabindex="-1" aria-labelledby="statsModalLabel{{ loop.index }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="statsModalLabel{{ loop.index }}">{{ item.home_team }} vs {{ item.away_team }}</h5>
+  <div class="modal fade" id="statsModal{{ loop.index }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-light border-bottom py-3">
+          <h5 class="modal-title fw-bold">{{ item.home_team }} vs {{ item.away_team }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
-        <div class="modal-body">
-          <div class="mb-2 text-muted">{{ item.league }} | {{ item.minute }}' | Placar {{ item.score }}</div>
+        <div class="modal-body p-4">
+          <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded-3">
+            <div class="text-center flex-fill">
+              <div class="small text-muted fw-bold">LIGA</div>
+              <div class="fw-bold">{{ item.league }}</div>
+            </div>
+            <div class="text-center flex-fill border-start border-end">
+              <div class="small text-muted fw-bold">TEMPO</div>
+              <div class="fw-bold text-primary">{{ item.minute }}'</div>
+            </div>
+            <div class="text-center flex-fill">
+              <div class="small text-muted fw-bold">PLACAR</div>
+              <div class="fw-bold" style="font-size: 1.2rem;">{{ item.score }}</div>
+            </div>
+          </div>
+          
           <div class="table-responsive">
             <table class="table table-sm table-clean mb-0">
               <thead>
-                <tr>
-                  <th>Stat</th>
-                  <th>Casa</th>
-                  <th>Fora</th>
+                <tr class="text-muted small">
+                  <th>ESTATÍSTICA</th>
+                  <th class="text-center">CASA</th>
+                  <th class="text-center">FORA</th>
                 </tr>
               </thead>
               <tbody>
                 {% for stat in item.stats_list %}
                 <tr>
-                  <td>{{ stat.key }}</td>
-                  <td>{{ stat.home }}</td>
-                  <td>{{ stat.away }}</td>
+                  <td class="fw-bold text-muted small">{{ stat.key }}</td>
+                  <td class="text-center fw-bold">{{ stat.home }}</td>
+                  <td class="text-center fw-bold">{{ stat.away }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </div>
-        <div class="modal-footer">
-          <a class="btn btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir no site</a>
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Fechar</button>
+        <div class="modal-footer bg-light border-top">
+          <a class="btn btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Ver no Site Original</a>
+          <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
   </div>
   {% endfor %}
 {% else %}
-  <div class="card-soft p-4">
-    <div class="fw-semibold mb-1">Nenhum jogo encontrado.</div>
-    <div class="text-muted">Tente ajustar o filtro ou aguarde novos jogos ao vivo.</div>
+  <div class="card border-0 shadow-sm p-5 text-center">
+    <div class="mb-3" style="font-size: 3rem;">🏟️</div>
+    <h4 class="fw-bold">Nenhum jogo ao vivo</h4>
+    <p class="text-muted">Não encontramos partidas que correspondam à sua busca no momento.</p>
+    <div class="mt-4">
+      <a href="{{ url_for('main.live') }}" class="btn btn-outline-primary px-4">Ver Todos os Jogos</a>
+    </div>
   </div>
 {% endif %}
 {% endblock %}

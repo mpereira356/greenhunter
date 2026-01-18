@@ -1,54 +1,80 @@
 {% extends "base.html" %}
-{% block title %}Configuracoes{% endblock %}
+{% block title %}Configurações | GreenHunter{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="page-title">Configuracoes</div>
-    <div class="page-subtitle">Conecte seu Telegram e teste notificacoes.</div>
+    <h1 class="page-title">Configurações</h1>
+    <p class="page-subtitle">Conecte seu Telegram e gerencie suas preferências de notificação.</p>
   </div>
 </div>
 
-<div class="row g-3">
+<div class="row g-4">
   <div class="col-lg-5">
-    <div class="card">
+    <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <h5 class="mb-3">Dados do Telegram</h5>
-        <form method="post" class="mb-3">
+        <h5 class="card-title d-flex align-items-center gap-2">
+          <span>📱</span> Integração Telegram
+        </h5>
+        <form method="post" class="mt-4">
           <div class="mb-3">
-            <label class="form-label">Telegram token</label>
-            <input class="form-control" name="telegram_token" value="{{ current_user.telegram_token or '' }}">
+            <label class="form-label">Telegram Bot Token</label>
+            <input class="form-control" name="telegram_token" value="{{ current_user.telegram_token or '' }}" placeholder="Ex: 123456789:ABCdef...">
           </div>
           <div class="mb-3">
-            <label class="form-label">Telegram chat_id</label>
-            <input class="form-control" name="telegram_chat_id" value="{{ current_user.telegram_chat_id or '' }}">
+            <label class="form-label">Telegram Chat ID</label>
+            <input class="form-control" name="telegram_chat_id" value="{{ current_user.telegram_chat_id or '' }}" placeholder="Ex: -100123456789">
           </div>
-          <div class="mb-3">
-            <div class="form-text">
-              Status: {% if current_user.telegram_verified %}<span class="text-success">Verificado</span>{% else %}<span class="text-danger">Nao verificado</span>{% endif %}
+          <div class="mb-4">
+            <div class="p-2 rounded bg-light border small d-flex justify-content-between align-items-center">
+              <span class="text-muted fw-bold">STATUS:</span>
+              {% if current_user.telegram_verified %}
+                <span class="text-success fw-bold">✓ Verificado</span>
+              {% else %}
+                <span class="text-danger fw-bold">✗ Não Verificado</span>
+              {% endif %}
             </div>
           </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit">Salvar</button>
-            <button class="btn btn-outline-secondary" form="test-telegram-form" type="submit">Testar Telegram</button>
+          <div class="d-grid gap-2">
+            <button class="btn btn-primary" type="submit">Salvar Alterações</button>
+            <button class="btn btn-outline-secondary" form="test-telegram-form" type="submit">Enviar Mensagem de Teste</button>
           </div>
         </form>
         <form id="test-telegram-form" method="post" action="{{ url_for('settings.test_telegram') }}"></form>
       </div>
     </div>
   </div>
+  
   <div class="col-lg-7">
-    <div class="card">
+    <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h5 class="card-title mb-3">Passo a passo: criar bot e pegar o chat_id</h5>
-        <ol class="mb-0">
-          <li>No Telegram, abra o @BotFather e crie um bot com o comando /newbot.</li>
-          <li>Copie o token gerado pelo BotFather e cole no campo "Telegram token".</li>
-          <li>Crie um grupo no Telegram e adicione o seu bot no grupo.</li>
-          <li>Adicione o bot @getidsbot no grupo.</li>
-          <li>O @getidsbot vai responder com algo como:</li>
-        </ol>
-        <pre class="mt-2 mb-0">This chat
-id: -1009876543210</pre>
+        <h5 class="card-title d-flex align-items-center gap-2">
+          <span>📖</span> Guia de Configuração
+        </h5>
+        <div class="mt-4">
+          <div class="d-flex gap-3 mb-4">
+            <div class="brand-icon flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.9rem;">1</div>
+            <div>
+              <h6 class="fw-bold mb-1">Crie seu Bot</h6>
+              <p class="text-muted small mb-0">No Telegram, procure por <a href="https://t.me/botfather" target="_blank" class="fw-bold">@BotFather</a> e use o comando <code>/newbot</code> para gerar seu token.</p>
+            </div>
+          </div>
+          
+          <div class="d-flex gap-3 mb-4">
+            <div class="brand-icon flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.9rem;">2</div>
+            <div>
+              <h6 class="fw-bold mb-1">Obtenha o Chat ID</h6>
+              <p class="text-muted small mb-0">Crie um grupo, adicione seu bot e o bot <a href="https://t.me/getidsbot" target="_blank" class="fw-bold">@getidsbot</a>. Ele informará o ID do chat (ex: -100...).</p>
+            </div>
+          </div>
+          
+          <div class="d-flex gap-3">
+            <div class="brand-icon flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.9rem;">3</div>
+            <div>
+              <h6 class="fw-bold mb-1">Vincule e Teste</h6>
+              <p class="text-muted small mb-0">Insira os dados ao lado, salve e clique em "Testar Telegram" para confirmar se está tudo funcionando.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

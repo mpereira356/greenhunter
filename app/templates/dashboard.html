@@ -1,123 +1,105 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard | GreenHunter{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="page-title">Dashboard</div>
-    <div class="page-subtitle">Resumo rapido dos seus alertas e resultados.</div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Bem-vindo de volta! Aqui está o resumo da sua operação.</p>
   </div>
   <div class="page-actions">
-    <a class="btn btn-primary" href="{{ url_for('rules.create_rule') }}">Nova regra</a>
+    <a class="btn btn-primary shadow-sm" href="{{ url_for('rules.create_rule') }}">
+      <span class="me-1">+</span> Nova Regra
+    </a>
   </div>
 </div>
 
 <div class="stat-grid">
   <div class="stat-card">
-    <div class="stat-label">Regras ativas</div>
-    <div class="stat-value">{{ active_rules }}</div>
+    <span class="stat-label">Regras Ativas</span>
+    <span class="stat-value">{{ active_rules }}</span>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Alertas hoje</div>
-    <div class="stat-value">{{ alerts_today }}</div>
+    <span class="stat-label">Alertas Hoje</span>
+    <span class="stat-value">{{ alerts_today }}</span>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Greens hoje</div>
-    <div class="stat-value text-success">{{ greens }}</div>
+    <span class="stat-label">Greens Hoje</span>
+    <span class="stat-value text-success">{{ greens }}</span>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Reds hoje</div>
-    <div class="stat-value text-danger">{{ reds }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Pendentes</div>
-    <div class="stat-value">{{ pending_alerts }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Ultimo alerta</div>
-    <div class="stat-sub">{{ last_alert.created_at.strftime('%d/%m %H:%M') if last_alert else '-' }}</div>
-    <div class="stat-small">{{ last_alert.home_team if last_alert else '' }} {{ 'x' if last_alert else '' }} {{ last_alert.away_team if last_alert else '' }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Ultimo GREEN</div>
-    <div class="stat-sub">{{ last_green.created_at.strftime('%d/%m %H:%M') if last_green else '-' }}</div>
-    <div class="stat-small">{{ last_green.home_team if last_green else '' }} {{ 'x' if last_green else '' }} {{ last_green.away_team if last_green else '' }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Ultimo RED</div>
-    <div class="stat-sub">{{ last_red.created_at.strftime('%d/%m %H:%M') if last_red else '-' }}</div>
-    <div class="stat-small">{{ last_red.home_team if last_red else '' }} {{ 'x' if last_red else '' }} {{ last_red.away_team if last_red else '' }}</div>
+    <span class="stat-label">Reds Hoje</span>
+    <span class="stat-value text-danger">{{ reds }}</span>
   </div>
 </div>
 
-<div class="row g-3 mt-3">
+<div class="row g-4">
   <div class="col-lg-8">
-    <div class="card">
+    <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="mb-0">Alertas da semana</h5>
-          <small class="text-muted">Greens / Reds / Pendentes</small>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h5 class="card-title mb-0">Desempenho Semanal</h5>
+          <div class="d-flex gap-3 small fw-bold">
+            <span class="text-success">● Green</span>
+            <span class="text-danger">● Red</span>
+            <span class="text-warning">● Pendente</span>
+          </div>
         </div>
-        <div class="d-flex gap-2 align-items-end" style="height: 160px;">
+        <div class="d-flex gap-3 align-items-end" style="height: 200px; padding-bottom: 20px;">
           {% for item in chart_days %}
-          {% set green_h = (item.counts.green / max_count) * 100 %}
-          {% set red_h = (item.counts.red / max_count) * 100 %}
-          {% set pending_h = (item.counts.pending / max_count) * 100 %}
-          <div class="text-center flex-fill">
-            <div class="chart-bar">
-              <div class="bar bg-success" style="height: {{ green_h }}%"></div>
-              <div class="bar bg-danger" style="height: {{ red_h }}%"></div>
-              <div class="bar bg-warning" style="height: {{ pending_h }}%"></div>
+          {% set green_h = (item.counts.green / max_count * 100) if max_count > 0 else 0 %}
+          {% set red_h = (item.counts.red / max_count * 100) if max_count > 0 else 0 %}
+          {% set pending_h = (item.counts.pending / max_count * 100) if max_count > 0 else 0 %}
+          <div class="text-center flex-fill d-flex flex-column align-items-center" style="height: 100%;">
+            <div class="chart-bar flex-grow-1 w-100" style="max-width: 40px;">
+              <div class="bar bg-success" style="height: {{ green_h }}%" title="Greens: {{ item.counts.green }}"></div>
+              <div class="bar bg-danger" style="height: {{ red_h }}%" title="Reds: {{ item.counts.red }}"></div>
+              <div class="bar bg-warning" style="height: {{ pending_h }}%" title="Pendentes: {{ item.counts.pending }}"></div>
             </div>
-            <div class="small text-muted mt-1">{{ item.day }}</div>
+            <div class="small text-muted mt-2 fw-bold">{{ item.day }}</div>
           </div>
           {% endfor %}
         </div>
       </div>
     </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card">
-      <div class="card-body">
-        <h5>Atalhos rapidos</h5>
-        <div class="d-grid gap-2">
-          <a class="btn btn-primary" href="{{ url_for('rules.create_rule') }}">Nova regra</a>
-          <a class="btn btn-outline-secondary" href="{{ url_for('history.history') }}">Historico</a>
-          <a class="btn btn-outline-secondary" href="{{ url_for('settings.settings') }}">Configuracoes</a>
-        </div>
-        <div class="mt-3 small text-muted">
-          Ultima atualizacao: {{ worker_status.last_cycle or 'aguardando' }}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
-<div class="row g-3 mt-3">
-  <div class="col-lg-7">
-    <div class="card">
+    <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <h5>Ultimos alertas</h5>
+        <h5 class="card-title">Últimos Alertas</h5>
         <div class="table-responsive">
-          <table class="table table-sm table-clean">
+          <table class="table table-clean align-middle">
             <thead>
               <tr>
                 <th>Regra</th>
-                <th>Jogo</th>
+                <th>Partida</th>
                 <th>Status</th>
-                <th>Data</th>
+                <th>Horário</th>
               </tr>
             </thead>
             <tbody>
               {% for alert in recent_alerts %}
               <tr>
-                <td>{{ alert.rule.name }}</td>
-                <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
-                <td>{{ alert.status }}</td>
-                <td>{{ alert.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td class="fw-bold">{{ alert.rule.name }}</td>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <span>{{ alert.home_team }}</span>
+                    <span class="text-muted small">vs</span>
+                    <span>{{ alert.away_team }}</span>
+                  </div>
+                </td>
+                <td>
+                  {% if alert.status == 'GREEN' %}
+                    <span class="badge-status badge-on">GREEN</span>
+                  {% elif alert.status == 'RED' %}
+                    <span class="badge-status badge-off">RED</span>
+                  {% else %}
+                    <span class="badge-status badge-wait">{{ alert.status }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-muted small">{{ alert.created_at.strftime('%H:%M') }}</td>
               </tr>
               {% endfor %}
-              {% if recent_alerts|length == 0 %}
-              <tr><td colspan="4" class="text-muted">Sem alertas ainda.</td></tr>
+              {% if not recent_alerts %}
+              <tr><td colspan="4" class="text-center py-4 text-muted">Nenhum alerta registrado hoje.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -125,41 +107,45 @@
       </div>
     </div>
   </div>
-  <div class="col-lg-5">
-    <div class="card">
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
-        <h5>Top regras (win rate)</h5>
+        <h5 class="card-title">Top Regras (Win Rate)</h5>
         {% if top_rules %}
-          <ul class="list-group list-group-flush">
+          <div class="d-flex flex-column gap-3">
             {% for item in top_rules %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>{{ item.rule.name }}</span>
-                <span class="badge bg-success">{{ item.win_rate }}%</span>
-              </li>
+              <div class="p-3 rounded-3 bg-light d-flex justify-content-between align-items-center border border-opacity-10">
+                <span class="fw-bold">{{ item.rule.name }}</span>
+                <span class="badge bg-success rounded-pill px-3">{{ item.win_rate }}%</span>
+              </div>
             {% endfor %}
-          </ul>
+          </div>
         {% else %}
-          <div class="text-muted">Sem dados suficientes.</div>
+          <div class="text-center py-3 text-muted">Dados insuficientes.</div>
         {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-primary text-white">
+      <div class="card-body">
+        <h5 class="card-title text-white">Status do Sistema</h5>
+        <div class="d-flex flex-column gap-2 small">
+          <div class="d-flex justify-content-between">
+            <span>Worker:</span>
+            <span class="fw-bold">Ativo</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span>Último Ciclo:</span>
+            <span class="fw-bold">{{ worker_status.last_cycle or 'Aguardando...' }}</span>
+          </div>
+        </div>
+        <hr class="my-3 opacity-25">
+        <div class="d-grid">
+          <a href="{{ url_for('settings.settings') }}" class="btn btn-light btn-sm fw-bold">Configurações</a>
+        </div>
       </div>
     </div>
   </div>
 </div>
-
-{% if (not current_user.telegram_token or not current_user.telegram_chat_id) or total_rules == 0 %}
-<div class="card shadow-sm mt-4">
-    <div class="card-body">
-      <h5 class="card-title">Primeiros passos</h5>
-      <ol class="mb-0">
-        {% if not current_user.telegram_token or not current_user.telegram_chat_id %}
-        <li>Configure seu Telegram em <a href="{{ url_for('settings.settings') }}">Configuracoes</a>.</li>
-      {% endif %}
-      {% if total_rules == 0 %}
-        <li>Crie sua primeira regra em <a href="{{ url_for('rules.create_rule') }}">Regras</a>.</li>
-      {% endif %}
-      <li>Use o botao "Testar regra" para validar antes de ativar.</li>
-    </ol>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
