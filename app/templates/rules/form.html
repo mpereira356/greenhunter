@@ -33,31 +33,7 @@
 
     <!-- PASSO 2: QUANDO MONITORAR (TEMPO E PLACAR) -->
     <div class="row g-4 mb-4">
-      <div class="col-md-6">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-header bg-white py-3 border-0">
-            <h6 class="mb-0 fw-bold text-primary">⏱️ Intervalo de Tempo</h6>
-          </div>
-          <div class="card-body pt-0">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="small text-muted">De (minuto)</label>
-                <input class="form-control" type="number" id="time-from" value="1">
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">Até (minuto)</label>
-                <input class="form-control" type="number" id="time-to" value="90">
-              </div>
-            </div>
-            <div class="d-flex gap-2 mt-3">
-              <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="setPresetTime(1, 45)">1º Tempo</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="setPresetTime(46, 90)">2º Tempo</button>
-              <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" onclick="setPresetTime(1, 90)">Jogo Todo</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6">
+      <div class="col-md-12">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white py-3 border-0">
             <h6 class="mb-0 fw-bold text-primary">🥅 Filtro de Placar (Opcional)</h6>
@@ -212,11 +188,6 @@
 </div>
 
 <script>
-  function setPresetTime(from, to) {
-    document.getElementById('time-from').value = from;
-    document.getElementById('time-to').value = to;
-  }
-
   function syncMinuteMode(block) {
     const statSelect = block.querySelector('.stat-select');
     const sideWrap = block.querySelector('.stat-side-wrap');
