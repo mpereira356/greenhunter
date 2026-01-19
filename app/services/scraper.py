@@ -140,7 +140,8 @@ def parse_minutes(time_text: str):
         return None
     text = time_text.strip().lower()
     text = text.replace("’", "").replace("'", "")
-    text = text.replace("＋", "+").replace("﹢", "+").replace("﹣", "-").replace("−", "-")
+    text = text.replace("＋", "+").replace("﹢", "+").replace("⁺", "+")
+    text = text.replace("﹣", "-").replace("−", "-")
     if text.startswith("+"):
         return None
     extra_match = re.search(r"(\d+)\s*\+\s*(\d+)", text)
