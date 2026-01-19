@@ -264,6 +264,13 @@ def process_live_games(session):
                 if not baseline:
                     continue
                 stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
+                if minute is not None:
+                    minute_2h = max(0, minute - 45)
+                    stats_for_rule["Minute"] = {
+                        "home": minute_2h,
+                        "away": minute_2h,
+                        "total": minute_2h,
+                    }
 
             if not evaluate_rule(rule, stats_for_rule):
                 continue
@@ -359,6 +366,16 @@ def follow_alerts(session):
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
+        if rule and rule.second_half_only:
+            if minute < 46:
+                time.sleep(0.4)
+                continue
+            baseline = SECOND_HALF_BASELINES.get(alert.game_id)
+            if baseline:
+                stats = apply_second_half_delta(stats_payload["stats"], baseline)
+            if minute is not None:
+                minute_2h = max(0, minute - 45)
+                stats["Minute"] = {"home": minute_2h, "away": minute_2h, "total": minute_2h}
 
         green_conditions = []
         red_conditions = []

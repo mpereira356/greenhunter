@@ -27,6 +27,15 @@
             <div class="form-check form-switch mt-2">
               <input class="form-check-input" type="checkbox" name="is_active" id="is_active" style="width: 3em; height: 1.5em;" {% if form is not none %}{% if form.is_active %}checked{% endif %}{% elif rule is none or rule.is_active %}checked{% endif %}>
             </div>
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" name="second_half_only" id="second_half_only" {% if form is not none %}{% if form.second_half_only %}checked{% endif %}{% elif rule and rule.second_half_only %}checked{% endif %}>
+              <label class="form-check-label small text-muted" for="second_half_only">
+                Somente 2º tempo (zerar stats do 1º)
+              </label>
+            </div>
+            <div class="small text-muted mt-2" id="second-half-note" style="display: none;">
+              No 2º tempo, os minutos são contados de 0 a 45 (ex.: 46' vira 1).
+            </div>
           </div>
         </div>
       </div>
@@ -560,6 +569,19 @@
   if (redIfNoGreen) {
     redIfNoGreen.addEventListener('change', syncRedMinuteRequired);
     syncRedMinuteRequired();
+  }
+
+  const secondHalfToggle = document.getElementById('second_half_only');
+  const secondHalfNote = document.getElementById('second-half-note');
+  function syncSecondHalfNote() {
+    if (!secondHalfToggle || !secondHalfNote) {
+      return;
+    }
+    secondHalfNote.style.display = secondHalfToggle.checked ? 'block' : 'none';
+  }
+  if (secondHalfToggle) {
+    secondHalfToggle.addEventListener('change', syncSecondHalfNote);
+    syncSecondHalfNote();
   }
 
 // Inicializar botões de remover existentes (se houver)

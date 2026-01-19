@@ -34,6 +34,8 @@ def _parse_conditions(form):
             index = int(parts[3])
             stat_key = form.get(f"group-{group_id}-cond-{index}-stat_key", "").strip()
             side = form.get(f"group-{group_id}-cond-{index}-side", "").strip()
+            if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
+                side = "total"
             operator = _normalize_operator(form.get(f"group-{group_id}-cond-{index}-operator", ""))
             value_raw = form.get(f"group-{group_id}-cond-{index}-value", "").strip()
             if stat_key and side and operator and value_raw.isdigit():
@@ -56,6 +58,8 @@ def _parse_conditions(form):
             break
         stat_key = stat_key.strip()
         side = form.get(f"conditions-{index}-side", "").strip()
+        if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
+            side = "total"
         operator = _normalize_operator(form.get(f"conditions-{index}-operator", ""))
         value_raw = form.get(f"conditions-{index}-value", "").strip()
         if stat_key and side and operator and value_raw.isdigit():
@@ -91,6 +95,8 @@ def _parse_outcome_conditions(form, prefix):
             break
         stat_key = stat_key.strip()
         side = form.get(f"{prefix}-{index}-side", "").strip()
+        if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
+            side = "total"
         operator = _normalize_operator(form.get(f"{prefix}-{index}-operator", ""))
         value_raw = form.get(f"{prefix}-{index}-value", "").strip()
         if stat_key and side and operator and value_raw.isdigit():
@@ -368,9 +374,18 @@ def test_rule():
             continue
         if temp_rule.score_away is not None and away_score != temp_rule.score_away:
             continue
-        if temp_rule.second_half_only and (minute or 0) < 46:
-            continue
-        if evaluate_rule(temp_rule, stats_payload["stats"]):
+        stats_for_rule = stats_payload.get("stats", {})
+        if temp_rule.second_half_only:
+            if (minute or 0) < 46:
+                continue
+            stats_for_rule = {
+                key: value.copy() if isinstance(value, dict) else value
+                for key, value in stats_for_rule.items()
+            }
+            if minute is not None:
+                minute_2h = max(0, minute - 45)
+                stats_for_rule["Minute"] = {"home": minute_2h, "away": minute_2h, "total": minute_2h}
+        if evaluate_rule(temp_rule, stats_for_rule):
             matches.append(
                 {
                     "league": stats_payload.get("league"),
