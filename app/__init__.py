@@ -145,6 +145,8 @@ def _ensure_rule_columns():
         "outcome_green_minute": "INTEGER",
         "outcome_red_minute": "INTEGER",
         "outcome_red_if_no_green": "BOOLEAN DEFAULT 0",
+        "score_home": "INTEGER",
+        "score_away": "INTEGER",
         "second_half_only": "BOOLEAN DEFAULT 0",
     }
 

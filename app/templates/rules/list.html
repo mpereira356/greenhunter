@@ -20,7 +20,6 @@
         <thead>
           <tr>
             <th>Nome da Regra</th>
-            <th>Tempo Limite</th>
             <th>Status</th>
             <th class="text-center">Greens</th>
             <th class="text-center">Reds</th>
@@ -34,9 +33,6 @@
             <td>
               <div class="fw-bold text-main">{{ rule.name }}</div>
               <div class="small text-muted">{{ rule.conditions|length }} condições configuradas</div>
-            </td>
-            <td>
-              <span class="badge bg-light text-dark border">{{ rule.time_limit_min }} min</span>
             </td>
             <td>
               {% if rule.is_active %}

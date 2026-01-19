@@ -139,6 +139,10 @@ def parse_minutes(time_text: str):
     if not time_text:
         return None
     text = time_text.strip().lower()
+    text = text.replace("’", "").replace("'", "")
+    text = text.replace("＋", "+").replace("﹢", "+").replace("﹣", "-").replace("−", "-")
+    if text.startswith("+"):
+        return None
     extra_match = re.search(r"(\d+)\s*\+\s*(\d+)", text)
     if extra_match:
         return int(extra_match.group(1))
@@ -146,6 +150,8 @@ def parse_minutes(time_text: str):
     nums = [int(n) for n in re.findall(r"\d+", text)]
     if not nums:
         return None
+    if "+" in text:
+        return nums[0] if len(nums) >= 2 else None
 
     if len(nums) == 1 and nums[0] <= 2 and ("half" in text or "tempo" in text or "ht" in text):
         return None
@@ -254,10 +260,6 @@ def fetch_match_stats(session, url):
             }
 
     minute_value = parse_minutes(time_text)
-    if minute_value is None:
-        minute_stats = stats.get("Minute")
-        if minute_stats:
-            minute_value = minute_stats.get("total") or minute_stats.get("home") or minute_stats.get("away")
     if minute_value is not None:
         stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
     return {

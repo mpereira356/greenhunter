@@ -16,6 +16,8 @@ def _upsert_excel(path: str, row: dict, key_field: str):
             df = pd.DataFrame()
     else:
         df = pd.DataFrame()
+    if not df.empty:
+        df = df.astype("object")
     if key_field in df.columns and row.get(key_field) in df[key_field].values:
         df.loc[df[key_field] == row[key_field], list(row.keys())] = list(row.values())
     else:

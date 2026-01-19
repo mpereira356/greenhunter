@@ -251,6 +251,11 @@ def process_live_games(session):
                 continue
 
             stats_for_rule = stats_payload["stats"]
+            home_score, away_score = parse_score(stats_payload.get("score", ""))
+            if rule.score_home is not None and home_score != rule.score_home:
+                continue
+            if rule.score_away is not None and away_score != rule.score_away:
+                continue
 
             if rule.second_half_only:
                 if minute < 46:
@@ -377,7 +382,7 @@ def follow_alerts(session):
             green_minute = rule.outcome_green_minute if rule else None
             red_minute = rule.outcome_red_minute if rule else None
 
-            if green_conditions and (green_minute is None or minute >= green_minute):
+            if green_conditions:
                 if evaluate_outcome_conditions(green_conditions, stats):
                     alert.status = "green"
                     alert.result_minute = minute
@@ -421,8 +426,8 @@ def follow_alerts(session):
                     )
                     continue
 
-            if rule and rule.outcome_red_if_no_green and green_conditions and green_minute is not None:
-                if minute >= green_minute:
+            if rule and rule.outcome_red_if_no_green and green_conditions and red_minute is not None:
+                if minute >= red_minute:
                     alert.status = "red"
                     alert.result_minute = minute
                     alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")

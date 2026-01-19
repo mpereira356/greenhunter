@@ -43,11 +43,11 @@
             <div class="row g-2">
               <div class="col-6">
                 <label class="small text-muted">Gols Casa</label>
-                <input class="form-control" type="number" id="score-home" placeholder="Qualquer">
+                <input class="form-control" type="number" id="score-home" name="score_home" value="{{ form.score_home if form is not none else (rule.score_home if rule and rule.score_home is not none else '') }}" placeholder="Qualquer">
               </div>
               <div class="col-6">
                 <label class="small text-muted">Gols Fora</label>
-                <input class="form-control" type="number" id="score-away" placeholder="Qualquer">
+                <input class="form-control" type="number" id="score-away" name="score_away" value="{{ form.score_away if form is not none else (rule.score_away if rule and rule.score_away is not none else '') }}" placeholder="Qualquer">
               </div>
             </div>
             <div class="form-text mt-2 small">Deixe em branco para monitorar qualquer placar.</div>
@@ -134,7 +134,7 @@
                 <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome="green">+ Condição GREEN</button>
               </div>
               <div class="mb-3">
-                <label class="small text-muted">Minuto para validar GREEN</label>
+                <label class="small text-muted">Minuto para validar GREEN (opcional)</label>
                 <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
               </div>
               <div id="outcome-green-container"></div>
@@ -147,7 +147,7 @@
                 <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome="red">+ Condição RED</button>
               </div>
               <div class="mb-3">
-                <label class="small text-muted">Minuto para validar RED (opcional)</label>
+                <label class="small text-muted">Minuto para virar RED se GREEN não ocorrer</label>
                 <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
               </div>
               <div class="form-check mb-3">
@@ -550,16 +550,16 @@
   });
 
   const redIfNoGreen = document.getElementById('outcome-red-if-no-green');
-  const greenMinuteInput = document.querySelector('input[name="outcome_green_minute"]');
-  function syncGreenMinuteRequired() {
-    if (!redIfNoGreen || !greenMinuteInput) {
+  const redMinuteInput = document.querySelector('input[name="outcome_red_minute"]');
+  function syncRedMinuteRequired() {
+    if (!redIfNoGreen || !redMinuteInput) {
       return;
     }
-    greenMinuteInput.required = redIfNoGreen.checked;
+    redMinuteInput.required = redIfNoGreen.checked;
   }
   if (redIfNoGreen) {
-    redIfNoGreen.addEventListener('change', syncGreenMinuteRequired);
-    syncGreenMinuteRequired();
+    redIfNoGreen.addEventListener('change', syncRedMinuteRequired);
+    syncRedMinuteRequired();
   }
 
 // Inicializar botões de remover existentes (se houver)

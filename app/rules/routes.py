@@ -6,6 +6,7 @@ from ..extensions import db
 from ..models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
 from ..services.evaluator import evaluate_rule
 from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
+from ..services.worker import parse_score
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
 
@@ -121,6 +122,8 @@ def _build_form_context(form):
         "message_template": form.get("message_template", "").strip(),
         "is_active": bool(form.get("is_active")),
         "second_half_only": bool(form.get("second_half_only")),
+        "score_home": form.get("score_home", "").strip(),
+        "score_away": form.get("score_away", "").strip(),
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
         "outcome_red_minute": form.get("outcome_red_minute", "").strip(),
         "outcome_red_if_no_green": bool(form.get("outcome_red_if_no_green")),
@@ -172,6 +175,8 @@ def create_rule():
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
+        score_home_raw = request.form.get("score_home", "").strip()
+        score_away_raw = request.form.get("score_away", "").strip()
 
         if not name:
             flash("Nome e obrigatorio.", "warning")
@@ -179,6 +184,8 @@ def create_rule():
         time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else 90
         outcome_green_minute = int(outcome_green_minute_raw) if outcome_green_minute_raw.isdigit() else None
         outcome_red_minute = int(outcome_red_minute_raw) if outcome_red_minute_raw.isdigit() else None
+        score_home = int(score_home_raw) if score_home_raw.isdigit() else None
+        score_away = int(score_away_raw) if score_away_raw.isdigit() else None
 
         conditions = _parse_conditions(request.form)
         if not conditions:
@@ -187,14 +194,11 @@ def create_rule():
 
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
-        if outcome_green and outcome_green_minute is None:
-            flash("Defina o minuto limite para validar o GREEN.", "warning")
-            return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
             return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
-        if outcome_green and not outcome_red_if_no_green:
-            flash("Marque a opcao de RED por tempo para encerrar quando o GREEN nao ocorrer.", "warning")
+        if outcome_red_if_no_green and outcome_red_minute is None:
+            flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
             return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
 
         rule = Rule(
@@ -211,6 +215,8 @@ def create_rule():
             outcome_green_minute=outcome_green_minute,
             outcome_red_minute=outcome_red_minute,
             outcome_red_if_no_green=outcome_red_if_no_green,
+            score_home=score_home,
+            score_away=score_away,
         )
         db.session.add(rule)
         db.session.flush()
@@ -247,6 +253,8 @@ def edit_rule(rule_id):
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
+        score_home_raw = request.form.get("score_home", "").strip()
+        score_away_raw = request.form.get("score_away", "").strip()
 
         if not name:
             flash("Nome e obrigatorio.", "warning")
@@ -255,6 +263,8 @@ def edit_rule(rule_id):
         time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else rule.time_limit_min
         outcome_green_minute = int(outcome_green_minute_raw) if outcome_green_minute_raw.isdigit() else None
         outcome_red_minute = int(outcome_red_minute_raw) if outcome_red_minute_raw.isdigit() else None
+        score_home = int(score_home_raw) if score_home_raw.isdigit() else None
+        score_away = int(score_away_raw) if score_away_raw.isdigit() else None
         rule.name = name
         rule.time_limit_min = time_limit_min
         rule.message_template = message_template or None
@@ -267,6 +277,8 @@ def edit_rule(rule_id):
         rule.outcome_green_minute = outcome_green_minute
         rule.outcome_red_minute = outcome_red_minute
         rule.outcome_red_if_no_green = outcome_red_if_no_green
+        rule.score_home = score_home
+        rule.score_away = score_away
 
         conditions = _parse_conditions(request.form)
         if not conditions:
@@ -275,14 +287,11 @@ def edit_rule(rule_id):
             return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
-        if outcome_green and outcome_green_minute is None:
-            flash("Defina o minuto limite para validar o GREEN.", "warning")
-            return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
             return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
-        if outcome_green and not outcome_red_if_no_green:
-            flash("Marque a opcao de RED por tempo para encerrar quando o GREEN nao ocorrer.", "warning")
+        if outcome_red_if_no_green and outcome_red_minute is None:
+            flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
             return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
 
         RuleCondition.query.filter_by(rule_id=rule.id).delete()
@@ -336,6 +345,10 @@ def test_rule():
         time_limit_min=90,
     )
     temp_rule.second_half_only = bool(request.form.get("second_half_only"))
+    score_home_raw = request.form.get("score_home", "").strip()
+    score_away_raw = request.form.get("score_away", "").strip()
+    temp_rule.score_home = int(score_home_raw) if score_home_raw.isdigit() else None
+    temp_rule.score_away = int(score_away_raw) if score_away_raw.isdigit() else None
     temp_rule.conditions = conditions
 
     session = make_session()
@@ -350,6 +363,11 @@ def test_rule():
         if is_youth_match(stats_payload):
             continue
         minute = stats_payload.get("minute") or game["minute"]
+        home_score, away_score = parse_score(stats_payload.get("score", ""))
+        if temp_rule.score_home is not None and home_score != temp_rule.score_home:
+            continue
+        if temp_rule.score_away is not None and away_score != temp_rule.score_away:
+            continue
         if temp_rule.second_half_only and (minute or 0) < 46:
             continue
         if evaluate_rule(temp_rule, stats_payload["stats"]):
