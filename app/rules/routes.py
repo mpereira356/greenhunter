@@ -150,6 +150,7 @@ def _build_form_context(form):
 def list_rules():
     rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.id.desc()).all()
     rule_stats = {rule.id: {"green": 0, "red": 0} for rule in rules}
+    rule_alert_counts = {rule.id: 0 for rule in rules}
     counts = (
         db.session.query(MatchAlert.rule_id, MatchAlert.status, func.count(MatchAlert.id))
         .filter(MatchAlert.user_id == current_user.id)
@@ -159,7 +160,14 @@ def list_rules():
     for rule_id, status, total in counts:
         if rule_id in rule_stats and status in ("green", "red"):
             rule_stats[rule_id][status] = total
-    return render_template("rules/list.html", rules=rules, rule_stats=rule_stats)
+        if rule_id in rule_alert_counts:
+            rule_alert_counts[rule_id] += total
+    return render_template(
+        "rules/list.html",
+        rules=rules,
+        rule_stats=rule_stats,
+        rule_alert_counts=rule_alert_counts,
+    )
 
 
 @rules_bp.route("/new", methods=["GET", "POST"])
@@ -318,6 +326,12 @@ def edit_rule(rule_id):
 @login_required
 def delete_rule(rule_id):
     rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
+    alert_count = MatchAlert.query.filter_by(rule_id=rule.id).count()
+    if alert_count > 20:
+        password = request.form.get("confirm_password", "")
+        if not current_user.check_password(password):
+            flash("Regra com muitos jogos no histórico. Informe sua senha para confirmar.", "warning")
+            return redirect(url_for("rules.list_rules"))
     db.session.delete(rule)
     db.session.commit()
     flash("Regra removida.", "success")
