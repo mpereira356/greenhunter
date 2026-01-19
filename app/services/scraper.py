@@ -118,10 +118,22 @@ def parse_int(value: str):
 def parse_minutes(time_text: str):
     if not time_text:
         return None
-    match = re.match(r"(\d+)", time_text)
-    if match:
-        return int(match.group(1))
-    return None
+    text = time_text.strip().lower()
+    extra_match = re.search(r"(\d+)\s*\+\s*(\d+)", text)
+    if extra_match:
+        return int(extra_match.group(1)) + int(extra_match.group(2))
+
+    nums = [int(n) for n in re.findall(r"\d+", text)]
+    if not nums:
+        return None
+
+    if len(nums) == 1 and nums[0] <= 2 and ("half" in text or "tempo" in text or "ht" in text):
+        return None
+
+    minute = nums[-1]
+    if minute <= 45 and ("2h" in text or "2nd" in text or "2o" in text or "2o tempo" in text):
+        return 45 + minute
+    return minute
 
 
 def fetch_live_games(session):
@@ -222,6 +234,10 @@ def fetch_match_stats(session, url):
             }
 
     minute_value = parse_minutes(time_text)
+    if minute_value is None:
+        minute_stats = stats.get("Minute")
+        if minute_stats:
+            minute_value = minute_stats.get("total") or minute_stats.get("home") or minute_stats.get("away")
     if minute_value is not None:
         stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
     return {
