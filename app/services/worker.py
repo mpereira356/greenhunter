@@ -21,6 +21,7 @@ API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
+YOUTH_TOKENS = ("u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19")
 
 
 def update_api_status(ok: bool, code: int | None):
@@ -97,6 +98,16 @@ def parse_score(score_text: str):
     if len(nums) >= 2:
         return int(nums[0]), int(nums[1])
     return 0, 0
+
+
+def is_youth_match(stats_payload: dict) -> bool:
+    if not stats_payload:
+        return False
+    league = stats_payload.get("league") or ""
+    home_team = stats_payload.get("home_team") or ""
+    away_team = stats_payload.get("away_team") or ""
+    hay = f"{league} {home_team} {away_team}".lower()
+    return any(token in hay for token in YOUTH_TOKENS)
 
 
 def copy_stats(stats):
@@ -194,6 +205,9 @@ def process_live_games(session):
 
         stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
+            continue
+
+        if is_youth_match(stats_payload):
             continue
 
         ensure_second_half_baseline(game["game_id"], stats_payload)

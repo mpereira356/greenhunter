@@ -1,1 +1,16 @@
+  GNU nano 7.2                                           .gitignore
 data/app.db
+# Ambiente virtual
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Variáveis de ambiente
+.env
+
+# Arquivos gerados
+data/exports/*.xlsx
+
+

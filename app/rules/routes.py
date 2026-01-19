@@ -234,6 +234,12 @@ def toggle_rule(rule_id):
 @rules_bp.route("/test", methods=["POST"])
 @login_required
 def test_rule():
+    def is_youth_match(payload):
+        if not payload:
+            return False
+        hay = f"{payload.get('league', '')} {payload.get('home_team', '')} {payload.get('away_team', '')}".lower()
+        return any(token in hay for token in ("u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19"))
+
     conditions = _parse_conditions(request.form)
     if not conditions:
         return jsonify({"ok": False, "message": "Adicione condicoes antes de testar."}), 400
@@ -253,6 +259,8 @@ def test_rule():
     for game in games[:10]:
         stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
+            continue
+        if is_youth_match(stats_payload):
             continue
         if game["minute"] and game["minute"] > temp_rule.time_limit_min:
             continue
