@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Configurar Regra{% endblock %}
 {% block content %}
+{% set form = form_data if form_data is defined and form_data else None %}
 {% set default_message = '📢 {rule}\n⏱️ Tempo: {minute}\'\n🏟️ {home_team} vs {away_team}\n🥅 Placar: {score}\n🎯 À Baliza: {on_target_home} x {on_target_away}\n🚩 Escanteios: {corners_home} x {corners_away}\n🔗 Abrir no site ({url})' %}
 
 <div class="builder-shell rule-editor">
@@ -19,12 +20,12 @@
         <div class="row g-3 align-items-center">
           <div class="col-md-9">
             <label class="form-label fw-bold">Nome da sua Estratégia</label>
-            <input class="form-control form-control-lg border-2" name="name" id="rule-name" value="{{ rule.name if rule else '' }}" placeholder="Ex: Funil de Escanteios HT" required>
+            <input class="form-control form-control-lg border-2" name="name" id="rule-name" value="{{ form.name if form is not none else (rule.name if rule else '') }}" placeholder="Ex: Funil de Escanteios HT" required>
           </div>
           <div class="col-md-3">
             <label class="form-label fw-bold">Status</label>
             <div class="form-check form-switch mt-2">
-              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" style="width: 3em; height: 1.5em;" {% if rule is none or rule.is_active %}checked{% endif %}>
+              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" style="width: 3em; height: 1.5em;" {% if form is not none %}{% if form.is_active %}checked{% endif %}{% elif rule is none or rule.is_active %}checked{% endif %}>
             </div>
           </div>
         </div>
@@ -119,13 +120,111 @@
       </div>
     </div>
 
-    <!-- PASSO 4: MENSAGEM DO TELEGRAM -->
+    <!-- PASSO 4: RESULTADO (GREEN/RED) -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-primary">✅ Resultado (Green/Red)</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="p-3 border rounded-3 bg-light h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-success">GREEN</h6>
+                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome="green">+ Condição GREEN</button>
+              </div>
+              <div class="mb-3">
+                <label class="small text-muted">Minuto para validar GREEN</label>
+                <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
+              </div>
+              <div id="outcome-green-container"></div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 border rounded-3 bg-light h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-danger">RED</h6>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome="red">+ Condição RED</button>
+              </div>
+              <div class="mb-3">
+                <label class="small text-muted">Minuto para validar RED (opcional)</label>
+                <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
+                <label class="form-check-label small text-muted" for="outcome-red-if-no-green">
+                  Se não bater o GREEN até o minuto acima, virar RED
+                </label>
+              </div>
+              <div id="outcome-red-container"></div>
+            </div>
+          </div>
+        </div>
+        <p class="small text-muted mt-3 mb-0">Se definir condições, elas serão usadas para decidir GREEN/RED. Se não definir RED, você pode usar a opção de virar RED por tempo.</p>
+      </div>
+    </div>
+
+    <template id="outcome-condition-template">
+      <div class="outcome-condition-block mb-3 p-3 border rounded-3 bg-white position-relative">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label class="small fw-bold">Estatística</label>
+            <select class="form-select outcome-stat-select">
+              <optgroup label="📊 Estatísticas Ofensivas">
+                <option value="corners">🚩 Escanteios</option>
+                <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
+                <option value="on-target">🎯 Chutes no Alvo</option>
+                <option value="attacks">⚔️ Ataques</option>
+                <option value="off-target">❌ Chutes para Fora</option>
+                <option value="possession">🏟️ Posse de Bola (%)</option>
+              </optgroup>
+              <optgroup label="🟡 Eventos">
+                <option value="goals">🟡 Gols</option>
+                <option value="yellow-cards">🟨 Cartões Amarelos</option>
+                <option value="red-cards">🔴 Cartões Vermelhos</option>
+              </optgroup>
+              <optgroup label="⏱️ Tempo">
+                <option value="Minute">⏱️ Minutos</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="col-md-2 outcome-stat-side-wrap">
+            <label class="small fw-bold">Time</label>
+            <select class="form-select outcome-stat-side">
+              <option value="total">Total</option>
+              <option value="home">Casa</option>
+              <option value="away">Fora</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold">Condição</label>
+            <select class="form-select outcome-stat-operator">
+              <option value=">=">&gt;= (Pelo menos)</option>
+              <option value="<=">&lt;= (No máximo)</option>
+              <option value="==">= (Igual a)</option>
+              <option value="!=">≠ (Diferente de)</option>
+              <option value=">">></option>
+              <option value="<"><</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold">Valor</label>
+            <input class="form-control outcome-stat-value" type="number" value="1">
+          </div>
+          <div class="col-md-2 d-flex align-items-end justify-content-end">
+            <button type="button" class="btn btn-outline-danger remove-outcome-condition px-2" aria-label="Excluir condição">✖</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- PASSO 5: MENSAGEM DO TELEGRAM -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white py-3 border-bottom">
         <h6 class="mb-0 fw-bold text-primary">💬 Mensagem no Telegram</h6>
       </div>
       <div class="card-body">
-        <textarea class="form-control message-template mb-3" name="message_template" rows="5" style="font-family: monospace; font-size: 0.9rem;">{{ rule.message_template if rule and rule.message_template else default_message }}</textarea>
+        <textarea class="form-control message-template mb-3" name="message_template" rows="5" style="font-family: monospace; font-size: 0.9rem;">{{ form.message_template if form is not none and form.message_template else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
         
         <div class="bg-light p-3 rounded-3">
           <p class="small fw-bold text-muted mb-2">Variáveis que você pode usar:</p>
@@ -202,8 +301,61 @@
   }
 
   const existingConditions = [
-    {% if rule and rule.conditions %}
+    {% if form_conditions %}
+      {% for cond in form_conditions %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% elif rule and rule.conditions %}
       {% for cond in rule.conditions %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% endif %}
+  ];
+
+  const existingOutcomeGreen = [
+    {% if form_outcome_green %}
+      {% for cond in form_outcome_green %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% elif rule and rule.outcome_conditions %}
+      {% for cond in rule.outcome_conditions if cond.outcome_type == 'green' %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% endif %}
+  ];
+
+  const existingOutcomeRed = [
+    {% if form_outcome_red %}
+      {% for cond in form_outcome_red %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% elif rule and rule.outcome_conditions %}
+      {% for cond in rule.outcome_conditions if cond.outcome_type == 'red' %}
         {
           stat_key: {{ cond.stat_key|tojson }},
           side: {{ cond.side|tojson }},
@@ -237,6 +389,29 @@
     });
   }
 
+  function refreshOutcomeNames(type) {
+    const blocks = Array.from(document.querySelectorAll(`.outcome-condition-block[data-outcome="${type}"]`));
+    blocks.forEach((block, index) => {
+      const statSelect = block.querySelector('.outcome-stat-select');
+      const sideSelect = block.querySelector('.outcome-stat-side');
+      const operatorSelect = block.querySelector('.outcome-stat-operator');
+      const valueInput = block.querySelector('.outcome-stat-value');
+
+      if (statSelect) {
+        statSelect.name = `outcome-${type}-${index}-stat_key`;
+      }
+      if (sideSelect) {
+        sideSelect.name = `outcome-${type}-${index}-side`;
+      }
+      if (operatorSelect) {
+        operatorSelect.name = `outcome-${type}-${index}-operator`;
+      }
+      if (valueInput) {
+        valueInput.name = `outcome-${type}-${index}-value`;
+      }
+    });
+  }
+
   function normalizeOperator(value) {
     if (value === "≥") {
       return ">=";
@@ -248,6 +423,60 @@
       return "==";
     }
     return value;
+  }
+
+  function syncOutcomeMinuteMode(block) {
+    const statSelect = block.querySelector('.outcome-stat-select');
+    const sideWrap = block.querySelector('.outcome-stat-side-wrap');
+    const sideSelect = block.querySelector('.outcome-stat-side');
+
+    if (statSelect && statSelect.value === 'Minute') {
+      sideSelect.value = 'total';
+      sideWrap.classList.add('d-none');
+    } else {
+      sideWrap.classList.remove('d-none');
+    }
+  }
+
+  function addOutcomeCondition(type, prefill) {
+    const container = document.getElementById(`outcome-${type}-container`);
+    const template = document.getElementById('outcome-condition-template');
+    const newBlock = template.content.firstElementChild.cloneNode(true);
+    newBlock.dataset.outcome = type;
+
+    newBlock.querySelectorAll('input').forEach(i => i.value = '');
+
+    if (prefill) {
+      const statSelect = newBlock.querySelector('.outcome-stat-select');
+      const sideSelect = newBlock.querySelector('.outcome-stat-side');
+      const operatorSelect = newBlock.querySelector('.outcome-stat-operator');
+      const valueInput = newBlock.querySelector('.outcome-stat-value');
+      if (statSelect && prefill.stat_key) {
+        statSelect.value = prefill.stat_key;
+      }
+      if (sideSelect && prefill.side) {
+        sideSelect.value = prefill.side;
+      }
+      if (operatorSelect && prefill.operator) {
+        operatorSelect.value = normalizeOperator(prefill.operator);
+      }
+      if (valueInput && prefill.value !== undefined && prefill.value !== null) {
+        valueInput.value = prefill.value;
+      }
+    }
+
+    newBlock.querySelector('.outcome-stat-select').addEventListener('change', function() {
+      syncOutcomeMinuteMode(newBlock);
+    });
+    syncOutcomeMinuteMode(newBlock);
+
+    newBlock.querySelector('.remove-outcome-condition').addEventListener('click', function() {
+      newBlock.remove();
+      refreshOutcomeNames(type);
+    });
+
+    container.appendChild(newBlock);
+    refreshOutcomeNames(type);
   }
 
   function addCondition(prefill) {
@@ -298,9 +527,40 @@
     });
   }
 
+  if (existingOutcomeGreen.length) {
+    existingOutcomeGreen.forEach(condition => {
+      addOutcomeCondition('green', condition);
+    });
+  }
+  if (existingOutcomeRed.length) {
+    existingOutcomeRed.forEach(condition => {
+      addOutcomeCondition('red', condition);
+    });
+  }
+
   document.getElementById('add-stat-condition').addEventListener('click', function() {
     addCondition();
   });
+
+  document.querySelectorAll('[data-add-outcome]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const type = this.getAttribute('data-add-outcome');
+      addOutcomeCondition(type);
+    });
+  });
+
+  const redIfNoGreen = document.getElementById('outcome-red-if-no-green');
+  const greenMinuteInput = document.querySelector('input[name="outcome_green_minute"]');
+  function syncGreenMinuteRequired() {
+    if (!redIfNoGreen || !greenMinuteInput) {
+      return;
+    }
+    greenMinuteInput.required = redIfNoGreen.checked;
+  }
+  if (redIfNoGreen) {
+    redIfNoGreen.addEventListener('change', syncGreenMinuteRequired);
+    syncGreenMinuteRequired();
+  }
 
 // Inicializar botões de remover existentes (se houver)
   document.querySelectorAll('.remove-stat-condition').forEach(btn => {
@@ -379,6 +639,8 @@
   if (ruleForm) {
     ruleForm.addEventListener('submit', function() {
       refreshConditionNames();
+      refreshOutcomeNames('green');
+      refreshOutcomeNames('red');
     });
   }
 

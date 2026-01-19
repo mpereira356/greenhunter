@@ -142,6 +142,9 @@ def _ensure_rule_columns():
         "last_alert_desc": "VARCHAR(255)",
         "outcome_green_stage": "VARCHAR(5)",
         "outcome_red_stage": "VARCHAR(5)",
+        "outcome_green_minute": "INTEGER",
+        "outcome_red_minute": "INTEGER",
+        "outcome_red_if_no_green": "BOOLEAN DEFAULT 0",
         "second_half_only": "BOOLEAN DEFAULT 0",
     }
 

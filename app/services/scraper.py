@@ -141,7 +141,7 @@ def parse_minutes(time_text: str):
     text = time_text.strip().lower()
     extra_match = re.search(r"(\d+)\s*\+\s*(\d+)", text)
     if extra_match:
-        return int(extra_match.group(1)) + int(extra_match.group(2))
+        return int(extra_match.group(1))
 
     nums = [int(n) for n in re.findall(r"\d+", text)]
     if not nums:

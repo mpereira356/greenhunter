@@ -152,6 +152,24 @@ def rule_has_custom_outcomes(rule):
     return len(rule.outcome_conditions) > 0
 
 
+def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
+    if not conditions:
+        return False
+    for cond in conditions:
+        key = normalize_stat_key(cond.stat_key)
+        if key not in stats:
+            return False
+        side_values = stats[key]
+        if cond.side not in side_values:
+            return False
+        value = side_values[cond.side]
+        if value is None:
+            return False
+        if not compare(cond.operator, value, cond.value):
+            return False
+    return True
+
+
 
 
 def start_worker(app):
@@ -168,6 +186,7 @@ def run_worker(app):
                 follow_alerts(session)
                 finalize_full_time(session)
             except Exception as exc:
+                db.session.rollback()
                 print(f"[worker] erro: {exc}")
 
             API_STATUS["last_cycle"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -334,6 +353,98 @@ def follow_alerts(session):
         time_text = stats_payload.get("time_text", "")
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
+        stats = stats_payload.get("stats", {})
+
+        green_conditions = []
+        red_conditions = []
+        if rule:
+            for cond in rule.outcome_conditions:
+                if cond.outcome_type == "green":
+                    green_conditions.append(cond)
+                elif cond.outcome_type == "red":
+                    red_conditions.append(cond)
+
+        has_custom_outcomes = False
+        if rule and (
+            rule_has_custom_outcomes(rule)
+            or rule.outcome_green_minute is not None
+            or rule.outcome_red_minute is not None
+            or rule.outcome_red_if_no_green
+        ):
+            has_custom_outcomes = True
+
+        if has_custom_outcomes:
+            green_minute = rule.outcome_green_minute if rule else None
+            red_minute = rule.outcome_red_minute if rule else None
+
+            if green_conditions and (green_minute is None or minute >= green_minute):
+                if evaluate_outcome_conditions(green_conditions, stats):
+                    alert.status = "green"
+                    alert.result_minute = minute
+                    alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+                    alert.ht_score = current_score
+                    alert.ht_stats_json = stats_to_json(stats)
+                    db.session.commit()
+
+                    export_alert(alert, alert.rule.name, EXPORT_DIR)
+
+                    send_message(
+                        alert.user.telegram_token,
+                        alert.user.telegram_chat_id,
+                        f"✅ GREEN - condições atingidas\n"
+                        f"{alert.home_team} vs {alert.away_team}\n"
+                        f"Tempo: {minute}'\n"
+                        f"Placar: {current_score}\n"
+                        f"Link: {alert.url}",
+                    )
+                    continue
+
+            if red_conditions and (red_minute is None or minute >= red_minute):
+                if evaluate_outcome_conditions(red_conditions, stats):
+                    alert.status = "red"
+                    alert.result_minute = minute
+                    alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+                    alert.ht_score = current_score
+                    alert.ht_stats_json = stats_to_json(stats)
+                    db.session.commit()
+
+                    export_alert(alert, alert.rule.name, EXPORT_DIR)
+
+                    send_message(
+                        alert.user.telegram_token,
+                        alert.user.telegram_chat_id,
+                        f"❌ RED - condições de RED atingidas\n"
+                        f"{alert.home_team} vs {alert.away_team}\n"
+                        f"Tempo: {minute}'\n"
+                        f"Placar: {current_score}\n"
+                        f"Link: {alert.url}",
+                    )
+                    continue
+
+            if rule and rule.outcome_red_if_no_green and green_conditions and green_minute is not None:
+                if minute >= green_minute:
+                    alert.status = "red"
+                    alert.result_minute = minute
+                    alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+                    alert.ht_score = current_score
+                    alert.ht_stats_json = stats_to_json(stats)
+                    db.session.commit()
+
+                    export_alert(alert, alert.rule.name, EXPORT_DIR)
+
+                    send_message(
+                        alert.user.telegram_token,
+                        alert.user.telegram_chat_id,
+                        f"❌ RED - prazo do GREEN expirou\n"
+                        f"{alert.home_team} vs {alert.away_team}\n"
+                        f"Tempo: {minute}'\n"
+                        f"Placar: {current_score}\n"
+                        f"Link: {alert.url}",
+                    )
+                    continue
+
+            time.sleep(0.4)
+            continue
 
         # GREEN se saiu gol no 1º tempo
         if (
