@@ -5,7 +5,7 @@ from sqlalchemy import func
 from ..extensions import db
 from ..models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
 from ..services.evaluator import evaluate_rule
-from ..services.scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
+from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
 
@@ -106,31 +106,6 @@ def _parse_outcome_conditions(form, prefix):
     return conditions
 
 
-def _condition_stats_payload(conditions, stats_payload):
-    stats = stats_payload.get("stats", {})
-    minute_value = stats_payload.get("minute")
-    payload = []
-    for cond in conditions:
-        key = normalize_stat_key(cond.stat_key)
-        current = None
-        if key == "Minute":
-            current = minute_value
-        else:
-            side_values = stats.get(key)
-            if isinstance(side_values, dict):
-                current = side_values.get(cond.side)
-        payload.append(
-            {
-                "key": key,
-                "side": cond.side,
-                "current": current,
-                "operator": cond.operator,
-                "target": cond.value,
-            }
-        )
-    return payload
-
-
 @rules_bp.route("/")
 @login_required
 def list_rules():
@@ -156,7 +131,7 @@ def create_rule():
         return redirect(url_for("settings.settings"))
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        time_limit_min = request.form.get("time_limit_min", "30").strip()
+        time_limit_raw = request.form.get("time_limit_min", "").strip()
         message_template = request.form.get("message_template", "").strip()
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
@@ -165,14 +140,15 @@ def create_rule():
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
         outcome_red_stage = request.form.get("outcome_red_stage", "HT")
 
-        if not name or not time_limit_min.isdigit():
-            flash("Nome e tempo limite sao obrigatorios.", "warning")
+        if not name:
+            flash("Nome e obrigatorio.", "warning")
             return render_template("rules/form.html", rule=None)
+        time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else 90
 
         rule = Rule(
             user_id=current_user.id,
             name=name,
-            time_limit_min=int(time_limit_min),
+            time_limit_min=time_limit_min,
             message_template=message_template or None,
             is_active=is_active,
             second_half_only=second_half_only,
@@ -213,7 +189,7 @@ def edit_rule(rule_id):
     rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        time_limit_min = request.form.get("time_limit_min", "30").strip()
+        time_limit_raw = request.form.get("time_limit_min", "").strip()
         message_template = request.form.get("message_template", "").strip()
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
@@ -222,12 +198,13 @@ def edit_rule(rule_id):
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
         outcome_red_stage = request.form.get("outcome_red_stage", "HT")
 
-        if not name or not time_limit_min.isdigit():
-            flash("Nome e tempo limite sao obrigatorios.", "warning")
+        if not name:
+            flash("Nome e obrigatorio.", "warning")
             return render_template("rules/form.html", rule=rule)
 
+        time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else rule.time_limit_min
         rule.name = name
-        rule.time_limit_min = int(time_limit_min)
+        rule.time_limit_min = time_limit_min
         rule.message_template = message_template or None
         rule.is_active = is_active
         rule.second_half_only = second_half_only
@@ -291,7 +268,7 @@ def test_rule():
     temp_rule = Rule(
         user_id=current_user.id,
         name=request.form.get("name", "Regra teste"),
-        time_limit_min=int(request.form.get("time_limit_min", "30") or 30),
+        time_limit_min=90,
     )
     temp_rule.second_half_only = bool(request.form.get("second_half_only"))
     temp_rule.conditions = conditions
@@ -308,10 +285,6 @@ def test_rule():
         if is_youth_match(stats_payload):
             continue
         minute = stats_payload.get("minute") or game["minute"]
-        if minute and minute > temp_rule.time_limit_min:
-            has_minute = any((cond.stat_key or "").lower() == "minute" for cond in conditions)
-            if not has_minute:
-                continue
         if temp_rule.second_half_only and (minute or 0) < 46:
             continue
         if evaluate_rule(temp_rule, stats_payload["stats"]):
@@ -323,7 +296,6 @@ def test_rule():
                     "minute": stats_payload.get("minute"),
                     "score": stats_payload.get("score"),
                     "url": game["url"],
-                    "condition_stats": _condition_stats_payload(conditions, stats_payload),
                 }
             )
         if len(matches) >= 5:

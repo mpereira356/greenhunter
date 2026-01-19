@@ -10,7 +10,9 @@ from .services.worker import start_worker
 
 
 def create_app():
-    # Carrega variáveis do .env (Windows e Linux)
+    # =========================
+    # Carrega variáveis do .env
+    # =========================
     load_dotenv()
 
     app = Flask(__name__)
@@ -20,24 +22,30 @@ def create_app():
     # =========================
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 
-    # Diretório base do projeto (compatível com Windows e Linux)
+    # Diretório base do projeto (Windows e Linux)
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-    # Pasta de dados
+    # Pastas de dados
     DATA_DIR = os.path.join(BASE_DIR, "data")
     EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
 
-    # Garante que as pastas existam (Windows e Linux)
+    # Garante que as pastas existam
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(EXPORTS_DIR, exist_ok=True)
 
-    # Banco de dados SQLite (funciona em qualquer SO)
+    # =========================
+    # Banco de dados SQLite
+    # =========================
     default_db_path = os.path.join(DATA_DIR, "app.db")
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL", f"sqlite:///{default_db_path}"
-    )
+    # Corrige caminho do Windows para formato SQLite
+    db_path = default_db_path.replace("\\", "/")
 
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        database_url = f"sqlite:///{db_path}"
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # =========================

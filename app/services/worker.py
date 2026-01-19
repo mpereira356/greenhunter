@@ -10,7 +10,7 @@ from ..extensions import db
 from ..models import MatchAlert, Rule, User
 from .evaluator import compare, evaluate_rule, render_message, stats_to_json
 from .exporter import export_alert
-from .scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
+from .scraper import fetch_live_games, fetch_match_stats, make_session
 from .telegram import send_message
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
@@ -152,11 +152,6 @@ def rule_has_custom_outcomes(rule):
     return len(rule.outcome_conditions) > 0
 
 
-def rule_has_minute_condition(rule) -> bool:
-    for cond in rule.conditions or []:
-        if normalize_stat_key(cond.stat_key) == "Minute":
-            return True
-    return False
 
 
 def start_worker(app):
@@ -199,12 +194,7 @@ def process_live_games(session):
             if minute is None:
                 continue
 
-        candidate_rules = [
-            r for r in active_rules if minute <= r.time_limit_min or rule_has_minute_condition(r)
-        ]
-        if not candidate_rules:
-            continue
-
+        candidate_rules = active_rules
         candidate_ids = [r.id for r in candidate_rules]
 
         existing = (

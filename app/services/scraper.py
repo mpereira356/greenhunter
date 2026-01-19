@@ -68,9 +68,29 @@ def _to_ascii(text: str) -> str:
 
 def normalize_stat_key(name: str) -> str:
     raw = _to_ascii(name).strip().lower()
-    if "on target" in raw or "a baliza" in raw or "ao alvo" in raw:
+    raw = raw.replace("-", " ").replace("_", " ")
+    raw = " ".join(raw.split())
+    if raw in ("on target", "shots on target", "shot on target"):
         return "On Target"
-    if "off target" in raw or "fora" in raw:
+    if raw in ("off target", "shots off target", "shot off target"):
+        return "Off Target"
+    if raw in ("dangerous attacks", "dangerous attack"):
+        return "Dangerous Attacks"
+    if raw in ("yellow cards", "yellow card"):
+        return "Yellow Card"
+    if raw in ("red cards", "red card"):
+        return "Red Card"
+    if (
+        "on target" in raw
+        or "on goal" in raw
+        or "a baliza" in raw
+        or "ao alvo" in raw
+        or ("alvo" in raw and ("chute" in raw or "shot" in raw))
+    ):
+        return "On Target"
+    if "off target" in raw:
+        return "Off Target"
+    if "fora" in raw:
         if "chute" in raw or "shot" in raw:
             return "Off Target"
     if "dangerous" in raw and "attack" in raw:

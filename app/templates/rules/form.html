@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Configurar Regra{% endblock %}
 {% block content %}
-{% set default_message = '📢 {rule}\n⏱️ Tempo: {minute}\' (Máx: {time_limit} min)\n🏟️ {home_team} vs {away_team}\n🥅 Placar: {score}\n🎯 À Baliza: {on_target_home} x {on_target_away}\n🚩 Escanteios: {corners_home} x {corners_away}\n🔗 Abrir no site ({url})' %}
+{% set default_message = '📢 {rule}\n⏱️ Tempo: {minute}\'\n🏟️ {home_team} vs {away_team}\n🥅 Placar: {score}\n🎯 À Baliza: {on_target_home} x {on_target_away}\n🚩 Escanteios: {corners_home} x {corners_away}\n🔗 Abrir no site ({url})' %}
 
 <div class="builder-shell rule-editor">
   <div class="page-header mb-4">
@@ -17,18 +17,11 @@
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-3 align-items-center">
-          <div class="col-md-7">
+          <div class="col-md-9">
             <label class="form-label fw-bold">Nome da sua Estratégia</label>
             <input class="form-control form-control-lg border-2" name="name" id="rule-name" value="{{ rule.name if rule else '' }}" placeholder="Ex: Funil de Escanteios HT" required>
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-bold">Tempo Limite (Alerta)</label>
-            <div class="input-group input-group-lg">
-              <input class="form-control border-2" name="time_limit_min" id="time-limit-min" type="number" value="{{ rule.time_limit_min if rule else 30 }}" required>
-              <span class="input-group-text bg-white border-2">min</span>
-            </div>
-          </div>
-          <div class="col-md-2">
             <label class="form-label fw-bold">Status</label>
             <div class="form-check form-switch mt-2">
               <input class="form-check-input" type="checkbox" name="is_active" id="is_active" style="width: 3em; height: 1.5em;" {% if rule is none or rule.is_active %}checked{% endif %}>
@@ -237,22 +230,6 @@
     }
   }
 
-  function syncTimeLimitState() {
-    const timeLimit = document.getElementById('time-limit-min');
-    if (!timeLimit) {
-      return;
-    }
-    const hasMinute = Array.from(document.querySelectorAll('.stat-select'))
-      .some(select => select.value === 'Minute');
-    if (hasMinute) {
-      timeLimit.disabled = true;
-      timeLimit.parentElement.classList.add('opacity-50');
-    } else {
-      timeLimit.disabled = false;
-      timeLimit.parentElement.classList.remove('opacity-50');
-    }
-  }
-
   const existingConditions = [
     {% if rule and rule.conditions %}
       {% for cond in rule.conditions %}
@@ -331,16 +308,13 @@
 
     newBlock.querySelector('.stat-select').addEventListener('change', function() {
       syncMinuteMode(newBlock);
-      syncTimeLimitState();
     });
     syncMinuteMode(newBlock);
-    syncTimeLimitState();
 
     // Evento de remover
     newBlock.querySelector('.remove-stat-condition').addEventListener('click', function() {
       newBlock.remove();
       refreshConditionNames();
-      syncTimeLimitState();
     });
 
     container.appendChild(newBlock);
@@ -362,7 +336,6 @@
     btn.addEventListener('click', function() {
       this.closest('.stat-condition-block').remove();
       refreshConditionNames();
-      syncTimeLimitState();
     });
   });
   document.querySelectorAll('.stat-condition-block').forEach(block => {
@@ -372,11 +345,9 @@
     }
     select.addEventListener('change', function() {
       syncMinuteMode(block);
-      syncTimeLimitState();
     });
     syncMinuteMode(block);
   });
-  syncTimeLimitState();
   refreshConditionNames();
 
   const testButton = document.getElementById('test-rule');
@@ -411,16 +382,6 @@
           const title = document.createElement('div');
           title.className = 'fw-bold';
           title.textContent = `${match.home_team} vs ${match.away_team}`;
-          if (match.condition_stats && match.condition_stats.length) {
-            const details = document.createElement('div');
-            details.className = 'small';
-            details.textContent = match.condition_stats.map(stat => {
-              const side = stat.key === 'Minute' ? '' : ` ${stat.side}`;
-              const current = stat.current === null || stat.current === undefined ? '-' : stat.current;
-              return `${stat.key}${side}: ${current} ${stat.operator} ${stat.target}`;
-            }).join(' | ');
-            item.appendChild(details);
-          }
           const meta = document.createElement('div');
           meta.className = 'small text-muted';
           meta.textContent = `Min: ${match.minute || '-'} | Placar: ${match.score || '-'}`;
