@@ -340,7 +340,25 @@ def test_rule():
         if not payload:
             return False
         hay = f"{payload.get('league', '')} {payload.get('home_team', '')} {payload.get('away_team', '')}".lower()
-        return any(token in hay for token in ("u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19"))
+        return any(
+            token in hay
+            for token in (
+                "u19",
+                "u-19",
+                "u 19",
+                "sub19",
+                "sub-19",
+                "sub 19",
+                "under 19",
+                "u20",
+                "u-20",
+                "u 20",
+                "sub20",
+                "sub-20",
+                "sub 20",
+                "under 20",
+            )
+        )
 
     conditions = _parse_conditions(request.form)
     if not conditions:

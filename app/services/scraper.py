@@ -261,14 +261,17 @@ def fetch_match_stats(session, url):
             }
 
     minute_value = parse_minutes(time_text)
-    if minute_value is None or minute_value <= 10:
-        raw_minute = raw_stats.get("Minute")
-        if raw_minute:
-            for candidate in raw_minute:
-                parsed = parse_minutes(candidate)
-                if parsed is not None and parsed >= 45:
-                    minute_value = parsed
-                    break
+    raw_minute = raw_stats.get("Minute")
+    if raw_minute:
+        candidates = []
+        for candidate in raw_minute:
+            parsed = parse_minutes(candidate)
+            if parsed is not None:
+                candidates.append(parsed)
+        if candidates:
+            best_minute = max(candidates)
+            if minute_value is None or best_minute > minute_value:
+                minute_value = best_minute
     if minute_value is not None:
         stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
     else:

@@ -21,7 +21,22 @@ API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
-YOUTH_TOKENS = ("u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19")
+YOUTH_TOKENS = (
+    "u19",
+    "u-19",
+    "u 19",
+    "sub19",
+    "sub-19",
+    "sub 19",
+    "under 19",
+    "u20",
+    "u-20",
+    "u 20",
+    "sub20",
+    "sub-20",
+    "sub 20",
+    "under 20",
+)
 
 
 def update_api_status(ok: bool, code: int | None):
