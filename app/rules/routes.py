@@ -5,13 +5,23 @@ from sqlalchemy import func
 from ..extensions import db
 from ..models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
 from ..services.evaluator import evaluate_rule
-from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
+from ..services.scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
 
 
 def _parse_conditions(form):
     conditions = []
+    def _normalize_operator(value: str) -> str:
+        value = (value or "").strip()
+        if value == "≥":
+            return ">="
+        if value == "≤":
+            return "<="
+        if value == "=":
+            return "=="
+        return value
+
     # New grouped format: group-<g>-cond-<i>-stat_key
     grouped_keys = [k for k in form.keys() if k.startswith("group-") and k.endswith("-stat_key")]
     if grouped_keys:
@@ -23,7 +33,7 @@ def _parse_conditions(form):
             index = int(parts[3])
             stat_key = form.get(f"group-{group_id}-cond-{index}-stat_key", "").strip()
             side = form.get(f"group-{group_id}-cond-{index}-side", "").strip()
-            operator = form.get(f"group-{group_id}-cond-{index}-operator", "").strip()
+            operator = _normalize_operator(form.get(f"group-{group_id}-cond-{index}-operator", ""))
             value_raw = form.get(f"group-{group_id}-cond-{index}-value", "").strip()
             if stat_key and side and operator and value_raw.isdigit():
                 conditions.append(
@@ -45,7 +55,7 @@ def _parse_conditions(form):
             break
         stat_key = stat_key.strip()
         side = form.get(f"conditions-{index}-side", "").strip()
-        operator = form.get(f"conditions-{index}-operator", "").strip()
+        operator = _normalize_operator(form.get(f"conditions-{index}-operator", ""))
         value_raw = form.get(f"conditions-{index}-value", "").strip()
         if stat_key and side and operator and value_raw.isdigit():
             conditions.append(
@@ -63,6 +73,16 @@ def _parse_conditions(form):
 
 def _parse_outcome_conditions(form, prefix):
     conditions = []
+    def _normalize_operator(value: str) -> str:
+        value = (value or "").strip()
+        if value == "≥":
+            return ">="
+        if value == "≤":
+            return "<="
+        if value == "=":
+            return "=="
+        return value
+
     index = 0
     while True:
         stat_key = form.get(f"{prefix}-{index}-stat_key")
@@ -70,7 +90,7 @@ def _parse_outcome_conditions(form, prefix):
             break
         stat_key = stat_key.strip()
         side = form.get(f"{prefix}-{index}-side", "").strip()
-        operator = form.get(f"{prefix}-{index}-operator", "").strip()
+        operator = _normalize_operator(form.get(f"{prefix}-{index}-operator", ""))
         value_raw = form.get(f"{prefix}-{index}-value", "").strip()
         if stat_key and side and operator and value_raw.isdigit():
             conditions.append(
@@ -84,6 +104,31 @@ def _parse_outcome_conditions(form, prefix):
             )
         index += 1
     return conditions
+
+
+def _condition_stats_payload(conditions, stats_payload):
+    stats = stats_payload.get("stats", {})
+    minute_value = stats_payload.get("minute")
+    payload = []
+    for cond in conditions:
+        key = normalize_stat_key(cond.stat_key)
+        current = None
+        if key == "Minute":
+            current = minute_value
+        else:
+            side_values = stats.get(key)
+            if isinstance(side_values, dict):
+                current = side_values.get(cond.side)
+        payload.append(
+            {
+                "key": key,
+                "side": cond.side,
+                "current": current,
+                "operator": cond.operator,
+                "target": cond.value,
+            }
+        )
+    return payload
 
 
 @rules_bp.route("/")
@@ -256,15 +301,18 @@ def test_rule():
     if status_code != 200:
         return jsonify({"ok": False, "message": f"API OFF (HTTP {status_code})"}), 503
     matches = []
-    for game in games[:10]:
+    for game in games:
         stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
             continue
         if is_youth_match(stats_payload):
             continue
-        if game["minute"] and game["minute"] > temp_rule.time_limit_min:
-            continue
-        if temp_rule.second_half_only and (game["minute"] or 0) < 46:
+        minute = stats_payload.get("minute") or game["minute"]
+        if minute and minute > temp_rule.time_limit_min:
+            has_minute = any((cond.stat_key or "").lower() == "minute" for cond in conditions)
+            if not has_minute:
+                continue
+        if temp_rule.second_half_only and (minute or 0) < 46:
             continue
         if evaluate_rule(temp_rule, stats_payload["stats"]):
             matches.append(
@@ -275,6 +323,7 @@ def test_rule():
                     "minute": stats_payload.get("minute"),
                     "score": stats_payload.get("score"),
                     "url": game["url"],
+                    "condition_stats": _condition_stats_payload(conditions, stats_payload),
                 }
             )
         if len(matches) >= 5:

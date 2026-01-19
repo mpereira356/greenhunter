@@ -98,17 +98,24 @@
           <div class="stat-condition-block mb-3 p-3 border rounded-3 bg-light position-relative">
             <div class="row g-2 align-items-end">
               <div class="col-md-4">
-                <label class="small fw-bold">Estatistica</label>
+                <label class="small fw-bold">Estatística</label>
                 <select class="form-select stat-select">
-                  <option value="corners">Escanteios</option>
-                  <option value="dangerous-attacks">Ataques Perigosos</option>
-                  <option value="on-target">Chutes no Alvo</option>
-                  <option value="attacks">Ataques</option>
-                  <option value="goals">Gols</option>
-                  <option value="yellow-cards">Cartoes Amarelos</option>
-                  <option value="red-cards">Cartoes Vermelhos</option>
-                  <option value="possession">Posse de Bola (%)</option>
-                  <option value="Minute">Minutos</option>
+                  <optgroup label="📊 Estatísticas Ofensivas">
+                    <option value="corners">🚩 Escanteios</option>
+                    <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
+                    <option value="on-target">🎯 Chutes no Alvo</option>
+                    <option value="attacks">⚔️ Ataques</option>
+                    <option value="off-target">❌ Chutes para Fora</option>
+                    <option value="possession">🔄 Posse de Bola (%)</option>
+                  </optgroup>
+                  <optgroup label="⚽ Eventos">
+                    <option value="goals">⚽ Gols</option>
+                    <option value="yellow-cards">🟨 Cartões Amarelos</option>
+                    <option value="red-cards">🔴 Cartões Vermelhos</option>
+                  </optgroup>
+                  <optgroup label="⏱️ Tempo">
+                    <option value="Minute">⏱️ Minutos</option>
+                  </optgroup>
                 </select>
               </div>
               <div class="col-md-2 stat-side-wrap">
@@ -120,11 +127,14 @@
                 </select>
               </div>
               <div class="col-md-2">
-                <label class="small fw-bold">Condicao</label>
+                <label class="small fw-bold">Condição</label>
                 <select class="form-select stat-operator">
-                  <option value=">=">&gt;=</option>
-                  <option value="<=">&lt;=</option>
-                  <option value="==">=</option>
+                  <option value=">=">&gt;= (Pelo menos)</option>
+                  <option value="<=">&lt;= (No máximo)</option>
+                  <option value="==">= (Igual a)</option>
+                  <option value="!=">≠ (Diferente de)</option>
+                  <option value=">">></option>
+                  <option value="<"><</option>
                 </select>
               </div>
               <div class="col-md-2">
@@ -132,14 +142,13 @@
                 <input class="form-control stat-value" type="number" value="3">
               </div>
               <div class="col-md-2 d-flex align-items-end justify-content-end">
-                <button type="button" class="btn btn-outline-danger remove-stat-condition px-2" aria-label="Excluir condicao">X</button>
+                <button type="button" class="btn btn-outline-danger remove-stat-condition px-2" aria-label="Excluir condição">✕</button>
               </div>
             </div>
           </div>
         </template>
       </div>
     </div>
-
 
     <!-- PASSO 4: MENSAGEM DO TELEGRAM -->
     <div class="card border-0 shadow-sm mb-4">
@@ -197,11 +206,11 @@
     </div>
 
     <!-- BOTÕES DE AÇÃO -->
-        <div class="d-grid mb-3">
-      <button type="button" class="btn btn-outline-primary btn-lg" id="test-rule">Testar bot</button>
+    <div class="d-grid mb-3">
+      <button type="button" class="btn btn-outline-primary btn-lg" id="test-rule">🧪 Testar Bot</button>
     </div>
     <div id="test-results" class="mb-3"></div>
-<div class="d-flex gap-3">
+    <div class="d-flex gap-3">
       <button class="btn btn-success btn-lg flex-grow-1 shadow-sm" type="submit">✅ Salvar e Ativar Bot</button>
       <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('rules.list_rules') }}">Cancelar</a>
     </div>
@@ -222,10 +231,8 @@
 
     if (statSelect && statSelect.value === 'Minute') {
       sideSelect.value = 'total';
-      sideSelect.setAttribute('disabled', 'disabled');
       sideWrap.classList.add('d-none');
     } else {
-      sideSelect.removeAttribute('disabled');
       sideWrap.classList.remove('d-none');
     }
   }
@@ -237,17 +244,91 @@
     }
     const hasMinute = Array.from(document.querySelectorAll('.stat-select'))
       .some(select => select.value === 'Minute');
-    timeLimit.disabled = hasMinute;
+    if (hasMinute) {
+      timeLimit.disabled = true;
+      timeLimit.parentElement.classList.add('opacity-50');
+    } else {
+      timeLimit.disabled = false;
+      timeLimit.parentElement.classList.remove('opacity-50');
+    }
   }
 
-  document.getElementById('add-stat-condition').addEventListener('click', function() {
+  const existingConditions = [
+    {% if rule and rule.conditions %}
+      {% for cond in rule.conditions %}
+        {
+          stat_key: {{ cond.stat_key|tojson }},
+          side: {{ cond.side|tojson }},
+          operator: {{ cond.operator|tojson }},
+          value: {{ cond.value }},
+        },
+      {% endfor %}
+    {% endif %}
+  ];
+
+  function refreshConditionNames() {
+    const blocks = Array.from(document.querySelectorAll('.stat-condition-block'));
+    blocks.forEach((block, index) => {
+      const statSelect = block.querySelector('.stat-select');
+      const sideSelect = block.querySelector('.stat-side');
+      const operatorSelect = block.querySelector('.stat-operator');
+      const valueInput = block.querySelector('.stat-value');
+
+      if (statSelect) {
+        statSelect.name = `conditions-${index}-stat_key`;
+      }
+      if (sideSelect) {
+        sideSelect.name = `conditions-${index}-side`;
+      }
+      if (operatorSelect) {
+        operatorSelect.name = `conditions-${index}-operator`;
+      }
+      if (valueInput) {
+        valueInput.name = `conditions-${index}-value`;
+      }
+    });
+  }
+
+  function normalizeOperator(value) {
+    if (value === "≥") {
+      return ">=";
+    }
+    if (value === "≤") {
+      return "<=";
+    }
+    if (value === "=") {
+      return "==";
+    }
+    return value;
+  }
+
+  function addCondition(prefill) {
     const container = document.getElementById('stats-conditions-container');
     const template = document.getElementById('stat-condition-template');
     const newBlock = template.content.firstElementChild.cloneNode(true);
     
     // Resetar valores
     newBlock.querySelectorAll('input').forEach(i => i.value = '');
-    
+
+    if (prefill) {
+      const statSelect = newBlock.querySelector('.stat-select');
+      const sideSelect = newBlock.querySelector('.stat-side');
+      const operatorSelect = newBlock.querySelector('.stat-operator');
+      const valueInput = newBlock.querySelector('.stat-value');
+      if (statSelect && prefill.stat_key) {
+        statSelect.value = prefill.stat_key;
+      }
+      if (sideSelect && prefill.side) {
+        sideSelect.value = prefill.side;
+      }
+      if (operatorSelect && prefill.operator) {
+        operatorSelect.value = normalizeOperator(prefill.operator);
+      }
+      if (valueInput && prefill.value !== undefined && prefill.value !== null) {
+        valueInput.value = prefill.value;
+      }
+    }
+
     newBlock.querySelector('.stat-select').addEventListener('change', function() {
       syncMinuteMode(newBlock);
       syncTimeLimitState();
@@ -258,15 +339,30 @@
     // Evento de remover
     newBlock.querySelector('.remove-stat-condition').addEventListener('click', function() {
       newBlock.remove();
+      refreshConditionNames();
+      syncTimeLimitState();
     });
 
     container.appendChild(newBlock);
+    refreshConditionNames();
+  }
+
+  if (existingConditions.length) {
+    existingConditions.forEach(condition => {
+      addCondition(condition);
+    });
+  }
+
+  document.getElementById('add-stat-condition').addEventListener('click', function() {
+    addCondition();
   });
 
-  // Inicializar botões de remover existentes (se houver)
+// Inicializar botões de remover existentes (se houver)
   document.querySelectorAll('.remove-stat-condition').forEach(btn => {
     btn.addEventListener('click', function() {
       this.closest('.stat-condition-block').remove();
+      refreshConditionNames();
+      syncTimeLimitState();
     });
   });
   document.querySelectorAll('.stat-condition-block').forEach(block => {
@@ -281,6 +377,7 @@
     syncMinuteMode(block);
   });
   syncTimeLimitState();
+  refreshConditionNames();
 
   const testButton = document.getElementById('test-rule');
   const testResults = document.getElementById('test-results');
@@ -288,6 +385,7 @@
 
   if (testButton && testResults && ruleForm) {
     testButton.addEventListener('click', async function() {
+      refreshConditionNames();
       testButton.disabled = true;
       testResults.innerHTML = '<div class="text-muted small">Buscando jogos ao vivo...</div>';
       try {
@@ -302,7 +400,7 @@
           return;
         }
         if (!data.matches || data.matches.length === 0) {
-          testResults.innerHTML = '<div class="alert alert-info mb-0">Nenhum jogo encontrou as condicoes agora.</div>';
+          testResults.innerHTML = '<div class="alert alert-info mb-0">Nenhum jogo encontrou as condições agora.</div>';
           return;
         }
         const list = document.createElement('div');
@@ -313,6 +411,16 @@
           const title = document.createElement('div');
           title.className = 'fw-bold';
           title.textContent = `${match.home_team} vs ${match.away_team}`;
+          if (match.condition_stats && match.condition_stats.length) {
+            const details = document.createElement('div');
+            details.className = 'small';
+            details.textContent = match.condition_stats.map(stat => {
+              const side = stat.key === 'Minute' ? '' : ` ${stat.side}`;
+              const current = stat.current === null || stat.current === undefined ? '-' : stat.current;
+              return `${stat.key}${side}: ${current} ${stat.operator} ${stat.target}`;
+            }).join(' | ');
+            item.appendChild(details);
+          }
           const meta = document.createElement('div');
           meta.className = 'small text-muted';
           meta.textContent = `Min: ${match.minute || '-'} | Placar: ${match.score || '-'}`;
@@ -333,6 +441,12 @@
       } finally {
         testButton.disabled = false;
       }
+    });
+  }
+
+  if (ruleForm) {
+    ruleForm.addEventListener('submit', function() {
+      refreshConditionNames();
     });
   }
 

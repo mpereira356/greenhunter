@@ -152,6 +152,13 @@ def rule_has_custom_outcomes(rule):
     return len(rule.outcome_conditions) > 0
 
 
+def rule_has_minute_condition(rule) -> bool:
+    for cond in rule.conditions or []:
+        if normalize_stat_key(cond.stat_key) == "Minute":
+            return True
+    return False
+
+
 def start_worker(app):
     thread = threading.Thread(target=run_worker, args=(app,), daemon=True)
     thread.start()
@@ -183,10 +190,18 @@ def process_live_games(session):
 
     for game in games:
         minute = game.get("minute")
+        stats_payload = None
         if minute is None:
-            continue
+            stats_payload = fetch_match_stats(session, game["url"])
+            if not stats_payload:
+                continue
+            minute = stats_payload.get("minute")
+            if minute is None:
+                continue
 
-        candidate_rules = [r for r in active_rules if minute <= r.time_limit_min]
+        candidate_rules = [
+            r for r in active_rules if minute <= r.time_limit_min or rule_has_minute_condition(r)
+        ]
         if not candidate_rules:
             continue
 
@@ -203,7 +218,8 @@ def process_live_games(session):
 
         existing_ids = {row.rule_id for row in existing}
 
-        stats_payload = fetch_match_stats(session, game["url"])
+        if stats_payload is None:
+            stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
             continue
 
