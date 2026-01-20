@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import threading
@@ -110,6 +111,34 @@ def apply_second_half_delta(stats, baseline):
         }
     return adjusted
 
+def _num(value):
+    return value if isinstance(value, (int, float)) else 0
+
+def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | None):
+    if not stats or not baseline:
+        return stats
+    adjusted = {}
+    for key, value in stats.items():
+        if not isinstance(value, dict):
+            continue
+        if key == "Possession":
+            adjusted[key] = value.copy()
+            continue
+        base = baseline.get(key)
+        if not isinstance(base, dict):
+            adjusted[key] = value.copy()
+            continue
+        adjusted[key] = {
+            "home": max(0, _num(value.get("home")) - _num(base.get("home"))),
+            "away": max(0, _num(value.get("away")) - _num(base.get("away"))),
+            "total": max(0, _num(value.get("total")) - _num(base.get("total"))),
+        }
+    if minute is not None:
+        start = alert_minute if alert_minute is not None else minute
+        m_delta = max(0, minute - start)
+        adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
+    return adjusted
+
 def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
     if not conditions: return False
     for cond in conditions:
@@ -178,7 +207,7 @@ def process_live_games(session):
                 alert = MatchAlert(
                     rule_id=rule.id, user_id=user.id, game_id=game["game_id"], url=game["url"],
                     status="pending", alert_minute=minute, initial_score=stats_payload["score"],
-                    initial_stats_json=stats_to_json(stats_payload["stats"]),
+                    initial_stats_json=stats_to_json(stats_for_rule),
                     league=stats_payload.get("league"), home_team=stats_payload.get("home_team"),
                     away_team=stats_payload.get("away_team")
                 )
@@ -228,14 +257,22 @@ def follow_alerts(session):
 
         green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] if rule else []
         red_conds = [c for c in rule.outcome_conditions if c.outcome_type == "red"] if rule else []
+
+        base_stats = None
+        if alert.initial_stats_json:
+            try:
+                base_stats = json.loads(alert.initial_stats_json)
+            except Exception:
+                base_stats = None
+        stats_for_outcome = apply_alert_delta(stats, base_stats, minute, alert.alert_minute) if base_stats else stats
         
         # 1. Verificar GREEN customizado
-        if green_conds and evaluate_outcome_conditions(green_conds, stats):
+        if green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
             update_alert_status(alert, "green", minute, current_score, stats, "✅ GREEN - condições atingidas")
             continue
 
         # 2. Verificar RED customizado
-        if red_conds and evaluate_outcome_conditions(red_conds, stats):
+        if red_conds and evaluate_outcome_conditions(red_conds, stats_for_outcome):
             update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - condições de RED atingidas")
             continue
 
