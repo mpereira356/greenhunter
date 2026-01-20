@@ -75,7 +75,7 @@
     <!-- PASSO 4: RESULTADO (GREEN/RED) -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white py-3 border-bottom">
-        <h6 class="mb-0 fw-bold text-primary">✅ Resultado (Green/Red)</h6>
+        <h6 class="mb-0 fw-bold text-primary">✅ Condições do Resultado</h6>
       </div>
       <div class="card-body">
         <div class="row g-4">
@@ -84,10 +84,6 @@
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-bold text-success">GREEN</h6>
                 <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome="green">+ Condição GREEN</button>
-              </div>
-              <div class="mb-3">
-                <label class="small text-muted">Minuto para validar GREEN (opcional)</label>
-                <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
               </div>
               <div id="outcome-green-container"></div>
             </div>
@@ -98,20 +94,38 @@
                 <h6 class="mb-0 fw-bold text-danger">RED</h6>
                 <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome="red">+ Condição RED</button>
               </div>
-              <div class="mb-3">
-                <label class="small text-muted">Minuto para virar RED se GREEN não ocorrer</label>
-                <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
-              </div>
-              <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
-                <label class="form-check-label small text-muted" for="outcome-red-if-no-green">
-                  Se não bater o GREEN até o minuto acima, virar RED
-                </label>
-              </div>
               <div id="outcome-red-container"></div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- PASSO 4.1: LIMITE DE TEMPO -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-primary">⏱️ Limite de Tempo</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-6">
+            <label class="small text-muted">GREEN até o minuto (opcional)</label>
+            <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
+          </div>
+          <div class="col-md-6">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
+              <label class="form-check-label small text-muted" for="outcome-red-if-no-green">
+                Virar RED se o GREEN não bater
+              </label>
+            </div>
+            <div id="outcome-red-minute-wrap">
+              <label class="small text-muted">Minuto do RED</label>
+              <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
+            </div>
+          </div>
+        </div>
+        <div class="form-text mt-2 small">O limite define até quando o GREEN precisa ocorrer.</div>
       </div>
     </div>
 
@@ -362,6 +376,17 @@
   existingOutcomeRed.forEach(c => addOutcome('red', c));
 
   document.getElementById('rule-form').addEventListener('submit', refreshNames);
+
+  const redToggle = document.getElementById('outcome-red-if-no-green');
+  const redMinuteWrap = document.getElementById('outcome-red-minute-wrap');
+  function syncRedMinute() {
+    const show = redToggle && redToggle.checked;
+    if (redMinuteWrap) redMinuteWrap.style.display = show ? '' : 'none';
+  }
+  if (redToggle) {
+    redToggle.addEventListener('change', syncRedMinute);
+    syncRedMinute();
+  }
   function formatOperator(op) {
     if (op === '==') return '=';
     return op || '';
