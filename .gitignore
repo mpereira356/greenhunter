@@ -15,4 +15,8 @@ data/exports/*.xlsx
 
 
 # Exports gerados automaticamente
+<<<<<<< HEAD
 data/exports/
+=======
+data/exports/
+>>>>>>> 4f88403 (Ignora arquivos de exportação automática)
