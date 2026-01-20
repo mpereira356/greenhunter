@@ -308,16 +308,26 @@ def _normalize_heading(text: str) -> str:
 
 def _find_history_tables(soup):
     tables = {}
-    for tag in soup.find_all(["h2", "h3", "h4", "h5", "h6", "div", "span", "strong"]):
+    used = set()
+    headings = soup.find_all(["h2", "h3", "h4", "h5", "h6", "div", "span", "strong"])
+    for tag in headings:
         text = tag.get_text(" ", strip=True)
         if not text:
             continue
         norm = _normalize_heading(text)
         for label, key in HISTORY_LABELS.items():
             if label in norm and key not in tables:
-                table = tag.find_next("table")
+                table = None
+                parent = tag.parent
+                if parent:
+                    table = parent.find("table")
+                if not table:
+                    table = tag.find_next("table")
+                if table and id(table) in used:
+                    table = table.find_next("table")
                 if table:
                     tables[key] = table
+                    used.add(id(table))
     return tables
 
 
