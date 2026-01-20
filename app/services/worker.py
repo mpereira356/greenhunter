@@ -378,7 +378,9 @@ def follow_alerts(session):
         ensure_second_half_baseline(alert.game_id, stats_payload)
 
         time_text = stats_payload.get("time_text", "")
-        minute = stats_payload.get("minute") or 0
+        minute = stats_payload.get("minute")
+        if minute is None:
+            minute = 45 if is_half_time(time_text, 0) else 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
         if rule and rule.second_half_only:
