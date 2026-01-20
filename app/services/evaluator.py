@@ -60,6 +60,17 @@ def render_message(rule, meta: dict) -> str:
         f"Min: {meta.get('minute')} | Placar: {meta.get('score')}\n"
         f"{meta.get('url')}"
     )
+    history_lines = []
+    if meta.get("history_confidence"):
+        history_lines.append(f"Conf: {meta.get('history_confidence')}")
+    if meta.get("history_h2h"):
+        history_lines.append(meta.get("history_h2h"))
+    if meta.get("history_home"):
+        history_lines.append(meta.get("history_home"))
+    if meta.get("history_away"):
+        history_lines.append(meta.get("history_away"))
+    if history_lines:
+        default_msg = f"{default_msg}\n" + "\n".join(history_lines)
     if not rule.message_template:
         return default_msg
     try:
@@ -70,3 +81,41 @@ def render_message(rule, meta: dict) -> str:
 
 def stats_to_json(stats: dict) -> str:
     return json.dumps(stats, ensure_ascii=True)
+
+
+def _get_cond_attr(cond, name: str):
+    if isinstance(cond, dict):
+        return cond.get(name)
+    return getattr(cond, name, None)
+
+
+def history_confidence(conditions, history_items):
+    if not conditions or not history_items:
+        return None
+    goals_conds = []
+    for cond in conditions:
+        stat_key = _get_cond_attr(cond, "stat_key")
+        side = _get_cond_attr(cond, "side")
+        operator = _get_cond_attr(cond, "operator")
+        value = _get_cond_attr(cond, "value")
+        if not stat_key or not side or operator is None or value is None:
+            return None
+        if normalize_stat_key(stat_key) != "Goals":
+            return None
+        if side not in ("home", "away", "total"):
+            return None
+        goals_conds.append((side, operator, int(value)))
+
+    total = len(history_items)
+    if total == 0:
+        return None
+    hits = 0
+    for item in history_items:
+        stats = {
+            "home": item.get("home", 0),
+            "away": item.get("away", 0),
+            "total": item.get("total", 0),
+        }
+        if all(compare(op, stats[side], val) for side, op, val in goals_conds):
+            hits += 1
+    return round((hits / total) * 100)

@@ -137,7 +137,7 @@
       <div class="card-body">
         <textarea class="form-control font-monospace" name="message_template" rows="6" placeholder="Sua mensagem personalizada...">{{ form.message_template if form is not none else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
         <div class="mt-2 small text-muted">
-          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>
+          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>, <code>{history_h2h}</code>, <code>{history_home}</code>, <code>{history_away}</code>, <code>{history_confidence}</code>
         </div>
       </div>
     </div>
@@ -471,13 +471,27 @@
       state.items.forEach(item => {
         const li = document.createElement('li');
         li.className = 'd-flex justify-content-between align-items-center py-2 border-top';
+        const left = document.createElement('div');
+        left.className = 'd-flex flex-column';
         const teams = document.createElement('div');
         teams.className = 'fw-semibold';
         teams.textContent = item.teams;
+        left.append(teams);
+        const extras = [];
+        if (item.confidence) extras.push(`Conf: ${item.confidence}`);
+        if (item.history_h2h) extras.push(item.history_h2h);
+        if (item.history_home) extras.push(item.history_home);
+        if (item.history_away) extras.push(item.history_away);
+        if (extras.length) {
+          const meta = document.createElement('div');
+          meta.className = 'small text-muted';
+          meta.textContent = extras.join(' | ');
+          left.append(meta);
+        }
         const minute = document.createElement('span');
         minute.className = 'badge text-bg-light';
         minute.textContent = item.minute;
-        li.append(teams, minute);
+        li.append(left, minute);
         list.append(li);
       });
       body.append(list);
@@ -536,7 +550,14 @@
       const items = data.matches.map(m => {
         const minute = m.minute !== null && m.minute !== undefined ? `${m.minute}'` : '-';
         const teams = `${m.home_team} vs ${m.away_team}`;
-        return { teams, minute };
+        return {
+          teams,
+          minute,
+          confidence: m.history_confidence || '',
+          history_h2h: m.history_h2h || '',
+          history_home: m.history_home || '',
+          history_away: m.history_away || '',
+        };
       });
       renderTestResult({
         badgeClass: 'text-bg-success',

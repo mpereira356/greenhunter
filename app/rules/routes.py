@@ -4,8 +4,15 @@ from sqlalchemy import func
 
 from ..extensions import db
 from ..models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
-from ..services.evaluator import evaluate_rule
-from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
+from ..services.evaluator import evaluate_rule, history_confidence
+from ..services.scraper import (
+    fetch_live_games,
+    fetch_match_history,
+    fetch_match_stats,
+    format_history_summary,
+    make_session,
+    summarize_history,
+)
 from ..services.worker import parse_score
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
@@ -437,6 +444,22 @@ def test_rule():
                 minute_2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": minute_2h, "away": minute_2h, "total": minute_2h}
         if evaluate_rule(temp_rule, stats_for_rule):
+            history_meta = {}
+            try:
+                history = fetch_match_history(session, game["url"])
+                h2h_summary = summarize_history(history.get("h2h", []))
+                home_summary = summarize_history(history.get("home", []))
+                away_summary = summarize_history(history.get("away", []))
+                history_meta = {
+                    "history_h2h": format_history_summary("H2H", h2h_summary),
+                    "history_home": format_history_summary("Home", home_summary),
+                    "history_away": format_history_summary("Away", away_summary),
+                }
+                confidence = history_confidence(conditions, history.get("h2h", []))
+                if confidence is not None:
+                    history_meta["history_confidence"] = f"{confidence}%"
+            except Exception:
+                history_meta = {}
             matches.append(
                 {
                     "league": stats_payload.get("league"),
@@ -445,6 +468,7 @@ def test_rule():
                     "minute": stats_payload.get("minute"),
                     "score": stats_payload.get("score"),
                     "url": game["url"],
+                    **history_meta,
                 }
             )
         if len(matches) >= 5:

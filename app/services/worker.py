@@ -9,9 +9,17 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import MatchAlert, Rule, User
-from app.services.evaluator import compare, evaluate_rule, render_message, stats_to_json
+from app.services.evaluator import compare, evaluate_rule, history_confidence, render_message, stats_to_json
 from app.services.exporter import export_alert
-from app.services.scraper import fetch_live_games, fetch_match_stats, make_session, normalize_stat_key
+from app.services.scraper import (
+    fetch_live_games,
+    fetch_match_history,
+    fetch_match_stats,
+    format_history_summary,
+    make_session,
+    normalize_stat_key,
+    summarize_history,
+)
 from app.services.telegram import send_message
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
@@ -218,16 +226,33 @@ def process_live_games(session):
                     rule.last_alert_desc = f"{alert.home_team} vs {alert.away_team}"
                     db.session.commit()
                     
-                    meta = build_message_meta(rule, stats_payload, game)
+                    history_meta = {}
+                    try:
+                        history = fetch_match_history(session, game["url"])
+                        h2h_summary = summarize_history(history.get("h2h", []))
+                        home_summary = summarize_history(history.get("home", []))
+                        away_summary = summarize_history(history.get("away", []))
+                        history_meta = {
+                            "history_h2h": format_history_summary("H2H", h2h_summary),
+                            "history_home": format_history_summary("Home", home_summary),
+                            "history_away": format_history_summary("Away", away_summary),
+                        }
+                        conf_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] or rule.conditions
+                        confidence = history_confidence(conf_conds, history.get("h2h", []))
+                        if confidence is not None:
+                            history_meta["history_confidence"] = f"{confidence}%"
+                    except Exception:
+                        history_meta = {}
+                    meta = build_message_meta(rule, stats_payload, game, history_meta)
                     send_message(user.telegram_token, user.telegram_chat_id, render_message(rule, meta))
                 except IntegrityError:
                     db.session.rollback()
         time.sleep(GAME_DELAY)
 
-def build_message_meta(rule, stats_payload, game):
+def build_message_meta(rule, stats_payload, game, history_meta=None):
     stats = stats_payload.get("stats", {})
     def sv(k, s): return stats.get(k, {}).get(s, "")
-    return {
+    meta = {
         "rule": rule.name, "home_team": stats_payload.get("home_team"), "away_team": stats_payload.get("away_team"),
         "minute": stats_payload.get("minute"), "score": stats_payload.get("score"), "url": game.get("url"),
         "league": stats_payload.get("league"), "time_limit": rule.time_limit_min,
@@ -236,6 +261,9 @@ def build_message_meta(rule, stats_payload, game):
         "on_target_home": sv("On Target", "home"), "on_target_away": sv("On Target", "away"), "on_target_total": sv("On Target", "total"),
         "dangerous_attacks_home": sv("Dangerous Attacks", "home"), "dangerous_attacks_away": sv("Dangerous Attacks", "away"), "dangerous_attacks_total": sv("Dangerous Attacks", "total"),
     }
+    if history_meta:
+        meta.update(history_meta)
+    return meta
 
 def follow_alerts(session):
     pending_alerts = MatchAlert.query.filter_by(status="pending").all()

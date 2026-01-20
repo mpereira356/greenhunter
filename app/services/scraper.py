@@ -286,3 +286,107 @@ def fetch_match_stats(session, url):
         "stats": stats,
         "raw_stats": raw_stats,
     }
+
+
+HISTORY_LIMITS = {"h2h": 8, "home": 6, "away": 6}
+HISTORY_LABELS = {
+    "head to head": "h2h",
+    "home history": "home",
+    "away history": "away",
+}
+
+
+def history_url_from_match(url: str) -> str:
+    if not url:
+        return ""
+    return url.replace("/r/", "/rh/")
+
+
+def _normalize_heading(text: str) -> str:
+    return " ".join(_to_ascii(text).lower().split())
+
+
+def _find_history_tables(soup):
+    tables = {}
+    for tag in soup.find_all(["h2", "h3", "h4", "h5", "h6", "div", "span", "strong"]):
+        text = tag.get_text(" ", strip=True)
+        if not text:
+            continue
+        norm = _normalize_heading(text)
+        for label, key in HISTORY_LABELS.items():
+            if label in norm and key not in tables:
+                table = tag.find_next("table")
+                if table:
+                    tables[key] = table
+    return tables
+
+
+def _parse_history_table(table):
+    items = []
+    if not table:
+        return items
+    for row in table.find_all("tr"):
+        text = row.get_text(" ", strip=True)
+        if not text:
+            continue
+        score_match = re.search(r"(\d+)\s*-\s*(\d+)", text)
+        if not score_match:
+            continue
+        home_goals = int(score_match.group(1))
+        away_goals = int(score_match.group(2))
+        items.append(
+            {
+                "home": home_goals,
+                "away": away_goals,
+                "total": home_goals + away_goals,
+            }
+        )
+    return items
+
+
+def fetch_match_history(session, match_url: str, limits=None):
+    history_url = history_url_from_match(match_url)
+    if not history_url:
+        return {"h2h": [], "home": [], "away": []}
+    resp = get_with_fallback(session, history_url)
+    if resp.status_code != 200:
+        return {"h2h": [], "home": [], "away": []}
+    soup = BeautifulSoup(resp.text, "html.parser")
+    tables = _find_history_tables(soup)
+    limits = limits or HISTORY_LIMITS
+    result = {"h2h": [], "home": [], "away": []}
+    for key in ("h2h", "home", "away"):
+        items = _parse_history_table(tables.get(key))
+        limit = limits.get(key) if isinstance(limits, dict) else None
+        result[key] = items[:limit] if limit else items
+    return result
+
+
+def summarize_history(items):
+    total = len(items)
+    if total == 0:
+        return None
+    goals_sum = sum(item.get("total", 0) for item in items)
+    over15 = sum(1 for item in items if item.get("total", 0) > 1)
+    over25 = sum(1 for item in items if item.get("total", 0) > 2)
+    btts = sum(1 for item in items if item.get("home", 0) > 0 and item.get("away", 0) > 0)
+    avg_goals = round(goals_sum / total, 1)
+    return {
+        "count": total,
+        "avg_goals": avg_goals,
+        "over15": over15,
+        "over25": over25,
+        "btts": btts,
+    }
+
+
+def format_history_summary(label: str, summary):
+    if not summary:
+        return ""
+    return (
+        f"{label} {summary['count']}j | "
+        f"Media gols {summary['avg_goals']} | "
+        f"O1.5 {summary['over15']}/{summary['count']} | "
+        f"O2.5 {summary['over25']}/{summary['count']} | "
+        f"BTTS {summary['btts']}/{summary['count']}"
+    )
