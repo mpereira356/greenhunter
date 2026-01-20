@@ -273,12 +273,37 @@
     return group;
   }
 
+  function normalizeStatKey(value) {
+    const raw = (value || '').toString();
+    const lowered = raw.toLowerCase();
+    const map = {
+      'corners': 'corners',
+      'corner': 'corners',
+      'dangerous attacks': 'dangerous-attacks',
+      'dangerous-attacks': 'dangerous-attacks',
+      'on target': 'on-target',
+      'on-target': 'on-target',
+      'attacks': 'attacks',
+      'off target': 'off-target',
+      'off-target': 'off-target',
+      'possession': 'possession',
+      'goals': 'goals',
+      'goal': 'goals',
+      'yellow cards': 'yellow-cards',
+      'yellow-cards': 'yellow-cards',
+      'red cards': 'red-cards',
+      'red-cards': 'red-cards',
+      'minute': 'Minute',
+    };
+    return map[lowered] || raw;
+  }
+
   function addConditionToGroup(group, prefill = null) {
     const list = group.querySelector('.conditions-list');
     const cond = conditionTemplate.content.firstElementChild.cloneNode(true);
     
     if (prefill) {
-      cond.querySelector('.stat-select').value = prefill.stat_key;
+      cond.querySelector('.stat-select').value = normalizeStatKey(prefill.stat_key);
       cond.querySelector('.stat-side').value = prefill.side;
       cond.querySelector('.stat-operator').value = prefill.operator;
       cond.querySelector('.stat-value').value = prefill.value;
@@ -302,7 +327,7 @@
     const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
     
     if (prefill) {
-      cond.querySelector('.outcome-stat-select').value = prefill.stat_key;
+      cond.querySelector('.outcome-stat-select').value = normalizeStatKey(prefill.stat_key);
       cond.querySelector('.outcome-stat-side').value = prefill.side;
       cond.querySelector('.outcome-stat-operator').value = prefill.operator;
       cond.querySelector('.outcome-stat-value').value = prefill.value;

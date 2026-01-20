@@ -114,12 +114,15 @@ def _parse_outcome_conditions(form, prefix):
 
 
 def _condition_dict(cond):
-    return {
+    data = {
         "stat_key": cond.stat_key,
         "side": cond.side,
         "operator": cond.operator,
         "value": cond.value,
     }
+    if hasattr(cond, "group_id"):
+        data["group_id"] = cond.group_id
+    return data
 
 
 def _build_form_context(form):
