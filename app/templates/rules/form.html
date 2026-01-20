@@ -33,99 +33,42 @@
                 Somente 2º tempo (zerar stats do quando estiver nos 45' HT)
               </label>
             </div>
-            <div class="small text-muted mt-2" id="second-half-note" style="display: none;">
-              No 2º tempo, os minutos são contados de 0 a 45 (ex.: 46' vira 1).
-            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- PASSO 2: QUANDO MONITORAR (TEMPO E PLACAR) -->
-    <div class="row g-4 mb-4">
-      <div class="col-md-12">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-header bg-white py-3 border-0">
-            <h6 class="mb-0 fw-bold text-primary">🥅 Filtro de Placar (Opcional)</h6>
+    <!-- PASSO 2: FILTRO DE PLACAR -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-0">
+        <h6 class="mb-0 fw-bold text-primary">🥅 Filtro de Placar (Opcional)</h6>
+      </div>
+      <div class="card-body pt-0">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="small text-muted">Gols Casa</label>
+            <input class="form-control" type="number" id="score-home" name="score_home" value="{{ form.score_home if form is not none else (rule.score_home if rule and rule.score_home is not none else '') }}" placeholder="Qualquer">
           </div>
-          <div class="card-body pt-0">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="small text-muted">Gols Casa</label>
-                <input class="form-control" type="number" id="score-home" name="score_home" value="{{ form.score_home if form is not none else (rule.score_home if rule and rule.score_home is not none else '') }}" placeholder="Qualquer">
-              </div>
-              <div class="col-6">
-                <label class="small text-muted">Gols Fora</label>
-                <input class="form-control" type="number" id="score-away" name="score_away" value="{{ form.score_away if form is not none else (rule.score_away if rule and rule.score_away is not none else '') }}" placeholder="Qualquer">
-              </div>
-            </div>
-            <div class="form-text mt-2 small">Deixe em branco para monitorar qualquer placar.</div>
+          <div class="col-md-6">
+            <label class="small text-muted">Gols Fora</label>
+            <input class="form-control" type="number" id="score-away" name="score_away" value="{{ form.score_away if form is not none else (rule.score_away if rule and rule.score_away is not none else '') }}" placeholder="Qualquer">
           </div>
         </div>
+        <div class="form-text mt-2 small">Deixe em branco para monitorar qualquer placar.</div>
       </div>
     </div>
 
-    <!-- PASSO 3: REGRAS DE ESTATÍSTICAS -->
+    <!-- PASSO 3: REGRAS DE ESTATÍSTICAS (GRUPOS) -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-bold text-primary">📊 Regras de Estatísticas</h6>
-        <button type="button" class="btn btn-sm btn-primary" id="add-stat-condition">+ Adicionar Condição</button>
+        <button type="button" class="btn btn-sm btn-primary" id="add-condition-group">+ Adicionar Grupo (OU)</button>
       </div>
       <div class="card-body">
-        <div id="stats-conditions-container"></div>
-        <template id="stat-condition-template">
-          <div class="stat-condition-block mb-3 p-3 border rounded-3 bg-light position-relative">
-            <div class="row g-2 align-items-end">
-              <div class="col-md-4">
-                <label class="small fw-bold">Estatística</label>
-                <select class="form-select stat-select">
-                  <optgroup label="📊 Estatísticas Ofensivas">
-                    <option value="corners">🚩 Escanteios</option>
-                    <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
-                    <option value="on-target">🎯 Chutes no Alvo</option>
-                    <option value="attacks">⚔️ Ataques</option>
-                    <option value="off-target">❌ Chutes para Fora</option>
-                    <option value="possession">🔄 Posse de Bola (%)</option>
-                  </optgroup>
-                  <optgroup label="⚽ Eventos">
-                    <option value="goals">⚽ Gols</option>
-                    <option value="yellow-cards">🟨 Cartões Amarelos</option>
-                    <option value="red-cards">🔴 Cartões Vermelhos</option>
-                  </optgroup>
-                  <optgroup label="⏱️ Tempo">
-                    <option value="Minute">⏱️ Minutos</option>
-                  </optgroup>
-                </select>
-              </div>
-              <div class="col-md-2 stat-side-wrap">
-                <label class="small fw-bold">Time</label>
-                <select class="form-select stat-side">
-                  <option value="total">Total</option>
-                  <option value="home">Casa</option>
-                  <option value="away">Fora</option>
-                </select>
-              </div>
-              <div class="col-md-2">
-                <label class="small fw-bold">Condição</label>
-                <select class="form-select stat-operator">
-                  <option value=">=">&gt;= (Pelo menos)</option>
-                  <option value="<=">&lt;= (No máximo)</option>
-                  <option value="==">= (Igual a)</option>
-                  <option value="!=">≠ (Diferente de)</option>
-                  <option value=">">></option>
-                  <option value="<"><</option>
-                </select>
-              </div>
-              <div class="col-md-2">
-                <label class="small fw-bold">Valor</label>
-                <input class="form-control stat-value" type="number" value="3">
-              </div>
-              <div class="col-md-2 d-flex align-items-end justify-content-end">
-                <button type="button" class="btn btn-outline-danger remove-stat-condition px-2" aria-label="Excluir condição">✕</button>
-              </div>
-            </div>
-          </div>
-        </template>
+        <div id="groups-container"></div>
+        <div class="form-text mt-2 small">
+          <strong>Dica:</strong> Condições dentro de um grupo funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
+        </div>
       </div>
     </div>
 
@@ -169,524 +112,403 @@
             </div>
           </div>
         </div>
-        <p class="small text-muted mt-3 mb-0">Se definir condições, elas serão usadas para decidir GREEN/RED. Se não definir RED, você pode usar a opção de virar RED por tempo.</p>
       </div>
     </div>
 
-    <template id="outcome-condition-template">
-      <div class="outcome-condition-block mb-3 p-3 border rounded-3 bg-white position-relative">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-4">
-            <label class="small fw-bold">Estatística</label>
-            <select class="form-select outcome-stat-select">
-              <optgroup label="📊 Estatísticas Ofensivas">
-                <option value="corners">🚩 Escanteios</option>
-                <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
-                <option value="on-target">🎯 Chutes no Alvo</option>
-                <option value="attacks">⚔️ Ataques</option>
-                <option value="off-target">❌ Chutes para Fora</option>
-                <option value="possession">🏟️ Posse de Bola (%)</option>
-              </optgroup>
-              <optgroup label="🟡 Eventos">
-                <option value="goals">🟡 Gols</option>
-                <option value="yellow-cards">🟨 Cartões Amarelos</option>
-                <option value="red-cards">🔴 Cartões Vermelhos</option>
-              </optgroup>
-              <optgroup label="⏱️ Tempo">
-                <option value="Minute">⏱️ Minutos</option>
-              </optgroup>
-            </select>
-          </div>
-          <div class="col-md-2 outcome-stat-side-wrap">
-            <label class="small fw-bold">Time</label>
-            <select class="form-select outcome-stat-side">
-              <option value="total">Total</option>
-              <option value="home">Casa</option>
-              <option value="away">Fora</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="small fw-bold">Condição</label>
-            <select class="form-select outcome-stat-operator">
-              <option value=">=">&gt;= (Pelo menos)</option>
-              <option value="<=">&lt;= (No máximo)</option>
-              <option value="==">= (Igual a)</option>
-              <option value="!=">≠ (Diferente de)</option>
-              <option value=">">></option>
-              <option value="<"><</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="small fw-bold">Valor</label>
-            <input class="form-control outcome-stat-value" type="number" value="1">
-          </div>
-          <div class="col-md-2 d-flex align-items-end justify-content-end">
-            <button type="button" class="btn btn-outline-danger remove-outcome-condition px-2" aria-label="Excluir condição">✖</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- PASSO 5: MENSAGEM DO TELEGRAM -->
+    <!-- PASSO 5: MENSAGEM -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white py-3 border-bottom">
-        <h6 class="mb-0 fw-bold text-primary">💬 Mensagem no Telegram</h6>
+        <h6 class="mb-0 fw-bold text-primary">💬 Mensagem do Alerta</h6>
       </div>
       <div class="card-body">
-        <textarea class="form-control message-template mb-3" name="message_template" rows="5" style="font-family: monospace; font-size: 0.9rem;">{{ form.message_template if form is not none and form.message_template else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
-        
-        <div class="bg-light p-3 rounded-3">
-          <p class="small fw-bold text-muted mb-2">Variáveis que você pode usar:</p>
-          <div class="row g-2">
-            <div class="col-md-6">
-              <div class="p-2 border rounded bg-white small mb-2">
-                <strong>Básicas:</strong><br>
-                <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{league}</code>, <code>{url}</code>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="p-2 border rounded bg-white small mb-2">
-                <strong>📊 Estatísticas (Casa / Fora / Total):</strong><br>
-                <div class="mt-2">
-                  <span class="text-muted">🚩 Escanteios:</span><br>
-                  <code>{corners_home}</code> / <code>{corners_away}</code> / <code>{corners_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">🎯 Chutes no Alvo:</span><br>
-                  <code>{on_target_home}</code> / <code>{on_target_away}</code> / <code>{on_target_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">⚡ Ataques Perigosos:</span><br>
-                  <code>{dangerous_attacks_home}</code> / <code>{dangerous_attacks_away}</code> / <code>{dangerous_attacks_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">⚔️ Ataques:</span><br>
-                  <code>{attacks_home}</code> / <code>{attacks_away}</code> / <code>{attacks_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">❌ Chutes para Fora:</span><br>
-                  <code>{off_target_home}</code> / <code>{off_target_away}</code> / <code>{off_target_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">🟨 Cartões Amarelos:</span><br>
-                  <code>{yellow_cards_home}</code> / <code>{yellow_cards_away}</code> / <code>{yellow_cards_total}</code>
-                </div>
-                <div class="mt-2">
-                  <span class="text-muted">🔴 Cartões Vermelhos:</span><br>
-                  <code>{red_cards_home}</code> / <code>{red_cards_away}</code> / <code>{red_cards_total}</code>
-                </div>
-              </div>
-            </div>
-          </div>
+        <textarea class="form-control font-monospace" name="message_template" rows="6" placeholder="Sua mensagem personalizada...">{{ form.message_template if form is not none else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
+        <div class="mt-2 small text-muted">
+          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>
         </div>
       </div>
     </div>
 
-    <!-- BOTÕES DE AÇÃO -->
-    <div class="d-grid mb-3">
-      <button type="button" class="btn btn-outline-primary btn-lg" id="test-rule">🧪 Testar Bot</button>
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-3">
+      <a href="{{ url_for('rules.list_rules') }}" class="btn btn-light px-4">Cancelar</a>
+      <button type="button" class="btn btn-outline-secondary px-4" id="test-rule">Testar bot</button>
+      <button type="submit" class="btn btn-primary px-5">Salvar Estratégia</button>
     </div>
-    <div id="test-results" class="mb-3"></div>
-    <div class="d-flex gap-3">
-      <button class="btn btn-success btn-lg flex-grow-1 shadow-sm" type="submit">✅ Salvar e Ativar Bot</button>
-      <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('rules.list_rules') }}">Cancelar</a>
-    </div>
-
+    <div id="test-rule-result" class="test-rule-result mb-5" role="status" aria-live="polite"></div>
   </form>
 </div>
 
+<!-- TEMPLATES -->
+<template id="group-template">
+  <div class="condition-group mb-4 p-3 border rounded-3 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0 fw-bold text-secondary group-title">Grupo de Condições</h6>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover Grupo</button>
+    </div>
+    <div class="conditions-list"></div>
+    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-group mt-2">+ Condição</button>
+  </div>
+</template>
+
+<template id="condition-template">
+  <div class="condition-row mb-2 p-2 border rounded bg-light position-relative">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <select class="form-select stat-select">
+          <optgroup label="📊 Estatísticas">
+            <option value="corners">🚩 Escanteios</option>
+            <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
+            <option value="on-target">🎯 Chutes no Alvo</option>
+            <option value="attacks">⚔️ Ataques</option>
+            <option value="off-target">❌ Chutes para Fora</option>
+            <option value="possession">🔄 Posse de Bola (%)</option>
+            <option value="goals">⚽ Gols</option>
+            <option value="yellow-cards">🟨 Cartões Amarelos</option>
+            <option value="red-cards">🔴 Cartões Vermelhos</option>
+            <option value="Minute">⏱️ Minutos</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="col-md-2 side-wrap">
+        <select class="form-select stat-side">
+          <option value="total">Total</option>
+          <option value="home">Casa</option>
+          <option value="away">Fora</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select stat-operator">
+          <option value=">=">&gt;=</option>
+          <option value="<=">&lt;=</option>
+          <option value="==">=</option>
+          <option value=">">></option>
+          <option value="<"><</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control stat-value" type="number" value="0">
+      </div>
+      <div class="col-md-2 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-condition">✕</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="outcome-condition-template">
+  <div class="outcome-condition-block mb-2 p-2 border rounded bg-white">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <select class="form-select outcome-stat-select">
+          <option value="goals">⚽ Gols</option>
+          <option value="corners">🚩 Escanteios</option>
+          <option value="on-target">🎯 Chutes no Alvo</option>
+          <option value="Minute">⏱️ Minutos</option>
+        </select>
+      </div>
+      <div class="col-md-3 outcome-side-wrap">
+        <select class="form-select outcome-stat-side">
+          <option value="total">Total</option>
+          <option value="home">Casa</option>
+          <option value="away">Fora</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select outcome-stat-operator">
+          <option value=">=">&gt;=</option>
+          <option value="==">=</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control outcome-stat-value" type="number" value="1">
+      </div>
+      <div class="col-md-1 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-condition">✕</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script>
-  function syncMinuteMode(block) {
-    const statSelect = block.querySelector('.stat-select');
-    const sideWrap = block.querySelector('.stat-side-wrap');
-    const sideSelect = block.querySelector('.stat-side');
+  const groupsContainer = document.getElementById('groups-container');
+  const groupTemplate = document.getElementById('group-template');
+  const conditionTemplate = document.getElementById('condition-template');
+  const outcomeGreenContainer = document.getElementById('outcome-green-container');
+  const outcomeRedContainer = document.getElementById('outcome-red-container');
+  const outcomeTemplate = document.getElementById('outcome-condition-template');
 
-    if (statSelect && statSelect.value === 'Minute') {
-      sideSelect.value = 'total';
-      sideWrap.classList.add('d-none');
-    } else {
-      sideWrap.classList.remove('d-none');
-    }
-  }
+  const existingConditions = {{ (form_conditions if form_conditions else (rule.conditions if rule else [])) | tojson }};
+  const existingOutcomeGreen = {{ (form_outcome_green if form_outcome_green else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'green') | list if rule else [])) | tojson }};
+  const existingOutcomeRed = {{ (form_outcome_red if form_outcome_red else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'red') | list if rule else [])) | tojson }};
 
-  const existingConditions = [
-    {% if form_conditions %}
-      {% for cond in form_conditions %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% elif rule and rule.conditions %}
-      {% for cond in rule.conditions %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% endif %}
-  ];
-
-  const existingOutcomeGreen = [
-    {% if form_outcome_green %}
-      {% for cond in form_outcome_green %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% elif rule and rule.outcome_conditions %}
-      {% for cond in rule.outcome_conditions if cond.outcome_type == 'green' %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% endif %}
-  ];
-
-  const existingOutcomeRed = [
-    {% if form_outcome_red %}
-      {% for cond in form_outcome_red %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% elif rule and rule.outcome_conditions %}
-      {% for cond in rule.outcome_conditions if cond.outcome_type == 'red' %}
-        {
-          stat_key: {{ cond.stat_key|tojson }},
-          side: {{ cond.side|tojson }},
-          operator: {{ cond.operator|tojson }},
-          value: {{ cond.value }},
-        },
-      {% endfor %}
-    {% endif %}
-  ];
-
-  function refreshConditionNames() {
-    const blocks = Array.from(document.querySelectorAll('.stat-condition-block'));
-    blocks.forEach((block, index) => {
-      const statSelect = block.querySelector('.stat-select');
-      const sideSelect = block.querySelector('.stat-side');
-      const operatorSelect = block.querySelector('.stat-operator');
-      const valueInput = block.querySelector('.stat-value');
-
-      if (statSelect) {
-        statSelect.name = `conditions-${index}-stat_key`;
-      }
-      if (sideSelect) {
-        sideSelect.name = `conditions-${index}-side`;
-      }
-      if (operatorSelect) {
-        operatorSelect.name = `conditions-${index}-operator`;
-      }
-      if (valueInput) {
-        valueInput.name = `conditions-${index}-value`;
-      }
-    });
-  }
-
-  function refreshOutcomeNames(type) {
-    const blocks = Array.from(document.querySelectorAll(`.outcome-condition-block[data-outcome="${type}"]`));
-    blocks.forEach((block, index) => {
-      const statSelect = block.querySelector('.outcome-stat-select');
-      const sideSelect = block.querySelector('.outcome-stat-side');
-      const operatorSelect = block.querySelector('.outcome-stat-operator');
-      const valueInput = block.querySelector('.outcome-stat-value');
-
-      if (statSelect) {
-        statSelect.name = `outcome-${type}-${index}-stat_key`;
-      }
-      if (sideSelect) {
-        sideSelect.name = `outcome-${type}-${index}-side`;
-      }
-      if (operatorSelect) {
-        operatorSelect.name = `outcome-${type}-${index}-operator`;
-      }
-      if (valueInput) {
-        valueInput.name = `outcome-${type}-${index}-value`;
-      }
-    });
-  }
-
-  function normalizeOperator(value) {
-    if (value === "≥") {
-      return ">=";
-    }
-    if (value === "≤") {
-      return "<=";
-    }
-    if (value === "=") {
-      return "==";
-    }
-    return value;
-  }
-
-  function syncOutcomeMinuteMode(block) {
-    const statSelect = block.querySelector('.outcome-stat-select');
-    const sideWrap = block.querySelector('.outcome-stat-side-wrap');
-    const sideSelect = block.querySelector('.outcome-stat-side');
-
-    if (statSelect && statSelect.value === 'Minute') {
-      sideSelect.value = 'total';
-      sideWrap.classList.add('d-none');
-    } else {
-      sideWrap.classList.remove('d-none');
-    }
-  }
-
-  function addOutcomeCondition(type, prefill) {
-    const container = document.getElementById(`outcome-${type}-container`);
-    const template = document.getElementById('outcome-condition-template');
-    const newBlock = template.content.firstElementChild.cloneNode(true);
-    newBlock.dataset.outcome = type;
-
-    newBlock.querySelectorAll('input').forEach(i => i.value = '');
-
-    if (prefill) {
-      const statSelect = newBlock.querySelector('.outcome-stat-select');
-      const sideSelect = newBlock.querySelector('.outcome-stat-side');
-      const operatorSelect = newBlock.querySelector('.outcome-stat-operator');
-      const valueInput = newBlock.querySelector('.outcome-stat-value');
-      if (statSelect && prefill.stat_key) {
-        statSelect.value = prefill.stat_key;
-      }
-      if (sideSelect && prefill.side) {
-        sideSelect.value = prefill.side;
-      }
-      if (operatorSelect && prefill.operator) {
-        operatorSelect.value = normalizeOperator(prefill.operator);
-      }
-      if (valueInput && prefill.value !== undefined && prefill.value !== null) {
-        valueInput.value = prefill.value;
-      }
-    }
-
-    newBlock.querySelector('.outcome-stat-select').addEventListener('change', function() {
-      syncOutcomeMinuteMode(newBlock);
-    });
-    syncOutcomeMinuteMode(newBlock);
-
-    newBlock.querySelector('.remove-outcome-condition').addEventListener('click', function() {
-      newBlock.remove();
-      refreshOutcomeNames(type);
-    });
-
-    container.appendChild(newBlock);
-    refreshOutcomeNames(type);
-  }
-
-  function addCondition(prefill) {
-    const container = document.getElementById('stats-conditions-container');
-    const template = document.getElementById('stat-condition-template');
-    const newBlock = template.content.firstElementChild.cloneNode(true);
+  function addGroup(groupId = null) {
+    const group = groupTemplate.content.firstElementChild.cloneNode(true);
+    const id = groupId !== null ? groupId : groupsContainer.children.length;
+    group.dataset.groupId = id;
+    group.querySelector('.group-title').textContent = `Grupo ${id + 1} (OU)`;
     
-    // Resetar valores
-    newBlock.querySelectorAll('input').forEach(i => i.value = '');
+    group.querySelector('.remove-group').addEventListener('click', () => {
+      group.remove();
+      refreshGroupIndices();
+    });
 
+    group.querySelector('.add-condition-to-group').addEventListener('click', () => {
+      addConditionToGroup(group);
+    });
+
+    groupsContainer.appendChild(group);
+    return group;
+  }
+
+  function addConditionToGroup(group, prefill = null) {
+    const list = group.querySelector('.conditions-list');
+    const cond = conditionTemplate.content.firstElementChild.cloneNode(true);
+    
     if (prefill) {
-      const statSelect = newBlock.querySelector('.stat-select');
-      const sideSelect = newBlock.querySelector('.stat-side');
-      const operatorSelect = newBlock.querySelector('.stat-operator');
-      const valueInput = newBlock.querySelector('.stat-value');
-      if (statSelect && prefill.stat_key) {
-        statSelect.value = prefill.stat_key;
-      }
-      if (sideSelect && prefill.side) {
-        sideSelect.value = prefill.side;
-      }
-      if (operatorSelect && prefill.operator) {
-        operatorSelect.value = normalizeOperator(prefill.operator);
-      }
-      if (valueInput && prefill.value !== undefined && prefill.value !== null) {
-        valueInput.value = prefill.value;
-      }
+      cond.querySelector('.stat-select').value = prefill.stat_key;
+      cond.querySelector('.stat-side').value = prefill.side;
+      cond.querySelector('.stat-operator').value = prefill.operator;
+      cond.querySelector('.stat-value').value = prefill.value;
     }
 
-    newBlock.querySelector('.stat-select').addEventListener('change', function() {
-      syncMinuteMode(newBlock);
+    cond.querySelector('.remove-condition').addEventListener('click', () => cond.remove());
+    
+    const statSelect = cond.querySelector('.stat-select');
+    const sideWrap = cond.querySelector('.side-wrap');
+    statSelect.addEventListener('change', () => {
+      sideWrap.style.visibility = statSelect.value === 'Minute' ? 'hidden' : 'visible';
     });
-    syncMinuteMode(newBlock);
+    if (prefill && prefill.stat_key === 'Minute') sideWrap.style.visibility = 'hidden';
 
-    // Evento de remover
-    newBlock.querySelector('.remove-stat-condition').addEventListener('click', function() {
-      newBlock.remove();
-      refreshConditionNames();
-    });
-
-    container.appendChild(newBlock);
-    refreshConditionNames();
+    list.appendChild(cond);
+    refreshNames();
   }
 
-  if (existingConditions.length) {
-    existingConditions.forEach(condition => {
-      addCondition(condition);
+  function addOutcome(type, prefill = null) {
+    const container = type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
+    const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
+    
+    if (prefill) {
+      cond.querySelector('.outcome-stat-select').value = prefill.stat_key;
+      cond.querySelector('.outcome-stat-side').value = prefill.side;
+      cond.querySelector('.outcome-stat-operator').value = prefill.operator;
+      cond.querySelector('.outcome-stat-value').value = prefill.value;
+    }
+
+    cond.querySelector('.remove-outcome-condition').addEventListener('click', () => cond.remove());
+    container.appendChild(cond);
+    refreshNames();
+  }
+
+  function refreshGroupIndices() {
+    Array.from(groupsContainer.children).forEach((group, i) => {
+      group.dataset.groupId = i;
+      group.querySelector('.group-title').textContent = `Grupo ${i + 1} (OU)`;
+    });
+    refreshNames();
+  }
+
+  function refreshNames() {
+    // Regras de Estatísticas
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const conditions = group.querySelectorAll('.condition-row');
+      conditions.forEach((cond, cIdx) => {
+        cond.querySelector('.stat-select').name = `group-${gIdx}-cond-${cIdx}-stat_key`;
+        cond.querySelector('.stat-side').name = `group-${gIdx}-cond-${cIdx}-side`;
+        cond.querySelector('.stat-operator').name = `group-${gIdx}-cond-${cIdx}-operator`;
+        cond.querySelector('.stat-value').name = `group-${gIdx}-cond-${cIdx}-value`;
+      });
+    });
+
+    // Outcomes
+    ['green', 'red'].forEach(type => {
+      const container = type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
+      Array.from(container.children).forEach((cond, i) => {
+        cond.querySelector('.outcome-stat-select').name = `outcome-${type}-${i}-stat_key`;
+        cond.querySelector('.outcome-stat-side').name = `outcome-${type}-${i}-side`;
+        cond.querySelector('.outcome-stat-operator').name = `outcome-${type}-${i}-operator`;
+        cond.querySelector('.outcome-stat-value').name = `outcome-${type}-${i}-value`;
+      });
     });
   }
 
-  if (existingOutcomeGreen.length) {
-    existingOutcomeGreen.forEach(condition => {
-      addOutcomeCondition('green', condition);
-    });
-  }
-  if (existingOutcomeRed.length) {
-    existingOutcomeRed.forEach(condition => {
-      addOutcomeCondition('red', condition);
-    });
-  }
-
-  document.getElementById('add-stat-condition').addEventListener('click', function() {
-    addCondition();
+  // Inicialização
+  document.getElementById('add-condition-group').addEventListener('click', () => {
+    const group = addGroup();
+    addConditionToGroup(group);
   });
 
   document.querySelectorAll('[data-add-outcome]').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const type = this.getAttribute('data-add-outcome');
-      addOutcomeCondition(type);
-    });
+    btn.addEventListener('click', () => addOutcome(btn.dataset.addOutcome));
   });
 
-  const redIfNoGreen = document.getElementById('outcome-red-if-no-green');
-  const redMinuteInput = document.querySelector('input[name="outcome_red_minute"]');
-  function syncRedMinuteRequired() {
-    if (!redIfNoGreen || !redMinuteInput) {
-      return;
-    }
-    redMinuteInput.required = redIfNoGreen.checked;
-  }
-  if (redIfNoGreen) {
-    redIfNoGreen.addEventListener('change', syncRedMinuteRequired);
-    syncRedMinuteRequired();
-  }
-
-  const secondHalfToggle = document.getElementById('second_half_only');
-  const secondHalfNote = document.getElementById('second-half-note');
-  function syncSecondHalfNote() {
-    if (!secondHalfToggle || !secondHalfNote) {
-      return;
-    }
-    secondHalfNote.style.display = secondHalfToggle.checked ? 'block' : 'none';
-  }
-  if (secondHalfToggle) {
-    secondHalfToggle.addEventListener('change', syncSecondHalfNote);
-    syncSecondHalfNote();
-  }
-
-// Inicializar botões de remover existentes (se houver)
-  document.querySelectorAll('.remove-stat-condition').forEach(btn => {
-    btn.addEventListener('click', function() {
-      this.closest('.stat-condition-block').remove();
-      refreshConditionNames();
+  // Carregar dados existentes
+  if (existingConditions.length > 0) {
+    const groups = {};
+    existingConditions.forEach(c => {
+      const gid = c.group_id || 0;
+      if (!groups[gid]) groups[gid] = [];
+      groups[gid].push(c);
     });
-  });
-  document.querySelectorAll('.stat-condition-block').forEach(block => {
-    const select = block.querySelector('.stat-select');
-    if (!select) {
-      return;
-    }
-    select.addEventListener('change', function() {
-      syncMinuteMode(block);
+    Object.keys(groups).forEach(gid => {
+      const group = addGroup(parseInt(gid));
+      groups[gid].forEach(c => addConditionToGroup(group, c));
     });
-    syncMinuteMode(block);
-  });
-  refreshConditionNames();
+  } else {
+    const group = addGroup();
+    addConditionToGroup(group);
+  }
 
-  const testButton = document.getElementById('test-rule');
-  const testResults = document.getElementById('test-results');
-  const ruleForm = document.getElementById('rule-form');
+  existingOutcomeGreen.forEach(c => addOutcome('green', c));
+  existingOutcomeRed.forEach(c => addOutcome('red', c));
 
-  if (testButton && testResults && ruleForm) {
-    testButton.addEventListener('click', async function() {
-      refreshConditionNames();
-      testButton.disabled = true;
-      testResults.innerHTML = '<div class="text-muted small">Buscando jogos ao vivo...</div>';
-      try {
-        const response = await fetch('{{ url_for("rules.test_rule") }}', {
-          method: 'POST',
-          body: new FormData(ruleForm),
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          const message = data && data.message ? data.message : 'Falha ao testar regra.';
-          testResults.innerHTML = `<div class="alert alert-warning mb-0">${message}</div>`;
-          return;
-        }
-        if (!data.matches || data.matches.length === 0) {
-          testResults.innerHTML = '<div class="alert alert-info mb-0">Nenhum jogo encontrou as condições agora.</div>';
-          return;
-        }
-        const list = document.createElement('div');
-        list.className = 'list-group';
-        data.matches.forEach(match => {
-          const item = document.createElement('div');
-          item.className = 'list-group-item';
-          const title = document.createElement('div');
-          title.className = 'fw-bold';
-          title.textContent = `${match.home_team} vs ${match.away_team}`;
-          const meta = document.createElement('div');
-          meta.className = 'small text-muted';
-          meta.textContent = `Min: ${match.minute || '-'} | Placar: ${match.score || '-'}`;
-          const link = document.createElement('a');
-          link.href = match.url;
-          link.target = '_blank';
-          link.rel = 'noopener';
-          link.textContent = match.url;
-          item.appendChild(title);
-          item.appendChild(meta);
-          item.appendChild(link);
-          list.appendChild(item);
-        });
-        testResults.innerHTML = '';
-        testResults.appendChild(list);
-      } catch (err) {
-        testResults.innerHTML = '<div class="alert alert-warning mb-0">Erro ao testar regra.</div>';
-      } finally {
-        testButton.disabled = false;
+  document.getElementById('rule-form').addEventListener('submit', refreshNames);
+  function formatOperator(op) {
+    if (op === '==') return '=';
+    return op || '';
+  }
+
+  function buildConditionsSummary() {
+    const groups = [];
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const parts = [];
+      const rows = group.querySelectorAll('.condition-row');
+      rows.forEach((row, cIdx) => {
+        const stat = row.querySelector('.stat-select')?.value || '';
+        const side = row.querySelector('.stat-side')?.value || '';
+        const op = row.querySelector('.stat-operator')?.value || '';
+        const val = row.querySelector('.stat-value')?.value || '';
+        if (!stat || !op || val === '') return;
+        const sideLabel = stat === 'Minute' ? '' : ` ${side}`;
+        parts.push(`${stat}${sideLabel} ${formatOperator(op)} ${val}`.trim());
+      });
+      if (parts.length) {
+        groups.push(`Grupo ${gIdx + 1}: ${parts.join(' AND ')}`);
       }
     });
+    return groups.join(' OR ');
   }
 
-  if (ruleForm) {
-    ruleForm.addEventListener('submit', function() {
-      refreshConditionNames();
-      refreshOutcomeNames('green');
-      refreshOutcomeNames('red');
-    });
+  function renderTestResult(state) {
+    const result = document.getElementById('test-rule-result');
+    result.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'card border-0 shadow-sm test-rule-card';
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const header = document.createElement('div');
+    header.className = 'd-flex align-items-center gap-2 mb-2';
+    const badge = document.createElement('span');
+    badge.className = `badge ${state.badgeClass || 'text-bg-secondary'}`;
+    badge.textContent = state.badgeText || 'INFO';
+    const title = document.createElement('div');
+    title.className = 'fw-bold';
+    title.textContent = state.title || '';
+    header.append(badge, title);
+    body.append(header);
+
+    if (state.subtitle) {
+      const subtitle = document.createElement('div');
+      subtitle.className = 'small text-muted mb-2';
+      subtitle.textContent = state.subtitle;
+      body.append(subtitle);
+    }
+
+    if (state.items && state.items.length) {
+      const list = document.createElement('ul');
+      list.className = 'list-unstyled mb-0';
+      state.items.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'd-flex justify-content-between align-items-center py-2 border-top';
+        const teams = document.createElement('div');
+        teams.className = 'fw-semibold';
+        teams.textContent = item.teams;
+        const minute = document.createElement('span');
+        minute.className = 'badge text-bg-light';
+        minute.textContent = item.minute;
+        li.append(teams, minute);
+        list.append(li);
+      });
+      body.append(list);
+    }
+
+    card.append(body);
+    result.append(card);
   }
 
+  function renderLoading() {
+    const result = document.getElementById('test-rule-result');
+    result.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'card border-0 shadow-sm test-rule-card';
+    const body = document.createElement('div');
+    body.className = 'card-body d-flex align-items-center gap-2';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm text-primary';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('div');
+    text.className = 'fw-semibold';
+    text.textContent = 'Testando...';
+    body.append(spinner, text);
+    card.append(body);
+    result.append(card);
+  }
+
+  document.getElementById('test-rule').addEventListener('click', async () => {
+    refreshNames();
+    const conditionsSummary = buildConditionsSummary();
+    renderLoading();
+    try {
+      const response = await fetch('{{ url_for("rules.test_rule") }}', {
+        method: 'POST',
+        body: new FormData(document.getElementById('rule-form')),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        renderTestResult({
+          badgeClass: 'text-bg-danger',
+          badgeText: 'ERRO',
+          title: data.message || 'Falha ao testar.',
+        });
+        return;
+      }
+      if (!data.matches || data.matches.length === 0) {
+        renderTestResult({
+          badgeClass: 'text-bg-warning',
+          badgeText: 'VAZIO',
+          title: 'Nenhuma partida encontrada com esta regra agora.',
+          subtitle: conditionsSummary ? `Condicoes: ${conditionsSummary}` : '',
+        });
+        return;
+      }
+      const items = data.matches.map(m => {
+        const minute = m.minute !== null && m.minute !== undefined ? `${m.minute}'` : '-';
+        const teams = `${m.home_team} vs ${m.away_team}`;
+        return { teams, minute };
+      });
+      renderTestResult({
+        badgeClass: 'text-bg-success',
+        badgeText: 'OK',
+        title: `Encontradas ${data.matches.length} partida(s)`,
+        subtitle: conditionsSummary ? `Condicoes: ${conditionsSummary}` : '',
+        items,
+      });
+    } catch (err) {
+      renderTestResult({
+        badgeClass: 'text-bg-danger',
+        badgeText: 'ERRO',
+        title: 'Falha ao testar. Tente novamente.',
+      });
+    }
+  });
 </script>
 
 <style>
-  .form-control:focus, .form-select:focus {
-    border-color: #10b981;
-    box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.1);
-  }
-  .stat-condition-block:hover {
-    border-color: #10b981 !important;
-  }
-  .remove-stat-condition {
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
-  }
-  code {
-    color: #059669;
-    background: #f0fdf4;
-    padding: 2px 4px;
-    border-radius: 4px;
-    font-size: 0.85rem;
-  }
+  .condition-group { border-left: 5px solid #0d6efd !important; }
+  .group-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+  .font-monospace { font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85rem; }
+  .test-rule-result .test-rule-card { border-left: 4px solid #0d6efd; }
 </style>
 {% endblock %}

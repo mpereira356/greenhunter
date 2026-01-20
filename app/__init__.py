@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 from flask import Flask
 from flask_login import current_user
 
-from .extensions import db, login_manager
-from .models import AdminBroadcast, AdminBroadcastView, User
-from .services.worker import start_worker
+from app.extensions import db, login_manager
+from app.models import AdminBroadcast, AdminBroadcastView, User
+from app.services.worker import start_worker
 
 
 def create_app():
@@ -58,12 +58,12 @@ def create_app():
     # =========================
     # Blueprints
     # =========================
-    from .auth.routes import auth_bp
-    from .rules.routes import rules_bp
-    from .history.routes import history_bp
-    from .settings.routes import settings_bp
-    from .main.routes import main_bp
-    from .admin.routes import admin_bp
+    from app.auth.routes import auth_bp
+    from app.rules.routes import rules_bp
+    from app.history.routes import history_bp
+    from app.settings.routes import settings_bp
+    from app.main.routes import main_bp
+    from app.admin.routes import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(rules_bp)
