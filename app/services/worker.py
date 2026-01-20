@@ -325,8 +325,11 @@ def update_alert_status(alert, status, minute, score, stats, msg_prefix):
     alert.ht_stats_json = stats_to_json(stats)
     db.session.commit()
     export_alert(alert, alert.rule.name, EXPORT_DIR)
-    send_message(alert.user.telegram_token, alert.user.telegram_chat_id, 
-                 f"{msg_prefix}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}")
+    send_message(
+        alert.user.telegram_token,
+        alert.user.telegram_chat_id,
+        f"{msg_prefix}\nRegra: {alert.rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}",
+    )
 
 def finalize_full_time(session):
     for alert in MatchAlert.query.filter_by(ft_completed=False).all():
