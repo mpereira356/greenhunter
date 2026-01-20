@@ -145,6 +145,22 @@ def _build_form_context(form):
     }
 
 
+def _build_rule_context(rule):
+    return {
+        "form_conditions": [_condition_dict(c) for c in (rule.conditions or [])],
+        "form_outcome_green": [
+            _condition_dict(c)
+            for c in (rule.outcome_conditions or [])
+            if c.outcome_type == "green"
+        ],
+        "form_outcome_red": [
+            _condition_dict(c)
+            for c in (rule.outcome_conditions or [])
+            if c.outcome_type == "red"
+        ],
+    }
+
+
 @rules_bp.route("/")
 @login_required
 def list_rules():
@@ -319,7 +335,7 @@ def edit_rule(rule_id):
         db.session.commit()
         flash("Regra atualizada.", "success")
         return redirect(url_for("rules.list_rules"))
-    return render_template("rules/form.html", rule=rule)
+    return render_template("rules/form.html", rule=rule, **_build_rule_context(rule))
 
 
 @rules_bp.route("/<int:rule_id>/delete", methods=["POST"])
