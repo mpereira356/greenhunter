@@ -54,10 +54,8 @@
                   </button>
                 </form>
                 <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
-                <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir esta regra?');">
-                  {% if rule_alert_counts.get(rule.id, 0) > 20 %}
-                    <input type="password" name="confirm_password" class="form-control form-control-sm d-inline-block me-2" style="width: 140px;" placeholder="Senha">
-                  {% endif %}
+                <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline rule-delete-form" data-alert-count="{{ rule_alert_counts.get(rule.id, 0) }}">
+                  <input type="hidden" name="confirm_password" value="">
                   <button class="btn btn-sm btn-outline-danger">Excluir</button>
                 </form>
               </div>
@@ -78,4 +76,24 @@
     </div>
   </div>
 {% endif %}
+
+<script>
+  document.querySelectorAll('.rule-delete-form').forEach(form => {
+    form.addEventListener('submit', (event) => {
+      const count = parseInt(form.dataset.alertCount || '0', 10);
+      if (!confirm('Tem certeza que deseja excluir esta regra?')) {
+        event.preventDefault();
+        return;
+      }
+      if (count > 20) {
+        const password = prompt('Regra com muitos jogos no histórico. Digite sua senha para excluir:');
+        if (!password) {
+          event.preventDefault();
+          return;
+        }
+        form.querySelector('input[name="confirm_password"]').value = password;
+      }
+    });
+  });
+</script>
 {% endblock %}
