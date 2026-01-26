@@ -210,7 +210,10 @@ def process_live_games(session):
 
             if evaluate_rule(rule, stats_for_rule):
                 user = rule.user
-                if not user or not user.telegram_token or not user.telegram_chat_id: continue
+                if not user:
+                    continue
+                if rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
+                    continue
                 
                 alert = MatchAlert(
                     rule_id=rule.id, user_id=user.id, game_id=game["game_id"], url=game["url"],
@@ -244,7 +247,8 @@ def process_live_games(session):
                     except Exception:
                         history_meta = {}
                     meta = build_message_meta(rule, stats_payload, game, history_meta)
-                    send_message(user.telegram_token, user.telegram_chat_id, render_message(rule, meta))
+                    if rule.notify_telegram and user.telegram_token and user.telegram_chat_id:
+                        send_message(user.telegram_token, user.telegram_chat_id, render_message(rule, meta))
                 except IntegrityError:
                     db.session.rollback()
         time.sleep(GAME_DELAY)
@@ -325,11 +329,12 @@ def update_alert_status(alert, status, minute, score, stats, msg_prefix):
     alert.ht_stats_json = stats_to_json(stats)
     db.session.commit()
     export_alert(alert, alert.rule.name, EXPORT_DIR)
-    send_message(
-        alert.user.telegram_token,
-        alert.user.telegram_chat_id,
-        f"{msg_prefix}\nRegra: {alert.rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}",
-    )
+    if alert.rule and alert.rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
+        send_message(
+            alert.user.telegram_token,
+            alert.user.telegram_chat_id,
+            f"{msg_prefix}\nRegra: {alert.rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}",
+        )
 
 def finalize_full_time(session):
     for alert in MatchAlert.query.filter_by(ft_completed=False).all():

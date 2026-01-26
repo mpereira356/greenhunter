@@ -33,6 +33,12 @@
                 Somente 2º tempo (zerar stats do quando estiver nos 45' HT)
               </label>
             </div>
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" name="notify_telegram" id="notify_telegram" {% if form is not none %}{% if form.notify_telegram %}checked{% endif %}{% elif rule is none or rule.notify_telegram %}checked{% endif %}>
+              <label class="form-check-label small text-muted" for="notify_telegram">
+                Avisar no Telegram
+              </label>
+            </div>
           </div>
         </div>
       </div>

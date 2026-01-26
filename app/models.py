@@ -48,6 +48,7 @@ class Rule(db.Model):
     outcome_green_minute = db.Column(db.Integer)
     outcome_red_minute = db.Column(db.Integer)
     outcome_red_if_no_green = db.Column(db.Boolean, default=False, nullable=False)
+    notify_telegram = db.Column(db.Boolean, default=True, nullable=False)
     score_home = db.Column(db.Integer)
     score_away = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

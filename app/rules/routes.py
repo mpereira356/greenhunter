@@ -138,6 +138,7 @@ def _build_form_context(form):
         "message_template": form.get("message_template", "").strip(),
         "is_active": bool(form.get("is_active")),
         "second_half_only": bool(form.get("second_half_only")),
+        "notify_telegram": bool(form.get("notify_telegram")),
         "score_home": form.get("score_home", "").strip(),
         "score_away": form.get("score_away", "").strip(),
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
@@ -199,15 +200,13 @@ def list_rules():
 @rules_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def create_rule():
-    if not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified:
-        flash("Configure e teste o Telegram antes de criar regras.", "warning")
-        return redirect(url_for("settings.settings"))
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         time_limit_raw = request.form.get("time_limit_min", "").strip()
         message_template = request.form.get("message_template", "").strip()
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
+        notify_telegram = bool(request.form.get("notify_telegram"))
         follow_ht = bool(request.form.get("follow_ht"))
         follow_ft = bool(request.form.get("follow_ft"))
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
@@ -221,6 +220,9 @@ def create_rule():
         if not name:
             flash("Nome e obrigatorio.", "warning")
             return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
+        if notify_telegram and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified):
+            flash("Configure e teste o Telegram antes de criar regras que avisam.", "warning")
+            return redirect(url_for("settings.settings"))
         time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else 90
         outcome_green_minute = int(outcome_green_minute_raw) if outcome_green_minute_raw.isdigit() else None
         outcome_red_minute = int(outcome_red_minute_raw) if outcome_red_minute_raw.isdigit() else None
@@ -248,6 +250,7 @@ def create_rule():
             message_template=message_template or None,
             is_active=is_active,
             second_half_only=second_half_only,
+            notify_telegram=notify_telegram,
             follow_ht=follow_ht,
             follow_ft=follow_ft,
             outcome_green_stage=outcome_green_stage,
@@ -276,9 +279,6 @@ def create_rule():
 @rules_bp.route("/<int:rule_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_rule(rule_id):
-    if not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified:
-        flash("Configure e teste o Telegram antes de editar regras.", "warning")
-        return redirect(url_for("settings.settings"))
     rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -286,6 +286,7 @@ def edit_rule(rule_id):
         message_template = request.form.get("message_template", "").strip()
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
+        notify_telegram = bool(request.form.get("notify_telegram"))
         follow_ht = bool(request.form.get("follow_ht"))
         follow_ft = bool(request.form.get("follow_ft"))
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
@@ -299,6 +300,9 @@ def edit_rule(rule_id):
         if not name:
             flash("Nome e obrigatorio.", "warning")
             return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
+        if notify_telegram and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified):
+            flash("Configure e teste o Telegram antes de ativar avisos.", "warning")
+            return redirect(url_for("settings.settings"))
 
         time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else rule.time_limit_min
         outcome_green_minute = int(outcome_green_minute_raw) if outcome_green_minute_raw.isdigit() else None
@@ -310,6 +314,7 @@ def edit_rule(rule_id):
         rule.message_template = message_template or None
         rule.is_active = is_active
         rule.second_half_only = second_half_only
+        rule.notify_telegram = notify_telegram
         rule.follow_ht = follow_ht
         rule.follow_ft = follow_ft
         rule.outcome_green_stage = outcome_green_stage
