@@ -196,6 +196,8 @@ def _ensure_alert_columns():
     columns = {
         "result_minute": "INTEGER",
         "result_time_hhmm": "VARCHAR(8)",
+        "last_score": "VARCHAR(20)",
+        "last_score_minute": "INTEGER",
     }
 
     with db.engine.connect() as conn:

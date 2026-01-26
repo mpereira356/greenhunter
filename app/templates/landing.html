@@ -1,105 +1,316 @@
 {% extends "base.html" %}
 
-{% block title %}GreenHunter | Bet Intelligence{% endblock %}
+{% block title %}GreenHunter | Inteligência em Apostas Esportivas{% endblock %}
 {% block main_class %}landing-shell{% endblock %}
 
 {% block content %}
+  <!-- Header / Navigation -->
   <header class="landing-nav landing-animate landing-delay-1">
     <div class="landing-brand">
-      <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="GreenHunter">
+      <div class="brand-icon">GH</div>
       <div>
         <div class="landing-brand-title">GreenHunter</div>
-        <div class="text-muted small">Bot de alertas em tempo real</div>
+        <div class="text-muted small">Inteligência em Tempo Real</div>
       </div>
     </div>
+    <nav class="d-none d-md-flex gap-4 me-auto ms-5">
+      <a href="#features" class="text-muted small fw-bold">Funcionalidades</a>
+      <a href="#how-it-works" class="text-muted small fw-bold">Como Funciona</a>
+      <a href="#pricing" class="text-muted small fw-bold">Planos</a>
+    </nav>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-secondary" href="{{ url_for('auth.login') }}">Entrar</a>
       <a class="btn btn-primary" href="{{ url_for('auth.register') }}">Criar conta</a>
     </div>
   </header>
 
-  <section class="landing-hero">
+  <!-- Hero Section -->
+  <section class="landing-hero mb-5">
     <div class="landing-hero-content landing-animate landing-delay-2">
-      <div class="landing-badge">Bet Intelligence</div>
-      <h1>Alertas cirurgicos para jogos ao vivo, sem perder o timing.</h1>
-      <p>
-        O GreenHunter monitora partidas em tempo real, cruza estatisticas e regras,
-        e entrega sinais claros para voce agir com confianca.
+      <div class="landing-badge">
+        <i class="bi bi-cpu-fill me-1"></i> Bet Intelligence AI
+      </div>
+      <h1 class="mt-3">Pare de "caçar" jogos. Deixe que o GreenHunter encontre o valor para você.</h1>
+      <p class="lead mb-4">
+        Monitoramos milhares de partidas simultaneamente. Receba alertas cirúrgicos no Telegram baseados em estatísticas reais e padrões vencedores.
       </p>
       <div class="landing-cta">
-        <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Comecar agora</a>
-        <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('auth.login') }}">Ja tenho conta</a>
+        <a class="btn btn-primary btn-lg px-5 shadow-lg" href="{{ url_for('auth.register') }}">
+          Começar Agora <i class="bi bi-arrow-right ms-2"></i>
+        </a>
+        <a class="btn btn-outline-secondary btn-lg" href="#how-it-works">Ver Demonstração</a>
       </div>
-      <div class="landing-metrics">
-        <div class="landing-metric">
-          <span class="landing-metric-title">Tempo real</span>
-          <span class="landing-metric-value">Atualizacoes constantes da API</span>
-        </div>
-        <div class="landing-metric">
-          <span class="landing-metric-title">Personalizacao</span>
-          <span class="landing-metric-value">Regras e filtros do seu jeito</span>
-        </div>
-        <div class="landing-metric">
-          <span class="landing-metric-title">Telegram</span>
-          <span class="landing-metric-value">Alertas instantaneos no celular</span>
+      <div class="landing-metrics mt-4">
+        <div class="row g-3">
+          <div class="col-6 col-md-4">
+            <div class="landing-metric">
+              <span class="landing-metric-title">Latência</span>
+              <span class="landing-metric-value text-success">< 1s</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="landing-metric">
+              <span class="landing-metric-title">Partidas/Dia</span>
+              <span class="landing-metric-value">2.500+</span>
+            </div>
+          </div>
+          <div class="col-12 col-md-4 d-none d-md-block">
+            <div class="landing-metric">
+              <span class="landing-metric-title">Precisão</span>
+              <span class="landing-metric-value">99.9%</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
     <div class="landing-hero-panel landing-animate landing-delay-3">
-      <div class="landing-card">
-        <div class="landing-card-title">Green confirmado</div>
-        <div class="landing-card-muted">Regra: Over 0.5 HT</div>
-        <div class="mt-3 small text-muted">Tempo: 34'</div>
-        <div class="fw-bold mt-1">Placar: 1 x 0</div>
+      <!-- Simulação de Alerta -->
+      <div class="landing-card border-primary shadow-lg transform-hover mb-3" style="border-left: 4px solid var(--primary) !important;">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="landing-card-title text-primary">
+              <i class="bi bi-bell-fill me-2"></i> Alerta de Valor: Over 0.5 HT
+            </div>
+            <div class="landing-card-muted">Real Madrid vs Barcelona</div>
+          </div>
+          <span class="badge bg-success">LIVE</span>
+        </div>
+        <div class="mt-3 row text-center g-2">
+          <div class="col-4">
+            <div class="small text-muted">Tempo</div>
+            <div class="fw-bold">28'</div>
+          </div>
+          <div class="col-4">
+            <div class="small text-muted">Ataques P.</div>
+            <div class="fw-bold">18 x 12</div>
+          </div>
+          <div class="col-4">
+            <div class="small text-muted">Chutes</div>
+            <div class="fw-bold">5 x 2</div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="progress" style="height: 6px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 75%"></div>
+          </div>
+          <div class="small text-muted mt-1 text-center">Probabilidade: 84%</div>
+        </div>
       </div>
-      <div class="landing-card">
-        <div class="landing-card-title">Monitorando partida</div>
-        <div class="landing-card-muted">Corinthians x Santos</div>
-        <div class="mt-3 small text-muted">Chutes no alvo: 4 x 2</div>
-        <div class="small text-muted">Ataques perigosos: 22 x 16</div>
+      
+      <div class="landing-card opacity-75">
+        <div class="landing-card-title">
+          <i class="bi bi-gear-fill me-2"></i> Sua Estratégia Ativa
+        </div>
+        <div class="landing-card-muted">Filtro: Pressão Total (Home)</div>
+        <div class="mt-2 small">
+          <span class="badge bg-light text-dark border">AP > 1.2/min</span>
+          <span class="badge bg-light text-dark border">Posse > 60%</span>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="landing-grid">
-    <div class="landing-feature landing-animate landing-delay-2">
-      <h3>Central de regras</h3>
-      <p class="text-muted mb-0">Crie filtros por stats, tempo e placar para encontrar jogos ideais.</p>
+  <!-- Features Section -->
+  <section id="features" class="py-5">
+    <div class="text-center mb-5 landing-animate landing-delay-2">
+      <h2 class="fw-800">Tudo o que você precisa para lucrar no live</h2>
+      <p class="text-muted">Ferramentas profissionais simplificadas para o apostador moderno.</p>
     </div>
-    <div class="landing-feature landing-animate landing-delay-3">
-      <h3>Status claro da API</h3>
-      <p class="text-muted mb-0">Acompanhe disponibilidade e seja avisado se algo sair do ar.</p>
-    </div>
-    <div class="landing-feature landing-animate landing-delay-4">
-      <h3>Historico dos sinais</h3>
-      <p class="text-muted mb-0">Revise alerts e otimize sua estrategia com dados reais.</p>
-    </div>
-  </section>
-
-  <section class="landing-flow">
-    <div class="landing-step landing-animate landing-delay-2">
-      <span>Passo 1</span>
-      <h4 class="mt-2">Defina suas regras</h4>
-      <p class="text-muted mb-0">Escolha as estatisticas e gatilhos que voce quer monitorar.</p>
-    </div>
-    <div class="landing-step landing-animate landing-delay-3">
-      <span>Passo 2</span>
-      <h4 class="mt-2">Conecte o Telegram</h4>
-      <p class="text-muted mb-0">Receba alertas com contexto e sem atrasos.</p>
-    </div>
-    <div class="landing-step landing-animate landing-delay-4">
-      <span>Passo 3</span>
-      <h4 class="mt-2">Acompanhe e ajuste</h4>
-      <p class="text-muted mb-0">Analise o historico e melhore seus sinais a cada dia.</p>
+    <div class="landing-grid">
+      <div class="landing-feature landing-animate landing-delay-2">
+        <div class="feature-icon mb-3 bg-primary-soft">
+          <i class="bi bi-funnel text-primary fs-4"></i>
+        </div>
+        <h3>Filtros Avançados</h3>
+        <p class="text-muted mb-0">Crie regras complexas cruzando tempo de jogo, placar, escanteios, chutes e ataques perigosos.</p>
+      </div>
+      <div class="landing-feature landing-animate landing-delay-3">
+        <div class="feature-icon mb-3 bg-info-soft">
+          <i class="bi bi-lightning-charge text-info fs-4"></i>
+        </div>
+        <h3>Alertas Instantâneos</h3>
+        <p class="text-muted mb-0">Integração nativa com Telegram. Receba o sinal com todas as estatísticas direto no seu celular.</p>
+      </div>
+      <div class="landing-feature landing-animate landing-delay-4">
+        <div class="feature-icon mb-3 bg-warning-soft">
+          <i class="bi bi-graph-up-arrow text-warning fs-4"></i>
+        </div>
+        <h3>Backtest de Estratégias</h3>
+        <p class="text-muted mb-0">Analise o histórico de sinais e veja como sua estratégia teria performado no passado.</p>
+      </div>
     </div>
   </section>
 
-  <section class="landing-cta-panel landing-animate landing-delay-2">
-    <h2 class="mb-0">Pronto para turbinar suas entradas?</h2>
-    <p>Comece com regras simples e evolua conforme ganha historico.</p>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-light fw-bold" href="{{ url_for('auth.register') }}">Criar conta gratis</a>
-      <a class="btn btn-outline-light" href="{{ url_for('auth.login') }}">Entrar</a>
+  <!-- How it Works -->
+  <section id="how-it-works" class="py-5 bg-light rounded-4 px-4 my-5">
+    <div class="row align-items-center">
+      <div class="col-lg-6 landing-animate landing-delay-2">
+        <h2 class="fw-800 mb-4">Como o GreenHunter transforma seus resultados</h2>
+        <div class="landing-step-list">
+          <div class="landing-step-item mb-4">
+            <div class="d-flex gap-3">
+              <div class="step-number">1</div>
+              <div>
+                <h4 class="mb-1">Configure seus gatilhos</h4>
+                <p class="text-muted">Defina exatamente o que você procura: "Mínimo de 10 ataques perigosos nos últimos 10 minutos".</p>
+              </div>
+            </div>
+          </div>
+          <div class="landing-step-item mb-4">
+            <div class="d-flex gap-3">
+              <div class="step-number">2</div>
+              <div>
+                <h4 class="mb-1">Monitoramento 24/7</h4>
+                <p class="text-muted">Nossos servidores escaneiam jogos do mundo todo, desde a Champions League até a Série C do Uzbequistão.</p>
+              </div>
+            </div>
+          </div>
+          <div class="landing-step-item">
+            <div class="d-flex gap-3">
+              <div class="step-number">3</div>
+              <div>
+                <h4 class="mb-1">Ação e Green</h4>
+                <p class="text-muted">Receba o alerta, clique no link direto para a partida e faça sua entrada com a confiança dos dados.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6 mt-5 mt-lg-0 landing-animate landing-delay-3 text-center">
+        <img src="https://img.freepik.com/free-vector/data-analysis-concept-illustration_114360-8014.jpg" alt="Data Analysis" class="img-fluid rounded-4 shadow">
+      </div>
     </div>
   </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="py-5">
+    <div class="text-center mb-5">
+      <h2 class="fw-800">Planos que cabem na sua banca</h2>
+      <p class="text-muted">Escolha a melhor opção para sua jornada como trader esportivo.</p>
+    </div>
+    <div class="row g-4 justify-content-center">
+      <div class="col-md-4">
+        <div class="card h-100 border-0 shadow-sm p-4">
+          <div class="card-body text-center">
+            <h5 class="text-muted">Iniciante</h5>
+            <h2 class="fw-800 my-3">Grátis</h2>
+            <ul class="list-unstyled text-start mb-4">
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> 2 Regras Ativas</li>
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Alertas no Telegram</li>
+              <li class="mb-2 text-muted"><i class="bi bi-x text-danger me-2"></i> Histórico de 24h</li>
+              <li class="text-muted"><i class="bi bi-x text-danger me-2"></i> Backtest</li>
+            </ul>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-outline-primary w-100">Começar Agora</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 border-primary shadow-lg p-4 position-relative overflow-hidden">
+          <div class="bg-primary text-white text-center position-absolute top-0 start-50 translate-middle-x py-1 px-4 small fw-bold" style="border-radius: 0 0 10px 10px;">MAIS POPULAR</div>
+          <div class="card-body text-center">
+            <h5 class="text-muted">Pro Hunter</h5>
+            <h2 class="fw-800 my-3">R$ 49,90<span class="fs-6 text-muted fw-normal">/mês</span></h2>
+            <ul class="list-unstyled text-start mb-4">
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Regras Ilimitadas</li>
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Alertas Prioritários</li>
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Histórico Completo</li>
+              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Backtest Ilimitado</li>
+            </ul>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary w-100 shadow">Assinar Agora</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-5">
+    <div class="max-width-800 mx-auto">
+      <h3 class="fw-800 mb-4 text-center">Dúvidas Frequentes</h3>
+      <div class="accordion accordion-flush" id="faqAccordion">
+        <div class="accordion-item bg-transparent">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-transparent fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+              Preciso deixar o computador ligado?
+            </button>
+          </h2>
+          <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body text-muted">
+              Não! O GreenHunter roda 100% na nuvem. Uma vez configurada sua regra, você pode fechar o site e os alertas chegarão no seu Telegram automaticamente.
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item bg-transparent">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-transparent fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+              Quais esportes são monitorados?
+            </button>
+          </h2>
+          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body text-muted">
+              Atualmente focamos 100% em Futebol, cobrindo mais de 1.500 ligas ao redor do mundo, incluindo divisões de base e ligas alternativas.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="landing-cta-panel landing-animate landing-delay-2 text-center py-5">
+    <h2 class="mb-3 fw-800">Chega de perder o timing das entradas.</h2>
+    <p class="lead mb-4">Junte-se a mais de 1.200 traders que automatizaram sua leitura de jogo.</p>
+    <div class="d-flex gap-3 justify-content-center flex-wrap">
+      <a class="btn btn-light btn-lg fw-bold px-5" href="{{ url_for('auth.register') }}">Criar Minha Conta Grátis</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-5 pt-5 border-top">
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="landing-brand mb-3">
+          <div class="brand-icon">GH</div>
+          <span class="landing-brand-title">GreenHunter</span>
+        </div>
+        <p class="small text-muted">A ferramenta definitiva para quem busca profissionalismo e agilidade no mercado de apostas esportivas.</p>
+      </div>
+      <div class="col-md-2 ms-auto">
+        <h6 class="fw-bold">Produto</h6>
+        <ul class="list-unstyled small">
+          <li><a href="#features" class="text-muted">Funcionalidades</a></li>
+          <li><a href="#pricing" class="text-muted">Preços</a></li>
+          <li><a href="#" class="text-muted">API</a></li>
+        </ul>
+      </div>
+      <div class="col-md-2">
+        <h6 class="fw-bold">Suporte</h6>
+        <ul class="list-unstyled small">
+          <li><a href="#" class="text-muted">Central de Ajuda</a></li>
+          <li><a href="#" class="text-muted">Contato</a></li>
+          <li><a href="#" class="text-muted">Telegram</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="mt-5 pb-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <span class="small text-muted">&copy; 2026 GreenHunter. Todos os direitos reservados.</span>
+      <div class="d-flex gap-3">
+        <a href="#" class="text-muted small">Termos de Uso</a>
+        <a href="#" class="text-muted small">Privacidade</a>
+      </div>
+    </div>
+  </footer>
+
+  <style>
+    .fw-800 { font-weight: 800; }
+    .bg-primary-soft { background: rgba(16, 185, 129, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .bg-info-soft { background: rgba(59, 130, 246, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .bg-warning-soft { background: rgba(245, 158, 11, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .step-number { width: 32px; height: 32px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+    .max-width-800 { max-width: 800px; }
+    .transform-hover { transition: transform 0.3s ease; }
+    .transform-hover:hover { transform: translateY(-5px); }
+    /* Adicionando suporte a ícones do Bootstrap para facilitar */
+    @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css");
+  </style>
 {% endblock %}

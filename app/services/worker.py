@@ -231,6 +231,7 @@ def process_live_games(session):
                 alert = MatchAlert(
                     rule_id=rule.id, user_id=user.id, game_id=game["game_id"], url=game["url"],
                     status="pending", alert_minute=minute, initial_score=stats_payload["score"],
+                    last_score=stats_payload["score"], last_score_minute=minute,
                     initial_stats_json=stats_to_json(stats_for_rule),
                     league=stats_payload.get("league"), home_team=stats_payload.get("home_team"),
                     away_team=stats_payload.get("away_team")
@@ -284,8 +285,8 @@ def build_message_meta(rule, stats_payload, game, history_meta=None):
     return meta
 
 def follow_alerts(session):
-    pending_alerts = MatchAlert.query.filter_by(status="pending").all()
-    for alert in pending_alerts:
+    active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
+    for alert in active_alerts:
         rule = alert.rule
         stats_payload = fetch_match_stats(session, alert.url)
         if not stats_payload: continue
@@ -294,6 +295,34 @@ def follow_alerts(session):
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
+        prev_score = alert.last_score or alert.initial_score
+        if prev_score and current_score:
+            prev_home, prev_away = parse_score(prev_score)
+            curr_home, curr_away = parse_score(current_score)
+            if curr_home < prev_home or curr_away < prev_away:
+                alert.status = "pending"
+                alert.result_minute = None
+                alert.result_time_hhmm = None
+                alert.ht_score = None
+                alert.ht_stats_json = None
+                alert.last_score = current_score
+                alert.last_score_minute = minute
+                db.session.commit()
+                if rule and rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
+                    send_message(
+                        alert.user.telegram_token,
+                        alert.user.telegram_chat_id,
+                        f"⚠️ Gol anulado detectado. Status voltou para pendente.\nRegra: {alert.rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {current_score}\nLink: {alert.url}",
+                    )
+                continue
+
+        if current_score:
+            alert.last_score = current_score
+            alert.last_score_minute = minute
+            db.session.commit()
+
+        if alert.status != "pending":
+            continue
 
         if rule and rule.second_half_only:
             baseline = SECOND_HALF_BASELINES.get(alert.game_id)
@@ -341,6 +370,8 @@ def update_alert_status(alert, status, minute, score, stats, msg_prefix):
     alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
     alert.ht_score = score
     alert.ht_stats_json = stats_to_json(stats)
+    alert.last_score = score
+    alert.last_score_minute = minute
     db.session.commit()
     export_alert(alert, alert.rule.name, EXPORT_DIR)
     if alert.rule and alert.rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:

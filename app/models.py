@@ -102,6 +102,8 @@ class MatchAlert(db.Model):
     result_minute = db.Column(db.Integer)
     result_time_hhmm = db.Column(db.String(8))
     initial_score = db.Column(db.String(20))
+    last_score = db.Column(db.String(20))
+    last_score_minute = db.Column(db.Integer)
     ht_score = db.Column(db.String(20))
     ft_score = db.Column(db.String(20))
     initial_stats_json = db.Column(db.Text)
