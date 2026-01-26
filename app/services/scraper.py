@@ -223,10 +223,11 @@ def fetch_match_stats(session, url):
     time_text = time_tag.get_text(strip=True) if time_tag else ""
 
     tables = soup.find_all("table", class_="table table-sm")
-    if not tables:
+    stat_tables = tables if tables else soup.find_all("table")
+    if not stat_tables:
         return None
 
-    rows = tables[0].find_all("tr")
+    rows = stat_tables[0].find_all("tr")
     home_team = ""
     away_team = ""
     if rows:
@@ -240,7 +241,7 @@ def fetch_match_stats(session, url):
     score = "0 x 0"
 
     all_rows = []
-    for table in tables:
+    for table in stat_tables:
         all_rows.extend(table.find_all("tr"))
 
     def _is_missing_pair(values):
@@ -253,6 +254,8 @@ def fetch_match_stats(session, url):
         if len(cols) != 3:
             continue
         name_raw = cols[1].get_text(strip=True)
+        if not name_raw or name_raw.isdigit():
+            continue
         key = normalize_stat_key(name_raw)
         home_val = extrair_valor_td(cols[0])
         away_val = extrair_valor_td(cols[2])
