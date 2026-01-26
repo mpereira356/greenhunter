@@ -82,6 +82,12 @@
   color: var(--text-main);
 }
 
+.theme-dark .table tbody tr,
+.theme-dark .table tbody td {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
 .theme-dark .alert {
   background-color: #0b1220;
   color: var(--text-main);
