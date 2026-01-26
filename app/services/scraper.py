@@ -239,7 +239,16 @@ def fetch_match_stats(session, url):
     raw_stats = {}
     score = "0 x 0"
 
-    for row in rows:
+    all_rows = []
+    for table in tables:
+        all_rows.extend(table.find_all("tr"))
+
+    def _is_missing_pair(values):
+        if not values:
+            return True
+        return all(not v or str(v).strip() in ("-", "—") for v in values)
+
+    for row in all_rows:
         cols = row.find_all("td")
         if len(cols) != 3:
             continue
@@ -247,7 +256,11 @@ def fetch_match_stats(session, url):
         key = normalize_stat_key(name_raw)
         home_val = extrair_valor_td(cols[0])
         away_val = extrair_valor_td(cols[2])
-        raw_stats[key] = (home_val, away_val)
+        if key in raw_stats:
+            if _is_missing_pair(raw_stats.get(key)) and not _is_missing_pair((home_val, away_val)):
+                raw_stats[key] = (home_val, away_val)
+        else:
+            raw_stats[key] = (home_val, away_val)
 
         if key == "Goals":
             score = f"{home_val} x {away_val}"
