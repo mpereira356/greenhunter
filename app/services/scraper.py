@@ -8,6 +8,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
+SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "2º", "second", "segundo")
 
 
 def make_session():
@@ -174,6 +175,21 @@ def parse_minutes(time_text: str):
     if minute <= 45 and ("2h" in text or "2nd" in text or "2o" in text or "2o tempo" in text):
         return 45 + minute
     return minute
+
+
+def is_first_half_extra_time(time_text: str) -> bool:
+    if not time_text:
+        return False
+    text = time_text.strip().lower()
+    if "+" not in text:
+        return False
+    if any(token in text for token in SECOND_HALF_TOKENS):
+        return False
+    nums = re.findall(r"\d+", text)
+    if not nums:
+        return False
+    base_minute = int(nums[0])
+    return base_minute <= 45
 
 
 def fetch_live_games(session):

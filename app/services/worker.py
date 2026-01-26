@@ -16,6 +16,7 @@ from app.services.scraper import (
     fetch_match_history,
     fetch_match_stats,
     format_history_summary,
+    is_first_half_extra_time,
     make_session,
     normalize_stat_key,
     summarize_history,
@@ -101,6 +102,8 @@ def copy_stats(stats):
 def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES: return
     minute = stats_payload.get("minute") or 0
+    if is_first_half_extra_time(stats_payload.get("time_text", "")):
+        return
     if is_half_time(stats_payload.get("time_text", ""), minute) or minute >= 46:
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
 
@@ -201,7 +204,10 @@ def process_live_games(session):
                 continue
 
             if rule.second_half_only:
-                if minute < 46: continue
+                if is_first_half_extra_time(stats_payload.get("time_text", "")):
+                    continue
+                if minute < 46:
+                    continue
                 baseline = SECOND_HALF_BASELINES.get(game["game_id"])
                 if not baseline: continue
                 stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)

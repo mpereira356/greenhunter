@@ -10,6 +10,7 @@ from ..services.scraper import (
     fetch_match_history,
     fetch_match_stats,
     format_history_summary,
+    is_first_half_extra_time,
     make_session,
     summarize_history,
 )
@@ -438,9 +439,11 @@ def test_rule():
         if temp_rule.score_away is not None and away_score != temp_rule.score_away:
             continue
         stats_for_rule = stats_payload.get("stats", {})
-        if temp_rule.second_half_only:
-            if (minute or 0) < 46:
-                continue
+    if temp_rule.second_half_only:
+        if is_first_half_extra_time(stats_payload.get("time_text", "")):
+            continue
+        if (minute or 0) < 46:
+            continue
             stats_for_rule = {
                 key: value.copy() if isinstance(value, dict) else value
                 for key, value in stats_for_rule.items()
