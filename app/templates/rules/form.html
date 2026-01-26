@@ -143,7 +143,7 @@
       <div class="card-body">
         <textarea class="form-control font-monospace" name="message_template" rows="6" placeholder="Sua mensagem personalizada...">{{ form.message_template if form is not none else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
         <div class="mt-2 small text-muted">
-          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{league}</code>, <code>{time_limit}</code>, <code>{goals_home}</code>, <code>{goals_away}</code>, <code>{goals_total}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{corners_total}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>, <code>{on_target_total}</code>, <code>{dangerous_attacks_home}</code>, <code>{dangerous_attacks_away}</code>, <code>{dangerous_attacks_total}</code>, <code>{history_h2h}</code>, <code>{history_home}</code>, <code>{history_away}</code>, <code>{history_confidence}</code>
+          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{league}</code>, <code>{time_limit}</code>, <code>{goals_home}</code>, <code>{goals_away}</code>, <code>{goals_total}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{corners_total}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>, <code>{on_target_total}</code>, <code>{off_target_home}</code>, <code>{off_target_away}</code>, <code>{off_target_total}</code>, <code>{dangerous_attacks_home}</code>, <code>{dangerous_attacks_away}</code>, <code>{dangerous_attacks_total}</code>, <code>{history_h2h}</code>, <code>{history_home}</code>, <code>{history_away}</code>, <code>{history_confidence}</code>
         </div>
         <div class="mt-3 p-3 border rounded-3 bg-light">
           <div class="fw-semibold mb-2">Guia rapido das tags</div>
@@ -168,6 +168,9 @@
               <div><code>{on_target_home}</code> - chutes no alvo (casa).</div>
               <div><code>{on_target_away}</code> - chutes no alvo (visitante).</div>
               <div><code>{on_target_total}</code> - chutes no alvo (total).</div>
+              <div><code>{off_target_home}</code> - chutes para fora (casa).</div>
+              <div><code>{off_target_away}</code> - chutes para fora (visitante).</div>
+              <div><code>{off_target_total}</code> - chutes para fora (total).</div>
               <div><code>{dangerous_attacks_home}</code> - ataques perigosos (casa).</div>
               <div><code>{dangerous_attacks_away}</code> - ataques perigosos (visitante).</div>
               <div><code>{dangerous_attacks_total}</code> - ataques perigosos (total).</div>
