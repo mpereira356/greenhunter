@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-BASE_URL = "https://pt.betsapi.com"
+BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
 
 
 def make_session():
@@ -46,11 +46,24 @@ def make_session():
     return session
 
 
+def _swap_base(url: str) -> str:
+    if "://pt.betsapi.com" in url:
+        return url.replace("://pt.betsapi.com", "://betsapi.com", 1)
+    if "://betsapi.com" in url:
+        return url.replace("://betsapi.com", "://pt.betsapi.com", 1)
+    return url
+
+
 def get_with_fallback(session, url):
     resp = session.get(url, timeout=15)
     if resp.status_code == 403:
-        session.headers.update({"Referer": BASE_URL, "Cache-Control": "no-cache"})
+        session.headers.update({"Referer": "https://betsapi.com", "Cache-Control": "no-cache"})
         resp = session.get(url, timeout=15)
+    if resp.status_code == 403:
+        alt_url = _swap_base(url)
+        if alt_url != url:
+            session.headers.update({"Referer": alt_url.split("/r/")[0]})
+            resp = session.get(alt_url, timeout=15)
     return resp
 
 
@@ -164,13 +177,20 @@ def parse_minutes(time_text: str):
 
 
 def fetch_live_games(session):
-    try:
-        resp = get_with_fallback(session, BASE_URL)
-    except requests.RequestException:
-        return [], None
-    if resp.status_code != 200:
-        return [], resp.status_code
-    soup = BeautifulSoup(resp.text, "html.parser")
+    last_status = None
+    for base in BASE_URLS:
+        try:
+            resp = get_with_fallback(session, base)
+        except requests.RequestException:
+            last_status = None
+            continue
+        last_status = resp.status_code
+        if resp.status_code != 200:
+            continue
+        soup = BeautifulSoup(resp.text, "html.parser")
+        break
+    else:
+        return [], last_status
     trs = soup.find_all("tr", id=lambda x: x and x.startswith("r_"))
     games = []
     for tr in trs:
@@ -201,7 +221,7 @@ def fetch_live_games(session):
         games.append(
             {
                 "game_id": game_id,
-                "url": BASE_URL + game_href,
+                "url": base + game_href,
                 "minute": parse_minutes(time_text),
                 "time_text": time_text,
                 "league": league_name,
