@@ -39,6 +39,12 @@
                 Avisar no Telegram
               </label>
             </div>
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" name="alert_on_penalty" id="alert_on_penalty" {% if form is not none %}{% if form.alert_on_penalty %}checked{% endif %}{% elif rule and rule.alert_on_penalty %}checked{% endif %}>
+              <label class="form-check-label small text-muted" for="alert_on_penalty">
+                Avisar se houver pênalti (dentro do limite da regra)
+              </label>
+            </div>
           </div>
         </div>
       </div>

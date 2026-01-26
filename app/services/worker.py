@@ -214,6 +214,13 @@ def process_live_games(session):
                 m2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
+            if rule.alert_on_penalty:
+                penalties_total = stats_for_rule.get("Penalties", {}).get("total", 0)
+                if penalties_total <= 0:
+                    continue
+                if rule.time_limit_min and minute > rule.time_limit_min:
+                    continue
+
             if evaluate_rule(rule, stats_for_rule):
                 user = rule.user
                 if not user:

@@ -140,6 +140,7 @@ def _build_form_context(form):
         "is_active": bool(form.get("is_active")),
         "second_half_only": bool(form.get("second_half_only")),
         "notify_telegram": bool(form.get("notify_telegram")),
+        "alert_on_penalty": bool(form.get("alert_on_penalty")),
         "score_home": form.get("score_home", "").strip(),
         "score_away": form.get("score_away", "").strip(),
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
@@ -208,6 +209,7 @@ def create_rule():
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
         notify_telegram = bool(request.form.get("notify_telegram"))
+        alert_on_penalty = bool(request.form.get("alert_on_penalty"))
         follow_ht = bool(request.form.get("follow_ht"))
         follow_ft = bool(request.form.get("follow_ft"))
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
@@ -252,6 +254,7 @@ def create_rule():
             is_active=is_active,
             second_half_only=second_half_only,
             notify_telegram=notify_telegram,
+            alert_on_penalty=alert_on_penalty,
             follow_ht=follow_ht,
             follow_ft=follow_ft,
             outcome_green_stage=outcome_green_stage,
@@ -288,6 +291,7 @@ def edit_rule(rule_id):
         is_active = bool(request.form.get("is_active"))
         second_half_only = bool(request.form.get("second_half_only"))
         notify_telegram = bool(request.form.get("notify_telegram"))
+        alert_on_penalty = bool(request.form.get("alert_on_penalty"))
         follow_ht = bool(request.form.get("follow_ht"))
         follow_ft = bool(request.form.get("follow_ft"))
         outcome_green_stage = request.form.get("outcome_green_stage", "HT")
@@ -316,6 +320,7 @@ def edit_rule(rule_id):
         rule.is_active = is_active
         rule.second_half_only = second_half_only
         rule.notify_telegram = notify_telegram
+        rule.alert_on_penalty = alert_on_penalty
         rule.follow_ht = follow_ht
         rule.follow_ft = follow_ft
         rule.outcome_green_stage = outcome_green_stage
@@ -415,6 +420,7 @@ def test_rule():
         time_limit_min=90,
     )
     temp_rule.second_half_only = bool(request.form.get("second_half_only"))
+    temp_rule.alert_on_penalty = bool(request.form.get("alert_on_penalty"))
     score_home_raw = request.form.get("score_home", "").strip()
     score_away_raw = request.form.get("score_away", "").strip()
     temp_rule.score_home = int(score_home_raw) if score_home_raw.isdigit() else None
@@ -451,6 +457,12 @@ def test_rule():
             if minute is not None:
                 minute_2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": minute_2h, "away": minute_2h, "total": minute_2h}
+        if temp_rule.alert_on_penalty:
+            penalties_total = stats_for_rule.get("Penalties", {}).get("total", 0)
+            if penalties_total <= 0:
+                continue
+            if minute is not None and temp_rule.time_limit_min and minute > temp_rule.time_limit_min:
+                continue
         if evaluate_rule(temp_rule, stats_for_rule):
             history_meta = {}
             try:
