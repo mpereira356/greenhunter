@@ -470,14 +470,14 @@ def test_rule():
                 h2h_summary = summarize_history(history.get("h2h", []))
                 home_summary = summarize_history(history.get("home", []))
                 away_summary = summarize_history(history.get("away", []))
+                h2h_items = history.get("h2h", [])
                 history_meta = {
-                    "history_h2h": format_history_summary("H2H", h2h_summary),
+                    "history_h2h": format_history_summary("H2H", h2h_summary) if h2h_summary else "Sem historico de um contra o outro",
                     "history_home": format_history_summary("Home", home_summary),
                     "history_away": format_history_summary("Away", away_summary),
                 }
-                confidence = history_confidence(conditions, history.get("h2h", []))
-                if confidence is not None:
-                    history_meta["history_confidence"] = f"{confidence}%"
+                confidence = history_confidence(conditions, h2h_items)
+                history_meta["history_confidence"] = f"{confidence}%" if confidence is not None else "Sem historico de um contra o outro"
             except Exception:
                 history_meta = {}
             matches.append(
