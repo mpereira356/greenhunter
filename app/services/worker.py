@@ -296,10 +296,15 @@ def follow_alerts(session):
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
         prev_score = alert.last_score or alert.initial_score
-        if prev_score and current_score:
+        prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
+        if alert.status != "pending" and prev_score and current_score and minute:
             prev_home, prev_away = parse_score(prev_score)
             curr_home, curr_away = parse_score(current_score)
-            if curr_home < prev_home or curr_away < prev_away:
+            prev_total = prev_home + prev_away
+            curr_total = curr_home + curr_away
+            if prev_minute is not None and minute < prev_minute:
+                pass
+            elif curr_total < prev_total or curr_home < prev_home or curr_away < prev_away:
                 alert.status = "pending"
                 alert.result_minute = None
                 alert.result_time_hhmm = None
