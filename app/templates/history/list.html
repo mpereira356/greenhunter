@@ -50,7 +50,7 @@
           <select class="form-select" name="rule_id">
             <option value="">Todas</option>
             {% for rule in rules %}
-              <option value="{{ rule.id }}" {% if request.args.get('rule_id', type=int) == rule.id %}selected{% endif %}>{{ rule.name }}</option>
+              <option value="{{ rule.id }}" {% if request.args.get('rule_id')|int == rule.id %}selected{% endif %}>{{ rule.name }}</option>
             {% endfor %}
           </select>
         </div>

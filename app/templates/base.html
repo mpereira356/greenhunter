@@ -88,7 +88,7 @@
         
         <main class="content">
     {% else %}
-    <main class="auth-shell">
+    <main class="{% block main_class %}auth-shell{% endblock %}">
     {% endif %}
     
       {% with messages = get_flashed_messages(with_categories=True) %}

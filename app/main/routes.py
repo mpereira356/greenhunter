@@ -12,8 +12,9 @@ main_bp = Blueprint("main", __name__)
 
 
 @main_bp.route("/")
-@login_required
 def dashboard():
+    if not current_user.is_authenticated:
+        return render_template("landing.html")
     now = datetime.utcnow()
     start_day = datetime(now.year, now.month, now.day)
     end_day = start_day + timedelta(days=1)
