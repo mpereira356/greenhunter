@@ -152,12 +152,16 @@ def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | N
         adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
     return adjusted
 
-def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team, alert_id=None):
+def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team, time_text=None, alert_id=None):
     if not rule or not rule.alert_on_penalty:
         return
     if not rule.notify_telegram:
         return
     if not user or not user.telegram_token or not user.telegram_chat_id:
+        return
+    if minute is None or minute <= 0:
+        return
+    if is_full_time(time_text or "", minute):
         return
     penalties_total = stats.get("Penalties", {}).get("total", 0) if isinstance(stats, dict) else 0
     if penalties_total <= 0:
@@ -357,6 +361,7 @@ def follow_alerts(session):
             alert.url,
             alert.home_team,
             alert.away_team,
+            time_text=stats_payload.get("time_text"),
             alert_id=alert.id,
         )
 
