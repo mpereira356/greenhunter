@@ -457,12 +457,7 @@ def test_rule():
             if minute is not None:
                 minute_2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": minute_2h, "away": minute_2h, "total": minute_2h}
-        if temp_rule.alert_on_penalty:
-            penalties_total = stats_for_rule.get("Penalties", {}).get("total", 0)
-            if penalties_total <= 0:
-                continue
-            if minute is not None and temp_rule.time_limit_min and minute > temp_rule.time_limit_min:
-                continue
+        # alert_on_penalty nao deve bloquear a regra no teste
         if evaluate_rule(temp_rule, stats_for_rule):
             history_meta = {}
             try:

@@ -30,6 +30,7 @@ EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
+PENALTY_ALERTED = set()
 NON_DELTA_KEYS = {"Minute", "Possession"}
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
@@ -150,6 +151,28 @@ def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | N
         adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
     return adjusted
 
+def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team):
+    if not rule or not rule.alert_on_penalty:
+        return
+    if not rule.notify_telegram:
+        return
+    if not user or not user.telegram_token or not user.telegram_chat_id:
+        return
+    penalties_total = stats.get("Penalties", {}).get("total", 0) if isinstance(stats, dict) else 0
+    if penalties_total <= 0:
+        return
+    if rule.time_limit_min and minute is not None and minute > rule.time_limit_min:
+        return
+    key = (game_id, rule.id)
+    if key in PENALTY_ALERTED:
+        return
+    PENALTY_ALERTED.add(key)
+    send_message(
+        user.telegram_token,
+        user.telegram_chat_id,
+        f"🟡 Penalti agora!\nRegra: {rule.name}\n{home_team} vs {away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {url}",
+    )
+
 def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
     if not conditions: return False
     for cond in conditions:
@@ -194,6 +217,7 @@ def process_live_games(session):
         ensure_second_half_baseline(game["game_id"], stats_payload)
         
         for rule in active_rules:
+            user = rule.user
             existing = MatchAlert.query.filter_by(game_id=game["game_id"], rule_id=rule.id).first()
             if existing: continue
 
@@ -215,14 +239,19 @@ def process_live_games(session):
                 stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
             if rule.alert_on_penalty:
-                penalties_total = stats_for_rule.get("Penalties", {}).get("total", 0)
-                if penalties_total <= 0:
-                    continue
-                if rule.time_limit_min and minute > rule.time_limit_min:
-                    continue
+                maybe_notify_penalty(
+                    rule,
+                    user,
+                    game["game_id"],
+                    stats_for_rule,
+                    minute,
+                    stats_payload.get("score"),
+                    game.get("url"),
+                    stats_payload.get("home_team"),
+                    stats_payload.get("away_team"),
+                )
 
             if evaluate_rule(rule, stats_for_rule):
-                user = rule.user
                 if not user:
                     continue
                 if rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
@@ -260,15 +289,15 @@ def process_live_games(session):
                         history_meta["history_confidence"] = f"{confidence}%" if confidence is not None else "Sem historico de um contra o outro"
                     except Exception:
                         history_meta = {}
-                    meta = build_message_meta(rule, stats_payload, game, history_meta)
+                    meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
                     if rule.notify_telegram and user.telegram_token and user.telegram_chat_id:
                         send_message(user.telegram_token, user.telegram_chat_id, render_message(rule, meta))
                 except IntegrityError:
                     db.session.rollback()
         time.sleep(GAME_DELAY)
 
-def build_message_meta(rule, stats_payload, game, history_meta=None):
-    stats = stats_payload.get("stats", {})
+def build_message_meta(rule, stats_payload, game, history_meta=None, stats_override=None):
+    stats = stats_override if isinstance(stats_override, dict) else stats_payload.get("stats", {})
     def sv(k, s): return stats.get(k, {}).get(s, "")
     meta = {
         "rule": rule.name, "home_team": stats_payload.get("home_team"), "away_team": stats_payload.get("away_team"),
@@ -325,6 +354,18 @@ def follow_alerts(session):
             alert.last_score = current_score
             alert.last_score_minute = minute
             db.session.commit()
+
+        maybe_notify_penalty(
+            rule,
+            alert.user,
+            alert.game_id,
+            stats,
+            minute,
+            current_score,
+            alert.url,
+            alert.home_team,
+            alert.away_team,
+        )
 
         if alert.status != "pending":
             continue
