@@ -34,6 +34,7 @@ API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 HALFTIME_SEEN_AT = {}
+HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
 PENALTY_ALERTED = set()
 PENALTY_LAST_TOTAL = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
@@ -142,7 +143,7 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         if not seen_at:
             HALFTIME_SEEN_AT[game_id] = now_sp()
             return
-        if (now_sp() - seen_at).total_seconds() >= 600:
+        if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
             SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
             HALFTIME_SEEN_AT.pop(game_id, None)
     else:
