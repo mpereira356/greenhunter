@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import unicodedata
 
@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
-SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "2º", "second", "segundo")
+SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "2Âº", "2º", "second", "segundo")
 
 
 def make_session():
@@ -153,9 +153,10 @@ def parse_minutes(time_text: str):
     if not time_text:
         return None
     text = time_text.strip().lower()
-    text = text.replace("’", "").replace("'", "")
-    text = text.replace("＋", "+").replace("﹢", "+").replace("⁺", "+")
-    text = text.replace("﹣", "-").replace("−", "-")
+    text = text.replace("º", "o")
+    text = text.replace("â€™", "").replace("'", "")
+    text = text.replace("ï¼‹", "+").replace("ï¹¢", "+").replace("âº", "+")
+    text = text.replace("ï¹£", "-").replace("âˆ’", "-")
     if text.startswith("+"):
         return None
     extra_match = re.search(r"(\d+)\s*\+\s*(\d+)", text)
@@ -181,6 +182,7 @@ def is_first_half_extra_time(time_text: str) -> bool:
     if not time_text:
         return False
     text = time_text.strip().lower()
+    text = text.replace("º", "o")
     if "+" not in text:
         return False
     if any(token in text for token in SECOND_HALF_TOKENS):
@@ -283,7 +285,7 @@ def fetch_match_stats(session, url):
     def _is_missing_pair(values):
         if not values:
             return True
-        return all(not v or str(v).strip() in ("-", "—") for v in values)
+        return all(not v or str(v).strip() in ("-", "â€”") for v in values)
 
     for row in all_rows:
         cols = row.find_all("td")
@@ -452,3 +454,4 @@ def format_history_summary(label: str, summary):
         f"O2.5 {summary['over25']}/{summary['count']} | "
         f"BTTS {summary['btts']}/{summary['count']}"
     )
+

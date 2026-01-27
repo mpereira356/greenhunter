@@ -78,7 +78,7 @@ def is_half_time(time_text: str, minute: int) -> bool:
 
 def is_first_half_goal(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
-    if any(x in text for x in ["2nd", "2o", "2h"]): return False
+    if any(x in text for x in ["2nd", "2o", "2h", "2º"]): return False
     return 0 <= minute <= 47
 
 def is_full_time(time_text: str, minute: int) -> bool:
