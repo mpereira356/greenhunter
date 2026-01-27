@@ -36,6 +36,7 @@ SECOND_HALF_BASELINES = {}
 HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
+FORCE_SECOND_HALF_BASELINE_MINUTE = int(os.environ.get("FORCE_SECOND_HALF_BASELINE_MINUTE", "55"))
 PENALTY_ALERTED = set()
 PENALTY_LAST_TOTAL = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
@@ -144,13 +145,13 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
-    if is_half_time_text(time_text):
-        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
-        return
-    if minute >= 46:
+    if minute >= FORCE_SECOND_HALF_BASELINE_MINUTE:
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
+    if is_half_time_text(time_text):
+        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
         return
     if minute >= 45:
         seen_at = HALFTIME_SEEN_AT.get(game_id)
@@ -160,7 +161,7 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
             HALFTIME_CONFIRMED_AT[game_id] = now_sp()
             return
-    if minute >= 46 and HALFTIME_CONFIRMED_AT.get(game_id):
+    if minute > 45 and HALFTIME_CONFIRMED_AT.get(game_id):
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
