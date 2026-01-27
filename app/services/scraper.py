@@ -1,6 +1,7 @@
 ﻿import os
 import re
 import unicodedata
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -78,6 +79,68 @@ def _to_ascii(text: str) -> str:
         return ""
     normalized = unicodedata.normalize("NFKD", text)
     return normalized.encode("ascii", "ignore").decode("ascii")
+
+
+def _normalize_team_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _to_ascii(name).lower())
+
+
+def _team_names_match(a: str, b: str) -> bool:
+    na = _normalize_team_name(a)
+    nb = _normalize_team_name(b)
+    if not na or not nb:
+        return False
+    return na in nb or nb in na
+
+
+def _split_team_text(text: str):
+    if not text:
+        return "", ""
+    cleaned = " ".join(text.split())
+    match = re.search(r"(.+?)\s+vs\.?\s+(.+)", cleaned, re.IGNORECASE)
+    if not match:
+        match = re.search(r"(.+?)\s+v\s+(.+)", cleaned, re.IGNORECASE)
+    if not match:
+        return "", ""
+    home = match.group(1).strip()
+    away = match.group(2).strip()
+    home = home.split(" - ")[0].strip()
+    away = away.split(" - ")[0].strip()
+    return home, away
+
+
+def _teams_from_title(soup):
+    if not soup:
+        return "", ""
+    for tag in (soup.find("h1"), soup.title):
+        if not tag:
+            continue
+        home, away = _split_team_text(tag.get_text(" ", strip=True))
+        if home and away:
+            return home, away
+    return "", ""
+
+
+def _teams_from_url(url: str):
+    if not url:
+        return "", ""
+    try:
+        path = urlparse(url).path or ""
+    except Exception:
+        path = ""
+    slug_match = re.search(r"/r/\d+/(.+)$", path)
+    if not slug_match:
+        return "", ""
+    slug = slug_match.group(1).strip("/")
+    if not slug:
+        return "", ""
+    slug = slug.replace("_", "-")
+    parts = re.split(r"-(?:vs|v)-", slug, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return "", ""
+    home = parts[0].replace("-", " ").strip()
+    away = parts[1].replace("-", " ").strip()
+    return home, away
 
 
 def normalize_stat_key(name: str) -> str:
@@ -273,6 +336,26 @@ def fetch_match_stats(session, url):
         if len(first) == 3:
             home_team = first[0].get_text(strip=True)
             away_team = first[2].get_text(strip=True)
+
+    title_home, title_away = _teams_from_title(soup)
+    url_home, url_away = _teams_from_url(url)
+
+    def _valid_team(name: str) -> bool:
+        return bool(name and name.strip() and not name.strip().isdigit())
+
+    if not _valid_team(home_team) or not _valid_team(away_team):
+        if _valid_team(title_home) and _valid_team(title_away):
+            home_team, away_team = title_home, title_away
+        elif _valid_team(url_home) and _valid_team(url_away):
+            home_team, away_team = url_home, url_away
+    elif _valid_team(url_home) and _valid_team(url_away):
+        home_ok = _team_names_match(home_team, url_home)
+        away_ok = _team_names_match(away_team, url_away)
+        if not (home_ok and away_ok):
+            if _valid_team(title_home) and _valid_team(title_away) and _team_names_match(title_home, url_home) and _team_names_match(title_away, url_away):
+                home_team, away_team = title_home, title_away
+            else:
+                home_team, away_team = url_home, url_away
 
     stats = {}
     raw_stats = {}
