@@ -34,6 +34,7 @@ API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 HALFTIME_SEEN_AT = {}
+HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
 PENALTY_ALERTED = set()
 PENALTY_LAST_TOTAL = {}
@@ -82,6 +83,10 @@ def notify_api_status(ok: bool, code: int | None):
 def is_half_time(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
     return "ht" in text or "half time" in text or "interval" in text or 45 <= minute <= 47
+
+def is_half_time_text(time_text: str) -> bool:
+    text = (time_text or "").lower()
+    return "ht" in text or "half time" in text or "interval" in text
 
 def is_first_half_goal(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
@@ -137,6 +142,10 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if is_second_half(time_text, minute):
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
         HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
+    if is_half_time_text(time_text):
+        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
         return
     if minute >= 45:
         seen_at = HALFTIME_SEEN_AT.get(game_id)
@@ -144,10 +153,16 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
             HALFTIME_SEEN_AT[game_id] = now_sp()
             return
         if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
-            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
-            HALFTIME_SEEN_AT.pop(game_id, None)
+            HALFTIME_CONFIRMED_AT[game_id] = now_sp()
+            return
+    if minute >= 46 and HALFTIME_CONFIRMED_AT.get(game_id):
+        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
     else:
         HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
 
 def apply_second_half_delta(stats, baseline):
     adjusted = {}
@@ -180,6 +195,8 @@ def should_time_red(rule, alert, minute: int | None) -> bool:
     eff_minute = effective_minute(rule, minute)
     if eff_minute is not None and eff_minute >= rule.outcome_red_minute:
         return True
+    if eff_minute is not None and eff_minute <= 1:
+        return False
     # Fallback: use wall-clock if o minuto do jogo nao avança
     if alert and alert.created_at and alert.alert_minute is not None:
         alert_eff = effective_minute(rule, alert.alert_minute)
