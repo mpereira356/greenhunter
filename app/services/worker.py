@@ -147,6 +147,11 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if is_half_time_text(time_text):
         HALFTIME_CONFIRMED_AT[game_id] = now_sp()
         return
+    if minute >= 46:
+        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
     if minute >= 45:
         seen_at = HALFTIME_SEEN_AT.get(game_id)
         if not seen_at:
