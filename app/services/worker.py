@@ -31,6 +31,7 @@ API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
 PENALTY_ALERTED = set()
+PENALTY_LAST_TOTAL = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
@@ -151,7 +152,7 @@ def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | N
         adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
     return adjusted
 
-def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team):
+def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team, alert_id=None):
     if not rule or not rule.alert_on_penalty:
         return
     if not rule.notify_telegram:
@@ -163,7 +164,11 @@ def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_te
         return
     if rule.time_limit_min and minute is not None and minute > rule.time_limit_min:
         return
-    key = (game_id, rule.id)
+    key = (game_id, rule.id, alert_id)
+    last_total = PENALTY_LAST_TOTAL.get(key, 0)
+    if penalties_total <= last_total:
+        return
+    PENALTY_LAST_TOTAL[key] = penalties_total
     if key in PENALTY_ALERTED:
         return
     PENALTY_ALERTED.add(key)
@@ -237,19 +242,6 @@ def process_live_games(session):
                 stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
                 m2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
-
-            if rule.alert_on_penalty:
-                maybe_notify_penalty(
-                    rule,
-                    user,
-                    game["game_id"],
-                    stats_for_rule,
-                    minute,
-                    stats_payload.get("score"),
-                    game.get("url"),
-                    stats_payload.get("home_team"),
-                    stats_payload.get("away_team"),
-                )
 
             if evaluate_rule(rule, stats_for_rule):
                 if not user:
@@ -365,6 +357,7 @@ def follow_alerts(session):
             alert.url,
             alert.home_team,
             alert.away_team,
+            alert_id=alert.id,
         )
 
         if alert.status != "pending":
