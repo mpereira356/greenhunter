@@ -22,6 +22,7 @@ from app.services.scraper import (
     summarize_history,
 )
 from app.services.telegram import send_message
+from app.utils.time import now_sp
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
 GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
@@ -49,7 +50,7 @@ def get_api_status() -> dict:
 def update_api_status(ok: bool, code: int | None):
     API_STATUS["ok"] = ok
     API_STATUS["code"] = code
-    API_STATUS["checked_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    API_STATUS["checked_at"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
     notify_api_status(ok, code)
 
 def notify_api_status(ok: bool, code: int | None):
@@ -207,7 +208,7 @@ def run_worker(app):
             except Exception as exc:
                 db.session.rollback()
                 print(f"[worker] erro: {exc}")
-            API_STATUS["last_cycle"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            API_STATUS["last_cycle"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
             time.sleep(POLL_INTERVAL)
 
 def process_live_games(session):
@@ -264,7 +265,7 @@ def process_live_games(session):
                 db.session.add(alert)
                 try:
                     db.session.commit()
-                    rule.last_alert_at = datetime.utcnow()
+                    rule.last_alert_at = now_sp()
                     rule.last_alert_desc = f"{alert.home_team} vs {alert.away_team}"
                     db.session.commit()
                     
@@ -411,7 +412,7 @@ def follow_alerts(session):
 def update_alert_status(alert, status, minute, score, stats, msg_prefix):
     alert.status = status
     alert.result_minute = minute
-    alert.result_time_hhmm = datetime.utcnow().strftime("%H:%M")
+    alert.result_time_hhmm = now_sp().strftime("%H:%M")
     alert.ht_score = score
     alert.ht_stats_json = stats_to_json(stats)
     alert.last_score = score

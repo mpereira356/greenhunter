@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import MatchAlert, Rule
 from ..services.worker import get_api_status
+from ..utils.time import now_sp
 from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
 
 main_bp = Blueprint("main", __name__)
@@ -15,7 +16,7 @@ main_bp = Blueprint("main", __name__)
 def dashboard():
     if not current_user.is_authenticated:
         return render_template("landing.html")
-    now = datetime.utcnow()
+    now = now_sp()
     start_day = datetime(now.year, now.month, now.day)
     end_day = start_day + timedelta(days=1)
 

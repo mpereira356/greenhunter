@@ -8,6 +8,7 @@ from ..extensions import db
 from ..models import AdminBroadcast, LoginAttempt, MatchAlert, Rule, RuleCondition, User
 from ..services.telegram import send_message
 from ..services.worker import get_api_status
+from ..utils.time import now_sp
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -23,7 +24,7 @@ def _require_admin():
 @login_required
 def dashboard():
     _require_admin()
-    now = datetime.utcnow()
+    now = now_sp()
     start_day = datetime(now.year, now.month, now.day)
     end_day = start_day + timedelta(days=1)
 

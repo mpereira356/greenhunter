@@ -4,6 +4,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
+from .utils.time import now_sp
 
 
 class User(UserMixin, db.Model):
@@ -15,7 +16,7 @@ class User(UserMixin, db.Model):
     telegram_chat_id = db.Column(db.String(64))
     telegram_verified = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
     rules = db.relationship("Rule", backref="user", cascade="all, delete-orphan")
     alerts = db.relationship("MatchAlert", backref="user", cascade="all, delete-orphan")
@@ -52,7 +53,7 @@ class Rule(db.Model):
     alert_on_penalty = db.Column(db.Boolean, default=False, nullable=False)
     score_home = db.Column(db.Integer)
     score_away = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
     last_checked_at = db.Column(db.DateTime)
     last_match_desc = db.Column(db.String(255))
     last_alert_at = db.Column(db.DateTime)
@@ -97,7 +98,7 @@ class MatchAlert(db.Model):
     game_id = db.Column(db.String(32), nullable=False)
     url = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(20), default="pending", nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
     alert_minute = db.Column(db.Integer)
     result_minute = db.Column(db.Integer)
     result_time_hhmm = db.Column(db.String(8))
@@ -123,21 +124,21 @@ class LoginAttempt(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     ip_address = db.Column(db.String(64))
     success = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
 
 class AdminBroadcast(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     message = db.Column(db.Text, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
 
 class AdminBroadcastView(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     broadcast_id = db.Column(db.Integer, db.ForeignKey("admin_broadcast.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    seen_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint("broadcast_id", "user_id", name="uix_broadcast_user"),
