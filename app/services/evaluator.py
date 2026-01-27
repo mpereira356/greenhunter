@@ -61,6 +61,8 @@ def render_message(rule, meta: dict) -> str:
         f"{meta.get('url')}"
     )
     history_lines = []
+    if meta.get("rule_confidence"):
+        history_lines.append(f"Conf regra: {meta.get('rule_confidence')}")
     if meta.get("history_confidence"):
         history_lines.append(f"Conf: {meta.get('history_confidence')}")
     if meta.get("history_h2h"):

@@ -27,10 +27,13 @@ from app.utils.time import now_sp
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
 GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
 EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
+RULE_CONF_SAMPLE = int(os.environ.get("RULE_CONF_SAMPLE", "50"))
+RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
+HALFTIME_SEEN_AT = {}
 PENALTY_ALERTED = set()
 PENALTY_LAST_TOTAL = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
@@ -89,10 +92,32 @@ def is_full_time(time_text: str, minute: int) -> bool:
     if any(x in text for x in ["ft", "full time", "finished", "ended", "fim", "encerrado", "final"]): return True
     return 90 <= minute <= 130
 
+def is_second_half(time_text: str, minute: int) -> bool:
+    text = (time_text or "").lower()
+    if any(x in text for x in ["2nd", "2o", "2h", "2Âº", "2º", "second", "segundo"]): return True
+    return False
+
 def parse_score(score_text: str):
     if not score_text: return 0, 0
     nums = re.findall(r"\d+", score_text)
     return (int(nums[0]), int(nums[1])) if len(nums) >= 2 else (0, 0)
+
+def rule_confidence_text(rule_id: int | None, user_id: int | None) -> str | None:
+    if not rule_id or not user_id:
+        return None
+    alerts = (
+        MatchAlert.query.filter_by(rule_id=rule_id, user_id=user_id)
+        .filter(MatchAlert.status.in_(("green", "red")))
+        .order_by(MatchAlert.created_at.desc())
+        .limit(RULE_CONF_SAMPLE)
+        .all()
+    )
+    total = len(alerts)
+    if total < RULE_CONF_MIN:
+        return None
+    greens = sum(1 for alert in alerts if alert.status == "green")
+    pct = round((greens / total) * 100)
+    return f"{pct}% ({greens}/{total})"
 
 def is_youth_match(stats_payload: dict) -> bool:
     if not stats_payload: return False
@@ -105,10 +130,23 @@ def copy_stats(stats):
 def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES: return
     minute = stats_payload.get("minute") or 0
-    if is_first_half_extra_time(stats_payload.get("time_text", "")):
+    time_text = stats_payload.get("time_text", "")
+    if is_first_half_extra_time(time_text):
         return
-    if is_half_time(stats_payload.get("time_text", ""), minute) or minute >= 46:
+    if is_second_half(time_text, minute):
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        return
+    if minute >= 45:
+        seen_at = HALFTIME_SEEN_AT.get(game_id)
+        if not seen_at:
+            HALFTIME_SEEN_AT[game_id] = now_sp()
+            return
+        if (now_sp() - seen_at).total_seconds() >= 600:
+            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+            HALFTIME_SEEN_AT.pop(game_id, None)
+    else:
+        HALFTIME_SEEN_AT.pop(game_id, None)
 
 def apply_second_half_delta(stats, baseline):
     adjusted = {}
@@ -268,6 +306,11 @@ def process_live_games(session):
                     rule.last_alert_at = now_sp()
                     rule.last_alert_desc = f"{alert.home_team} vs {alert.away_team}"
                     db.session.commit()
+
+                    if rule.alert_on_penalty:
+                        penalties_total = stats_payload.get("stats", {}).get("Penalties", {}).get("total", 0)
+                        key = (alert.game_id, rule.id, alert.id)
+                        PENALTY_LAST_TOTAL[key] = penalties_total
                     
                     history_meta = {}
                     try:
@@ -306,6 +349,8 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
         "off_target_home": sv("Off Target", "home"), "off_target_away": sv("Off Target", "away"), "off_target_total": sv("Off Target", "total"),
         "dangerous_attacks_home": sv("Dangerous Attacks", "home"), "dangerous_attacks_away": sv("Dangerous Attacks", "away"), "dangerous_attacks_total": sv("Dangerous Attacks", "total"),
     }
+    if rule:
+        meta["rule_confidence"] = rule_confidence_text(rule.id, rule.user_id)
     if history_meta:
         meta.update(history_meta)
     return meta
@@ -438,4 +483,5 @@ def finalize_full_time(session):
             db.session.commit()
             export_alert(alert, alert.rule.name, EXPORT_DIR)
             SECOND_HALF_BASELINES.pop(alert.game_id, None)
+            HALFTIME_SEEN_AT.pop(alert.game_id, None)
         time.sleep(0.4)
