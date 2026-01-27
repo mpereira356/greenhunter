@@ -193,6 +193,7 @@
     <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-3">
       <a href="{{ url_for('rules.list_rules') }}" class="btn btn-light px-4">Cancelar</a>
       <button type="button" class="btn btn-outline-secondary px-4" id="test-rule">Testar bot</button>
+      <button type="button" class="btn btn-outline-dark px-4" id="copy-debug">Copiar debug</button>
       <button type="submit" class="btn btn-primary px-5">Salvar Estratégia</button>
     </div>
     <div id="test-rule-result" class="test-rule-result mb-5" role="status" aria-live="polite"></div>
@@ -486,6 +487,103 @@
     });
     return groups.join(' OR ');
   }
+
+  function buildDebugPayload() {
+    const form = document.getElementById('rule-form');
+    const fd = new FormData(form);
+    const data = {
+      name: fd.get('name') || '',
+      is_active: !!fd.get('is_active'),
+      second_half_only: !!fd.get('second_half_only'),
+      notify_telegram: !!fd.get('notify_telegram'),
+      alert_on_penalty: !!fd.get('alert_on_penalty'),
+      score_home: fd.get('score_home') || '',
+      score_away: fd.get('score_away') || '',
+      outcome_green_minute: fd.get('outcome_green_minute') || '',
+      outcome_red_minute: fd.get('outcome_red_minute') || '',
+      outcome_red_if_no_green: !!fd.get('outcome_red_if_no_green'),
+      message_template: fd.get('message_template') || '',
+      conditions: [],
+      outcome_green: [],
+      outcome_red: [],
+      created_at: new Date().toISOString(),
+    };
+
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const rows = group.querySelectorAll('.condition-row');
+      rows.forEach((row, cIdx) => {
+        const stat = row.querySelector('.stat-select')?.value || '';
+        const side = row.querySelector('.stat-side')?.value || '';
+        const op = row.querySelector('.stat-operator')?.value || '';
+        const val = row.querySelector('.stat-value')?.value || '';
+        if (!stat || !op || val === '') return;
+        data.conditions.push({
+          group_id: gIdx,
+          stat_key: stat,
+          side: stat === 'Minute' ? 'total' : side,
+          operator: op,
+          value: Number(val),
+        });
+      });
+    });
+
+    [['green', outcomeGreenContainer], ['red', outcomeRedContainer]].forEach(([type, container]) => {
+      Array.from(container.children).forEach((row) => {
+        const stat = row.querySelector('.outcome-stat-select')?.value || '';
+        const side = row.querySelector('.outcome-stat-side')?.value || '';
+        const op = row.querySelector('.outcome-stat-operator')?.value || '';
+        const val = row.querySelector('.outcome-stat-value')?.value || '';
+        if (!stat || !op || val === '') return;
+        data[type === 'green' ? 'outcome_green' : 'outcome_red'].push({
+          stat_key: stat,
+          side: stat === 'Minute' ? 'total' : side,
+          operator: op,
+          value: Number(val),
+        });
+      });
+    });
+
+    return data;
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.position = 'absolute';
+    temp.style.left = '-9999px';
+    document.body.appendChild(temp);
+    temp.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(temp);
+    return ok;
+  }
+
+  document.getElementById('copy-debug').addEventListener('click', async () => {
+    refreshNames();
+    const payload = buildDebugPayload();
+    const pretty = JSON.stringify(payload, null, 2);
+    try {
+      await copyTextToClipboard(pretty);
+      renderTestResult({
+        badgeClass: 'text-bg-info',
+        badgeText: 'COPIADO',
+        title: 'Debug copiado para a área de transferência.',
+        subtitle: 'Cole aqui no chat para analisarmos.',
+      });
+    } catch (err) {
+      renderTestResult({
+        badgeClass: 'text-bg-danger',
+        badgeText: 'ERRO',
+        title: 'Não foi possível copiar o debug.',
+        subtitle: 'Tente novamente ou copie manualmente.',
+      });
+    }
+  });
 
   function renderTestResult(state) {
     const result = document.getElementById('test-rule-result');
