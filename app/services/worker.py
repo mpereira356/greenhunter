@@ -167,6 +167,32 @@ def apply_second_half_delta(stats, baseline):
 def _num(value):
     return value if isinstance(value, (int, float)) else 0
 
+def effective_minute(rule, minute: int | None) -> int | None:
+    if minute is None:
+        return None
+    if rule and rule.second_half_only:
+        return max(0, minute - 45)
+    return minute
+
+def should_time_red(rule, alert, minute: int | None) -> bool:
+    if not rule or not rule.outcome_red_if_no_green or rule.outcome_red_minute is None:
+        return False
+    eff_minute = effective_minute(rule, minute)
+    if eff_minute is not None and eff_minute >= rule.outcome_red_minute:
+        return True
+    # Fallback: use wall-clock if o minuto do jogo nao avança
+    if alert and alert.created_at and alert.alert_minute is not None:
+        alert_eff = effective_minute(rule, alert.alert_minute)
+        if alert_eff is None:
+            return False
+        remaining = rule.outcome_red_minute - alert_eff
+        if remaining <= 0:
+            return True
+        elapsed = (now_sp() - alert.created_at).total_seconds()
+        if elapsed >= remaining * 60:
+            return True
+    return False
+
 def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | None):
     if not stats or not baseline:
         return stats
@@ -443,10 +469,9 @@ def follow_alerts(session):
             continue
 
         # 3. Verificar RED por tempo (se habilitado)
-        if rule and rule.outcome_red_if_no_green and rule.outcome_red_minute is not None:
-            if minute >= rule.outcome_red_minute:
-                update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - prazo do GREEN expirou")
-                continue
+        if should_time_red(rule, alert, minute):
+            update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - prazo do GREEN expirou")
+            continue
 
         # 4. Lógica padrão (se não houver condições customizadas)
         if not green_conds and not red_conds:
