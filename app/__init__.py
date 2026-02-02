@@ -198,6 +198,9 @@ def _ensure_alert_columns():
         "result_time_hhmm": "VARCHAR(8)",
         "last_score": "VARCHAR(20)",
         "last_score_minute": "INTEGER",
+        "penalty_last_total": "INTEGER DEFAULT 0",
+        "penalty_notified": "BOOLEAN DEFAULT 0",
+        "penalty_baseline_set": "BOOLEAN DEFAULT 0",
     }
 
     with db.engine.connect() as conn:

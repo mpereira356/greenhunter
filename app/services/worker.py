@@ -37,8 +37,6 @@ HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
 FORCE_SECOND_HALF_BASELINE_MINUTE = int(os.environ.get("FORCE_SECOND_HALF_BASELINE_MINUTE", "55"))
-PENALTY_ALERTED = set()
-PENALTY_LAST_TOTAL = {}
 NON_DELTA_KEYS = {"Minute", "Possession"}
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
@@ -246,7 +244,11 @@ def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | N
         adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
     return adjusted
 
-def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_team, away_team, time_text=None, alert_id=None):
+def maybe_notify_penalty(alert, stats, minute, score, time_text=None):
+    if not alert:
+        return
+    rule = alert.rule
+    user = alert.user
     if not rule or not rule.alert_on_penalty:
         return
     if not rule.notify_telegram:
@@ -262,19 +264,27 @@ def maybe_notify_penalty(rule, user, game_id, stats, minute, score, url, home_te
         return
     if rule.time_limit_min and minute is not None and minute > rule.time_limit_min:
         return
-    key = (game_id, rule.id, alert_id)
-    last_total = PENALTY_LAST_TOTAL.get(key, 0)
+    if not alert.penalty_baseline_set:
+        alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
+        alert.penalty_notified = False
+        alert.penalty_baseline_set = True
+        db.session.commit()
+        return
+    last_total = alert.penalty_last_total if alert.penalty_last_total is not None else 0
     if penalties_total <= last_total:
         return
-    PENALTY_LAST_TOTAL[key] = penalties_total
-    if key in PENALTY_ALERTED:
+    alert.penalty_last_total = penalties_total
+    if alert.penalty_notified:
+        db.session.commit()
         return
-    PENALTY_ALERTED.add(key)
-    send_message(
+    ok, _ = send_message(
         user.telegram_token,
         user.telegram_chat_id,
-        f"🟡 Penalti agora!\nRegra: {rule.name}\n{home_team} vs {away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {url}",
+        f"Penalti agora!\nRegra: {rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}",
     )
+    if ok:
+        alert.penalty_notified = True
+    db.session.commit()
 
 def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
     if not conditions: return False
@@ -304,19 +314,11 @@ def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
         MatchAlert.status == "pending",
     ).all()
     for alert in alerts:
-        maybe_notify_penalty(
-            alert.rule,
-            alert.user,
-            alert.game_id,
-            stats,
-            minute,
-            score,
-            alert.url,
-            home_team or alert.home_team,
-            away_team or alert.away_team,
-            time_text=time_text,
-            alert_id=alert.id,
-        )
+        if home_team:
+            alert.home_team = home_team
+        if away_team:
+            alert.away_team = away_team
+        maybe_notify_penalty(alert, stats, minute, score, time_text=time_text)
 
 def start_worker(app):
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
@@ -397,8 +399,10 @@ def process_live_games(session):
 
                     if rule.alert_on_penalty:
                         penalties_total = stats_payload.get("stats", {}).get("Penalties", {}).get("total", 0)
-                        key = (alert.game_id, rule.id, alert.id)
-                        PENALTY_LAST_TOTAL[key] = penalties_total
+                        alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
+                        alert.penalty_notified = False
+                        alert.penalty_baseline_set = True
+                        db.session.commit()
                     
                     history_meta = {}
                     try:
@@ -464,6 +468,7 @@ def follow_alerts(session):
             if prev_minute is not None and minute < prev_minute:
                 pass
             elif curr_total < prev_total or curr_home < prev_home or curr_away < prev_away:
+                penalties_total = stats.get("Penalties", {}).get("total", 0) if isinstance(stats, dict) else 0
                 alert.status = "pending"
                 alert.result_minute = None
                 alert.result_time_hhmm = None
@@ -471,6 +476,9 @@ def follow_alerts(session):
                 alert.ht_stats_json = None
                 alert.last_score = current_score
                 alert.last_score_minute = minute
+                alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
+                alert.penalty_notified = False
+                alert.penalty_baseline_set = True
                 db.session.commit()
                 if rule and rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
                     send_message(
@@ -487,19 +495,7 @@ def follow_alerts(session):
 
         if alert.status != "pending":
             continue
-        maybe_notify_penalty(
-            rule,
-            alert.user,
-            alert.game_id,
-            stats,
-            minute,
-            current_score,
-            alert.url,
-            alert.home_team,
-            alert.away_team,
-            time_text=stats_payload.get("time_text"),
-            alert_id=alert.id,
-        )
+        maybe_notify_penalty(alert, stats, minute, current_score, time_text=stats_payload.get("time_text"))
 
         if rule and rule.second_half_only:
             baseline = SECOND_HALF_BASELINES.get(alert.game_id)
