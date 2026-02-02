@@ -45,6 +45,17 @@
     <div class="filter-card">
       <div class="fw-semibold mb-2">Filtros</div>
       <form method="get" class="d-grid gap-2">
+        {% if is_admin %}
+        <div>
+          <label class="form-label">Usuario</label>
+          <select class="form-select" name="user_id">
+            <option value="">Todos</option>
+            {% for u in users %}
+              <option value="{{ u.id }}" {% if request.args.get('user_id')|int == u.id %}selected{% endif %}>{{ u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <div>
           <label class="form-label">Regra</label>
           <select class="form-select" name="rule_id">
@@ -87,18 +98,27 @@
           <thead>
             <tr>
               <th>Regra</th>
+              {% if is_admin %}
+              <th>Usuario</th>
+              {% endif %}
               <th>Jogo</th>
               <th>Status</th>
               <th>Min alerta</th>
               <th>HT</th>
               <th>FT</th>
               <th>Data</th>
+              {% if is_admin %}
+              <th class="text-end">Acoes</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
             {% for alert in pagination.items %}
             <tr>
               <td>{{ alert.rule.name }}</td>
+              {% if is_admin %}
+              <td>{{ alert.user.username }}</td>
+              {% endif %}
               <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
               <td>
                 {% if alert.status == "green" %}
@@ -113,6 +133,18 @@
               <td>{{ alert.ht_score or '-' }}</td>
               <td>{{ alert.ft_score or '-' }}</td>
               <td>{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              {% if is_admin %}
+              <td class="text-end">
+                <form
+                  method="post"
+                  action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"
+                  onsubmit="return confirm('Excluir este historico de forma definitiva?');"
+                  class="d-inline"
+                >
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                </form>
+              </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>

@@ -5,7 +5,8 @@ import os
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..models import MatchAlert, Rule
+from ..extensions import db
+from ..models import MatchAlert, Rule, User
 from ..services.telegram import send_document
 
 history_bp = Blueprint("history", __name__, url_prefix="/history")
@@ -15,16 +16,22 @@ history_bp = Blueprint("history", __name__, url_prefix="/history")
 @login_required
 def history():
     rule_id = request.args.get("rule_id", type=int)
+    user_id = request.args.get("user_id", type=int)
     status = request.args.get("status", "").strip()
     date_from = request.args.get("from", "").strip()
     date_to = request.args.get("to", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 20
 
-    query = MatchAlert.query.filter_by(user_id=current_user.id)
+    is_admin = current_user.is_admin_user
+    query = MatchAlert.query
+    if not is_admin:
+        query = query.filter_by(user_id=current_user.id)
 
     if rule_id:
         query = query.filter(MatchAlert.rule_id == rule_id)
+    if is_admin and user_id:
+        query = query.filter(MatchAlert.user_id == user_id)
     if status:
         query = query.filter(MatchAlert.status == status)
     if date_from:
@@ -48,13 +55,20 @@ def history():
     win_rate = 0
     if green_count + red_count > 0:
         win_rate = round((green_count / (green_count + red_count)) * 100, 1)
-    rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.name).all()
+    if is_admin:
+        rules = Rule.query.order_by(Rule.name).all()
+        users = User.query.order_by(User.username.asc()).all()
+    else:
+        rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.name).all()
+        users = []
     query_args = request.args.to_dict()
     query_args.pop("page", None)
     return render_template(
         "history/list.html",
         pagination=pagination,
+        is_admin=is_admin,
         rules=rules,
+        users=users,
         query_args=query_args,
         total_count=total_count,
         green_count=green_count,
@@ -62,6 +76,20 @@ def history():
         pending_count=pending_count,
         win_rate=win_rate,
     )
+
+
+@history_bp.route("/<int:alert_id>/delete", methods=["POST"])
+@login_required
+def delete_alert(alert_id):
+    if not current_user.is_admin_user:
+        flash("Apenas administradores podem excluir historicos.", "danger")
+        return redirect(url_for("history.history"))
+
+    alert = MatchAlert.query.get_or_404(alert_id)
+    db.session.delete(alert)
+    db.session.commit()
+    flash("Historico excluido com sucesso.", "success")
+    return redirect(url_for("history.history", **request.args.to_dict()))
 
 
 @history_bp.route("/send-report", methods=["POST"])
