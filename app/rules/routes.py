@@ -364,8 +364,8 @@ def edit_rule(rule_id):
 def delete_rule(rule_id):
     rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
     alert_count = MatchAlert.query.filter_by(rule_id=rule.id).count()
-    if alert_count > 20:
-        password = request.form.get("confirm_password", "")
+    if alert_count > 20 and not current_user.is_admin_user:
+        password = request.form.get("confirm_password", "").strip()
         if not current_user.check_password(password):
             flash("Regra com muitos jogos no histórico. Informe sua senha para confirmar.", "warning")
             return redirect(url_for("rules.list_rules"))

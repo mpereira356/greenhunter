@@ -85,7 +85,8 @@
         event.preventDefault();
         return;
       }
-      if (count > 20) {
+      const isAdmin = {{ 'true' if current_user.is_admin_user else 'false' }};
+      if (count > 20 && !isAdmin) {
         const password = prompt('Regra com muitos jogos no histórico. Digite sua senha para excluir:');
         if (!password) {
           event.preventDefault();
