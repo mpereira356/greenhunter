@@ -287,6 +287,36 @@ def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
         if value is None or not compare(cond.operator, value, cond.value): return False
     return True
 
+def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
+    if not game_id or not stats_payload:
+        return
+    minute = stats_payload.get("minute")
+    if minute is None:
+        return
+    score = stats_payload.get("score")
+    stats = stats_payload.get("stats", {})
+    time_text = stats_payload.get("time_text", "")
+    home_team = stats_payload.get("home_team", "")
+    away_team = stats_payload.get("away_team", "")
+    alerts = MatchAlert.query.filter(
+        MatchAlert.game_id == game_id,
+        MatchAlert.status.in_(("pending", "green", "red")),
+    ).all()
+    for alert in alerts:
+        maybe_notify_penalty(
+            alert.rule,
+            alert.user,
+            alert.game_id,
+            stats,
+            minute,
+            score,
+            alert.url,
+            home_team or alert.home_team,
+            away_team or alert.away_team,
+            time_text=time_text,
+            alert_id=alert.id,
+        )
+
 def start_worker(app):
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
 
@@ -318,6 +348,8 @@ def process_live_games(session):
         if minute is None: continue
 
         ensure_second_half_baseline(game["game_id"], stats_payload)
+        # Check penalty notifications as soon as this game's stats are fetched.
+        maybe_notify_penalty_for_game(game["game_id"], stats_payload)
         
         for rule in active_rules:
             user = rule.user
