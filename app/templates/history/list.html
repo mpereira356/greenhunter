@@ -92,11 +92,27 @@
     </div>
   </div>
   <div class="col-lg-9">
+    {% if is_admin %}
+    <form
+      method="post"
+      action="{{ url_for('history.delete_selected_alerts', **query_args) }}"
+      onsubmit="return confirm('Excluir definitivamente os historicos selecionados?');"
+      id="bulk-delete-form"
+      class="mb-2 d-flex justify-content-end"
+    >
+      <button class="btn btn-sm btn-danger" type="submit">Excluir selecionados</button>
+    </form>
+    {% endif %}
     <div class="table-card">
       <div class="table-responsive">
         <table class="table table-clean align-middle mb-0">
           <thead>
             <tr>
+              {% if is_admin %}
+              <th style="width: 1%;">
+                <input type="checkbox" id="select-all-alerts" title="Selecionar todos">
+              </th>
+              {% endif %}
               <th>Regra</th>
               {% if is_admin %}
               <th>Usuario</th>
@@ -115,6 +131,17 @@
           <tbody>
             {% for alert in pagination.items %}
             <tr>
+              {% if is_admin %}
+              <td>
+                <input
+                  type="checkbox"
+                  name="selected_alert_ids"
+                  value="{{ alert.id }}"
+                  class="bulk-alert-checkbox"
+                  form="bulk-delete-form"
+                >
+              </td>
+              {% endif %}
               <td>{{ alert.rule.name }}</td>
               {% if is_admin %}
               <td>{{ alert.user.username }}</td>
@@ -169,4 +196,22 @@
     </nav>
   </div>
 </div>
+{% if is_admin %}
+<script>
+  (function () {
+    const selectAll = document.getElementById('select-all-alerts');
+    if (!selectAll) return;
+    const items = Array.from(document.querySelectorAll('.bulk-alert-checkbox'));
+    selectAll.addEventListener('change', function () {
+      items.forEach(cb => { cb.checked = selectAll.checked; });
+    });
+    items.forEach(cb => {
+      cb.addEventListener('change', function () {
+        const allChecked = items.length > 0 && items.every(x => x.checked);
+        selectAll.checked = allChecked;
+      });
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

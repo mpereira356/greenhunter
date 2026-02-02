@@ -92,6 +92,31 @@ def delete_alert(alert_id):
     return redirect(url_for("history.history", **request.args.to_dict()))
 
 
+@history_bp.route("/delete-selected", methods=["POST"])
+@login_required
+def delete_selected_alerts():
+    if not current_user.is_admin_user:
+        flash("Apenas administradores podem excluir historicos.", "danger")
+        return redirect(url_for("history.history"))
+
+    selected_ids = request.form.getlist("selected_alert_ids")
+    ids = []
+    for raw in selected_ids:
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not ids:
+        flash("Nenhum historico selecionado.", "warning")
+        return redirect(url_for("history.history", **request.args.to_dict()))
+
+    deleted = MatchAlert.query.filter(MatchAlert.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+    flash(f"{deleted} historico(s) excluido(s) com sucesso.", "success")
+    return redirect(url_for("history.history", **request.args.to_dict()))
+
+
 @history_bp.route("/send-report", methods=["POST"])
 @login_required
 def send_report():
