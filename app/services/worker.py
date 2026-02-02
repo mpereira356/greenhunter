@@ -298,9 +298,10 @@ def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
     time_text = stats_payload.get("time_text", "")
     home_team = stats_payload.get("home_team", "")
     away_team = stats_payload.get("away_team", "")
+    # Keep behavior aligned with rule flow: only alerts that were triggered and are still pending.
     alerts = MatchAlert.query.filter(
         MatchAlert.game_id == game_id,
-        MatchAlert.status.in_(("pending", "green", "red")),
+        MatchAlert.status == "pending",
     ).all()
     for alert in alerts:
         maybe_notify_penalty(
@@ -484,6 +485,8 @@ def follow_alerts(session):
             alert.last_score_minute = minute
             db.session.commit()
 
+        if alert.status != "pending":
+            continue
         maybe_notify_penalty(
             rule,
             alert.user,
@@ -497,9 +500,6 @@ def follow_alerts(session):
             time_text=stats_payload.get("time_text"),
             alert_id=alert.id,
         )
-
-        if alert.status != "pending":
-            continue
 
         if rule and rule.second_half_only:
             baseline = SECOND_HALF_BASELINES.get(alert.game_id)
