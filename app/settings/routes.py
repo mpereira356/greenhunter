@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
 
 from ..extensions import db
 from ..models import User
@@ -15,17 +16,18 @@ def settings():
         form_type = request.form.get("form_type", "telegram")
         if form_type == "profile":
             new_username = request.form.get("username", "").strip()
+            new_username_normalized = new_username.lower()
             new_email = request.form.get("email", "").strip()
             current_password = request.form.get("current_password", "")
             new_password = request.form.get("new_password", "")
             confirm_password = request.form.get("confirm_password", "")
 
-            if not new_username:
+            if not new_username_normalized:
                 flash("Informe um nome de usuario.", "warning")
                 return redirect(url_for("settings.settings"))
 
             existing_user = User.query.filter(
-                User.username == new_username, User.id != current_user.id
+                func.lower(User.username) == new_username_normalized, User.id != current_user.id
             ).first()
             if existing_user:
                 flash("Este nome de usuario ja esta em uso.", "warning")
@@ -48,7 +50,7 @@ def settings():
                     return redirect(url_for("settings.settings"))
                 current_user.set_password(new_password)
 
-            current_user.username = new_username
+            current_user.username = new_username_normalized
             current_user.email = new_email or None
             db.session.commit()
             flash("Dados pessoais atualizados.", "success")

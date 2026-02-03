@@ -222,14 +222,17 @@ def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     if request.method == "POST":
         username = request.form.get("username", "").strip()
+        username_normalized = username.lower()
         email = request.form.get("email", "").strip()
         is_admin = bool(request.form.get("is_admin"))
         new_password = request.form.get("new_password", "").strip()
 
-        if not username:
+        if not username_normalized:
             flash("Usuario e obrigatorio.", "warning")
             return render_template("admin/user_edit.html", user=user)
-        existing = User.query.filter(User.username == username, User.id != user.id).first()
+        existing = User.query.filter(
+            func.lower(User.username) == username_normalized, User.id != user.id
+        ).first()
         if existing:
             flash("Usuario ja existe.", "warning")
             return render_template("admin/user_edit.html", user=user)
@@ -239,7 +242,7 @@ def edit_user(user_id):
                 flash("Email ja cadastrado.", "warning")
                 return render_template("admin/user_edit.html", user=user)
 
-        user.username = username
+        user.username = username_normalized
         user.email = email or None
         user.is_admin = is_admin
         if new_password:
