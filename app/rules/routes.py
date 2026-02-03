@@ -1,4 +1,7 @@
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+﻿import json
+from datetime import datetime
+
+from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
@@ -15,6 +18,7 @@ from ..services.scraper import (
     summarize_history,
 )
 from ..services.worker import parse_score
+from ..utils.time import now_sp
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
 
@@ -121,6 +125,95 @@ def _parse_outcome_conditions(form, prefix):
     return conditions
 
 
+def _coerce_int(value, default=None):
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _normalize_import_operator(value: str) -> str:
+    value = (value or "").strip()
+    if value in ("?", "???"):
+        return ">="
+    if value in ("?", "???"):
+        return "<="
+    if value == "=":
+        return "=="
+    if value not in (">", ">=", "<", "<=", "==", "!="):
+        return ">="
+    return value
+
+
+def _serialize_rule(rule: Rule) -> dict:
+    return {
+        "name": rule.name,
+        "time_limit_min": rule.time_limit_min,
+        "message_template": rule.message_template,
+        "is_active": rule.is_active,
+        "second_half_only": rule.second_half_only,
+        "notify_telegram": rule.notify_telegram,
+        "alert_on_penalty": rule.alert_on_penalty,
+        "follow_ht": rule.follow_ht,
+        "follow_ft": rule.follow_ft,
+        "outcome_green_stage": rule.outcome_green_stage,
+        "outcome_red_stage": rule.outcome_red_stage,
+        "outcome_green_minute": rule.outcome_green_minute,
+        "outcome_red_minute": rule.outcome_red_minute,
+        "outcome_red_if_no_green": rule.outcome_red_if_no_green,
+        "score_home": rule.score_home,
+        "score_away": rule.score_away,
+        "conditions": [_condition_dict(c) for c in (rule.conditions or [])],
+        "outcome_conditions": [_condition_dict(c) | {"outcome_type": c.outcome_type} for c in (rule.outcome_conditions or [])],
+    }
+
+
+def _deserialize_condition(item: dict):
+    stat_key = str(item.get("stat_key", "")).strip()
+    side = str(item.get("side", "")).strip()
+    operator = _normalize_import_operator(item.get("operator", ""))
+    value = _coerce_int(item.get("value"))
+    group_id = _coerce_int(item.get("group_id"), default=0)
+    if not stat_key or not side or value is None:
+        return None
+    return RuleCondition(
+        stat_key=stat_key,
+        side=side,
+        operator=operator,
+        value=value,
+        group_id=group_id,
+    )
+
+
+def _deserialize_outcome_condition(item: dict):
+    outcome_type = str(item.get("outcome_type", "")).strip().lower()
+    stat_key = str(item.get("stat_key", "")).strip()
+    side = str(item.get("side", "")).strip()
+    operator = _normalize_import_operator(item.get("operator", ""))
+    value = _coerce_int(item.get("value"))
+    if outcome_type not in ("green", "red") or not stat_key or not side or value is None:
+        return None
+    return RuleOutcomeCondition(
+        outcome_type=outcome_type,
+        stat_key=stat_key,
+        side=side,
+        operator=operator,
+        value=value,
+    )
+
+
 def _condition_dict(cond):
     data = {
         "stat_key": cond.stat_key,
@@ -197,6 +290,116 @@ def list_rules():
         rule_stats=rule_stats,
         rule_alert_counts=rule_alert_counts,
     )
+
+
+
+
+@rules_bp.route("/export", methods=["GET"])
+@login_required
+def export_rules():
+    rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.id.asc()).all()
+    payload = {
+        "version": 1,
+        "exported_at": now_sp().isoformat(),
+        "user": current_user.username,
+        "rules": [_serialize_rule(rule) for rule in rules],
+    }
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"regras_{current_user.username}_{stamp}.json"
+    return Response(
+        data,
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@rules_bp.route("/import", methods=["POST"])
+@login_required
+def import_rules():
+    file = request.files.get("rules_file")
+    if not file or not file.filename:
+        flash("Selecione um arquivo JSON para importar.", "warning")
+        return redirect(url_for("rules.list_rules"))
+
+    try:
+        payload = json.loads(file.read().decode("utf-8-sig"))
+    except Exception:
+        flash("Arquivo invalido. Envie um JSON exportado pelo sistema.", "danger")
+        return redirect(url_for("rules.list_rules"))
+
+    rule_items = payload.get("rules") if isinstance(payload, dict) else None
+    if not isinstance(rule_items, list):
+        flash("Formato invalido: campo 'rules' nao encontrado.", "danger")
+        return redirect(url_for("rules.list_rules"))
+
+    imported = 0
+    skipped = 0
+
+    for item in rule_items:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+
+        name = str(item.get("name", "")).strip()
+        if not name:
+            skipped += 1
+            continue
+
+        conditions_raw = item.get("conditions") or []
+        conditions = [_deserialize_condition(c) for c in conditions_raw if isinstance(c, dict)]
+        conditions = [c for c in conditions if c]
+        if not conditions:
+            skipped += 1
+            continue
+
+        outcome_conditions_raw = item.get("outcome_conditions") or []
+        outcome_conditions = [_deserialize_outcome_condition(c) for c in outcome_conditions_raw if isinstance(c, dict)]
+        outcome_conditions = [c for c in outcome_conditions if c]
+
+        rule = Rule(
+            user_id=current_user.id,
+            name=name,
+            time_limit_min=_coerce_int(item.get("time_limit_min"), 90),
+            message_template=item.get("message_template") or None,
+            is_active=_coerce_bool(item.get("is_active"), True),
+            second_half_only=_coerce_bool(item.get("second_half_only"), False),
+            notify_telegram=_coerce_bool(item.get("notify_telegram"), True),
+            alert_on_penalty=_coerce_bool(item.get("alert_on_penalty"), False),
+            follow_ht=_coerce_bool(item.get("follow_ht"), True),
+            follow_ft=_coerce_bool(item.get("follow_ft"), True),
+            outcome_green_stage=str(item.get("outcome_green_stage") or "HT"),
+            outcome_red_stage=str(item.get("outcome_red_stage") or "HT"),
+            outcome_green_minute=_coerce_int(item.get("outcome_green_minute")),
+            outcome_red_minute=_coerce_int(item.get("outcome_red_minute")),
+            outcome_red_if_no_green=_coerce_bool(item.get("outcome_red_if_no_green"), False),
+            score_home=_coerce_int(item.get("score_home")),
+            score_away=_coerce_int(item.get("score_away")),
+        )
+
+        db.session.add(rule)
+        db.session.flush()
+        for cond in conditions:
+            cond.rule_id = rule.id
+            db.session.add(cond)
+        for cond in outcome_conditions:
+            cond.rule_id = rule.id
+            db.session.add(cond)
+
+        try:
+            db.session.commit()
+            imported += 1
+        except Exception:
+            db.session.rollback()
+            skipped += 1
+
+    if imported:
+        flash(f"Importacao concluida: {imported} regra(s) importada(s).", "success")
+    if skipped:
+        flash(f"{skipped} item(ns) foram ignorados por formato invalido.", "warning")
+    if not imported and not skipped:
+        flash("Nenhuma regra encontrada para importar.", "warning")
+    return redirect(url_for("rules.list_rules"))
 
 
 @rules_bp.route("/new", methods=["GET", "POST"])

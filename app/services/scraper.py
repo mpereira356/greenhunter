@@ -1,5 +1,7 @@
 ﻿import os
 import re
+import threading
+import time
 import unicodedata
 from urllib.parse import urlparse
 
@@ -10,6 +12,15 @@ from urllib3.util.retry import Retry
 
 BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
 SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "2Âº", "2º", "second", "segundo")
+CF_CHALLENGE_MARKERS = (
+    "just a moment",
+    "um momento",
+    "cf-challenge",
+    "checking your browser",
+)
+_CF_LOCK = threading.Lock()
+_CF_LAST_SOLVED_AT = 0.0
+_BROWSER_DRIVER = None
 
 
 def make_session():
@@ -20,7 +31,7 @@ def make_session():
             connect=5,
             read=5,
             backoff_factor=1.5,
-            status_forcelist=(403, 429, 500, 502, 503, 504),
+            status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=("GET", "POST"),
         )
     except TypeError:
@@ -29,7 +40,7 @@ def make_session():
             connect=5,
             read=5,
             backoff_factor=1.5,
-            status_forcelist=(403, 429, 500, 502, 503, 504),
+            status_forcelist=(429, 500, 502, 503, 504),
             method_whitelist=("GET", "POST"),
         )
     adapter = HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=20)
@@ -48,6 +59,161 @@ def make_session():
     return session
 
 
+def _cf_mode() -> str:
+    return os.environ.get("BETSAPI_CF_MODE", "manual").strip().lower()
+
+
+class _SimpleResponse:
+    def __init__(self, url: str, status_code: int, text: str):
+        self.url = url
+        self.status_code = status_code
+        self.text = text
+
+
+def _is_cloudflare_content(text: str) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in CF_CHALLENGE_MARKERS)
+
+
+def _is_cloudflare_response(resp) -> bool:
+    if resp is None:
+        return False
+    if resp.status_code in (403, 429, 503):
+        return True
+    return _is_cloudflare_content(getattr(resp, "text", ""))
+
+
+
+
+def _has_cf_clearance_cookie(cookies) -> bool:
+    if not cookies:
+        return False
+    return any((c.get("name") or "").lower() == "cf_clearance" for c in cookies)
+
+
+def _apply_cookies_to_session(session, cookies):
+    if not cookies:
+        return
+    for cookie in cookies:
+        name = cookie.get("name")
+        value = cookie.get("value")
+        if not name:
+            continue
+        session.cookies.set(
+            name,
+            value,
+            domain=cookie.get("domain") or ".betsapi.com",
+            path=cookie.get("path") or "/",
+        )
+
+
+def _build_browser_driver():
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+    except ModuleNotFoundError:
+        print("[scraper] selenium nao instalado. Instale com: pip install selenium")
+        return None
+    except Exception as exc:
+        print(f"[scraper] falha ao carregar selenium: {exc}")
+        return None
+
+    profile_dir = os.environ.get("BETSAPI_BROWSER_PROFILE_DIR", "data/browser_profile")
+    profile_dir = os.path.abspath(profile_dir)
+    os.makedirs(profile_dir, exist_ok=True)
+
+    options = Options()
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-notifications")
+    options.add_argument(f"--user-data-dir={profile_dir}")
+
+    headless = os.environ.get("BETSAPI_BROWSER_HEADLESS", "0").strip().lower() in ("1", "true", "yes")
+    if headless:
+        options.add_argument("--headless=new")
+
+    return webdriver.Chrome(options=options)
+
+
+def _ensure_browser_driver():
+    global _BROWSER_DRIVER
+    if _BROWSER_DRIVER is not None:
+        return _BROWSER_DRIVER
+    _BROWSER_DRIVER = _build_browser_driver()
+    return _BROWSER_DRIVER
+
+
+def _browser_snapshot(driver):
+    cookies = driver.get_cookies() or []
+    try:
+        user_agent = driver.execute_script("return navigator.userAgent")
+    except Exception:
+        user_agent = None
+    return cookies, user_agent
+
+
+def _browser_fetch(url: str):
+    wait_seconds = int(os.environ.get("BETSAPI_CF_WAIT_SECONDS", "180"))
+    try:
+        from selenium.common.exceptions import TimeoutException
+        from selenium.webdriver.support.ui import WebDriverWait
+    except Exception as exc:
+        print(f"[scraper] falha no webdriver: {exc}")
+        return None, None, None
+
+    with _CF_LOCK:
+        for attempt in (1, 2):
+            driver = _ensure_browser_driver()
+            if driver is None:
+                return None, None, None
+            try:
+                driver.get(url)
+                WebDriverWait(driver, 25).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+                if _is_cloudflare_content(driver.title or "") or _is_cloudflare_content(driver.page_source or ""):
+                    print("[scraper] Cloudflare detectado. Resolva manualmente no navegador...")
+                    try:
+                        WebDriverWait(driver, wait_seconds).until(
+                            lambda d: not (
+                                _is_cloudflare_content(d.title or "")
+                                or _is_cloudflare_content(d.page_source or "")
+                            )
+                        )
+                    except TimeoutException:
+                        print("[scraper] timeout ao aguardar liberacao do challenge.")
+                        return None, None, None
+
+                html = driver.page_source or ""
+                cookies, user_agent = _browser_snapshot(driver)
+                # Some valid pages may still contain "cloudflare" references in scripts/CDN links.
+                # If clearance cookie exists and title is no longer challenge, accept the page.
+                title_blocked = _is_cloudflare_content(driver.title or "")
+                html_blocked = _is_cloudflare_content(html)
+                if title_blocked or (html_blocked and not _has_cf_clearance_cookie(cookies)):
+                    return None, None, None
+                print("[scraper] Challenge liberado. Sessao persistente ativa.")
+                return _SimpleResponse(driver.current_url or url, 200, html), cookies, user_agent
+            except Exception as exc:
+                # Browser closed/invalid session: try recreate once
+                if attempt == 1:
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+                    globals()["_BROWSER_DRIVER"] = None
+                    continue
+                print(f"[scraper] erro no navegador de desafio: {exc}")
+                return None, None, None
+
+
+def _browser_fallback_enabled() -> bool:
+    mode = _cf_mode()
+    return mode not in ("off", "0", "false", "no")
+
+
 def _swap_base(url: str) -> str:
     if "://pt.betsapi.com" in url:
         return url.replace("://pt.betsapi.com", "://betsapi.com", 1)
@@ -57,16 +223,51 @@ def _swap_base(url: str) -> str:
 
 
 def get_with_fallback(session, url):
-    resp = session.get(url, timeout=15)
-    if resp.status_code == 403:
-        session.headers.update({"Referer": "https://betsapi.com", "Cache-Control": "no-cache"})
-        resp = session.get(url, timeout=15)
-    if resp.status_code == 403:
-        alt_url = _swap_base(url)
-        if alt_url != url:
-            session.headers.update({"Referer": alt_url.split("/r/")[0]})
-            resp = session.get(alt_url, timeout=15)
-    return resp
+    last_resp = None
+    last_exc = None
+    blocked_urls = []
+    candidates = [url]
+    alt_url = _swap_base(url)
+    if alt_url != url:
+        candidates.append(alt_url)
+
+    for candidate in candidates:
+        try:
+            resp = session.get(candidate, timeout=15)
+        except requests.RequestException as exc:
+            last_exc = exc
+            continue
+
+        if resp.status_code == 403:
+            session.headers.update({"Referer": candidate.split("/r/")[0], "Cache-Control": "no-cache"})
+            try:
+                resp = session.get(candidate, timeout=15)
+            except requests.RequestException as exc:
+                last_exc = exc
+                continue
+
+        if resp.status_code == 200 and not _is_cloudflare_response(resp):
+            return resp
+
+        if _is_cloudflare_response(resp):
+            blocked_urls.append(candidate)
+        last_resp = resp
+
+    if _browser_fallback_enabled():
+        for candidate in blocked_urls or candidates:
+            browser_resp, cookies, user_agent = _browser_fetch(candidate)
+            if not browser_resp:
+                continue
+            _apply_cookies_to_session(session, cookies)
+            if user_agent:
+                session.headers["User-Agent"] = user_agent
+            return browser_resp
+
+    if last_resp is not None:
+        return last_resp
+    if last_exc:
+        raise last_exc
+    raise requests.RequestException(f"falha ao acessar {url}")
 
 
 def extrair_valor_td(td):

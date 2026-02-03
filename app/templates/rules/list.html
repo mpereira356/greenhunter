@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Minhas Regras | GreenHunter{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -7,6 +7,11 @@
     <p class="page-subtitle">Gerencie seus bots e acompanhe o desempenho individual.</p>
   </div>
   <div class="page-actions">
+    <a class="btn btn-outline-secondary" href="{{ url_for('rules.export_rules') }}">Exportar Regras</a>
+    <form id="rules-import-form" method="post" action="{{ url_for('rules.import_rules') }}" enctype="multipart/form-data" class="d-inline">
+      <input id="rules-file-input" type="file" name="rules_file" accept=".json,application/json" hidden>
+      <button type="button" id="rules-import-btn" class="btn btn-outline-secondary">Importar Regras</button>
+    </form>
     <a class="btn btn-primary shadow-sm" href="{{ url_for('rules.create_rule') }}">
       <span class="me-1">+</span> Nova Regra
     </a>
@@ -96,5 +101,17 @@
       }
     });
   });
+
+  const importBtn = document.getElementById('rules-import-btn');
+  const fileInput = document.getElementById('rules-file-input');
+  const importForm = document.getElementById('rules-import-form');
+  if (importBtn && fileInput && importForm) {
+    importBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        importForm.submit();
+      }
+    });
+  }
 </script>
 {% endblock %}
