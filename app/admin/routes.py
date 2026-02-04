@@ -60,7 +60,7 @@ def _build_tracked_games(now: datetime) -> list[dict]:
     recent_window = now - timedelta(minutes=20)
     live_rows = (
         LiveGameState.query.filter(LiveGameState.updated_at >= recent_window)
-        .order_by(LiveGameState.updated_at.desc())
+        .order_by(LiveGameState.minute.desc(), LiveGameState.updated_at.desc())
         .all()
     )
     for row in live_rows:
