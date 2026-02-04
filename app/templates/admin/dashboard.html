@@ -116,7 +116,7 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="mb-0">Monitor jogos ao vivo</h5>
-          <span class="text-muted small">Somente jogos entre 45' e 55'</span>
+          <span class="text-muted small">Reset entre 45' e 55', exibindo ate FT</span>
         </div>
         <div class="table-responsive border rounded" style="max-height: 320px; overflow-y: auto;">
           <table class="table table-sm table-clean align-middle small mb-0">
@@ -131,7 +131,7 @@
                 <th>Ver</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="live-monitor-body">
               {% for row in tracked_games %}
               <tr>
                 <td>{{ row.teams }}</td>
@@ -158,7 +158,7 @@
               </tr>
               {% endfor %}
               {% if tracked_games|length == 0 %}
-              <tr><td colspan="7" class="text-muted">Nenhum jogo entre 45' e 55' no momento.</td></tr>
+              <tr><td colspan="7" class="text-muted">Nenhum jogo com reset 45-55 ativo no momento.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -275,4 +275,64 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (function () {
+    const body = document.getElementById("live-monitor-body");
+    if (!body) return;
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function formatMinute(item) {
+      if (item.time_text) return esc(item.time_text);
+      if (item.minute !== null && item.minute !== undefined) return `${esc(item.minute)}'`;
+      return "-";
+    }
+
+    function renderRow(item) {
+      const link = item.url ? `<a class="small" href="${esc(item.url)}" target="_blank" rel="noopener">abrir</a>` : "-";
+      const base = item.baseline_minute ?? "-";
+      const onTarget = item.on_target_2h ?? "-";
+      const corners = item.corners_2h ?? "-";
+      const dangerous = item.dangerous_2h ?? "-";
+      return `<tr>
+        <td>${esc(item.teams)}</td>
+        <td>${formatMinute(item)}</td>
+        <td>${esc(base)}</td>
+        <td>${esc(onTarget)}</td>
+        <td>${esc(corners)}</td>
+        <td>${esc(dangerous)}</td>
+        <td>${link}</td>
+      </tr>`;
+    }
+
+    async function refreshLiveMonitor() {
+      try {
+        const resp = await fetch("{{ url_for('admin.live_monitor') }}", { cache: "no-store" });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const games = Array.isArray(data.games) ? data.games : [];
+        if (!games.length) {
+          body.innerHTML = "<tr><td colspan='7' class='text-muted'>Nenhum jogo com reset 45-55 ativo no momento.</td></tr>";
+          return;
+        }
+        body.innerHTML = games.map(renderRow).join("");
+      } catch (e) {
+        // Keep last rendered table if the request fails.
+      }
+    }
+
+    setInterval(refreshLiveMonitor, 5000);
+  })();
+</script>
 {% endblock %}
