@@ -53,7 +53,7 @@ def _build_tracked_games(now: datetime) -> list[dict]:
         if is_first_half_extra_time(row.time_text or ""):
             continue
         baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
-        if not isinstance(baseline_minute, int) or baseline_minute < 45 or baseline_minute > 55:
+        if not isinstance(baseline_minute, int) or baseline_minute < 45:
             continue
         on_target_now = _stat_total(row.stats_json, "On Target")
         on_target_base = _stat_total(row.second_half_baseline_json, "On Target")
@@ -115,7 +115,7 @@ def _build_tracked_games_live(now: datetime) -> list[dict]:
 
         baseline_payload = baseline_map.get(game.get("game_id"), "")
         baseline_minute = _stat_total(baseline_payload, "Minute")
-        if not isinstance(baseline_minute, int) or baseline_minute < 45 or baseline_minute > 55:
+        if not isinstance(baseline_minute, int) or baseline_minute < 45:
             continue
         on_target_now = (stats_payload.get("stats", {}).get("On Target", {}) or {}).get("total")
         corners_now = (stats_payload.get("stats", {}).get("Corners", {}) or {}).get("total")
