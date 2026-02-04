@@ -226,6 +226,93 @@ def _condition_dict(cond):
     return data
 
 
+def _normalize_text(value) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def _name_key(value) -> str:
+    return _normalize_text(value).casefold()
+
+
+def _condition_signature(cond, include_outcome_type: bool = False):
+    base = (
+        _normalize_text(getattr(cond, "stat_key", "")).casefold(),
+        _normalize_text(getattr(cond, "side", "")).lower(),
+        _normalize_import_operator(getattr(cond, "operator", "")),
+        _coerce_int(getattr(cond, "value", None), 0),
+        _coerce_int(getattr(cond, "group_id", 0), 0),
+    )
+    if include_outcome_type:
+        return (_normalize_text(getattr(cond, "outcome_type", "")).lower(),) + base
+    return base
+
+
+def _rule_signature(
+    *,
+    name,
+    time_limit_min,
+    message_template,
+    is_active,
+    second_half_only,
+    notify_telegram,
+    alert_on_penalty,
+    follow_ht,
+    follow_ft,
+    outcome_green_stage,
+    outcome_red_stage,
+    outcome_green_minute,
+    outcome_red_minute,
+    outcome_red_if_no_green,
+    score_home,
+    score_away,
+    conditions,
+    outcome_conditions,
+):
+    return (
+        _name_key(name),
+        _coerce_int(time_limit_min, 90),
+        _normalize_text(message_template) or None,
+        _coerce_bool(is_active, True),
+        _coerce_bool(second_half_only, False),
+        _coerce_bool(notify_telegram, True),
+        _coerce_bool(alert_on_penalty, False),
+        _coerce_bool(follow_ht, True),
+        _coerce_bool(follow_ft, True),
+        _normalize_text(outcome_green_stage or "HT").upper(),
+        _normalize_text(outcome_red_stage or "HT").upper(),
+        _coerce_int(outcome_green_minute),
+        _coerce_int(outcome_red_minute),
+        _coerce_bool(outcome_red_if_no_green, False),
+        _coerce_int(score_home),
+        _coerce_int(score_away),
+        tuple(sorted(_condition_signature(c) for c in (conditions or []))),
+        tuple(sorted(_condition_signature(c, include_outcome_type=True) for c in (outcome_conditions or []))),
+    )
+
+
+def _rule_model_signature(rule: Rule):
+    return _rule_signature(
+        name=rule.name,
+        time_limit_min=rule.time_limit_min,
+        message_template=rule.message_template,
+        is_active=rule.is_active,
+        second_half_only=rule.second_half_only,
+        notify_telegram=rule.notify_telegram,
+        alert_on_penalty=rule.alert_on_penalty,
+        follow_ht=rule.follow_ht,
+        follow_ft=rule.follow_ft,
+        outcome_green_stage=rule.outcome_green_stage,
+        outcome_red_stage=rule.outcome_red_stage,
+        outcome_green_minute=rule.outcome_green_minute,
+        outcome_red_minute=rule.outcome_red_minute,
+        outcome_red_if_no_green=rule.outcome_red_if_no_green,
+        score_home=rule.score_home,
+        score_away=rule.score_away,
+        conditions=rule.conditions or [],
+        outcome_conditions=rule.outcome_conditions or [],
+    )
+
+
 def _build_form_context(form):
     form_data = {
         "name": form.get("name", "").strip(),
@@ -335,6 +422,15 @@ def import_rules():
 
     imported = 0
     skipped = 0
+    duplicated = 0
+    existing_name_keys = {
+        _name_key(rule.name)
+        for rule in Rule.query.filter_by(user_id=current_user.id).all()
+    }
+    existing_signatures = {
+        _rule_model_signature(rule)
+        for rule in Rule.query.filter_by(user_id=current_user.id).all()
+    }
 
     for item in rule_items:
         if not isinstance(item, dict):
@@ -344,6 +440,9 @@ def import_rules():
         name = str(item.get("name", "")).strip()
         if not name:
             skipped += 1
+            continue
+        if _name_key(name) in existing_name_keys:
+            duplicated += 1
             continue
 
         conditions_raw = item.get("conditions") or []
@@ -357,24 +456,37 @@ def import_rules():
         outcome_conditions = [_deserialize_outcome_condition(c) for c in outcome_conditions_raw if isinstance(c, dict)]
         outcome_conditions = [c for c in outcome_conditions if c]
 
+        rule_data = {
+            "time_limit_min": _coerce_int(item.get("time_limit_min"), 90),
+            "message_template": item.get("message_template") or None,
+            "is_active": _coerce_bool(item.get("is_active"), True),
+            "second_half_only": _coerce_bool(item.get("second_half_only"), False),
+            "notify_telegram": _coerce_bool(item.get("notify_telegram"), True),
+            "alert_on_penalty": _coerce_bool(item.get("alert_on_penalty"), False),
+            "follow_ht": _coerce_bool(item.get("follow_ht"), True),
+            "follow_ft": _coerce_bool(item.get("follow_ft"), True),
+            "outcome_green_stage": str(item.get("outcome_green_stage") or "HT"),
+            "outcome_red_stage": str(item.get("outcome_red_stage") or "HT"),
+            "outcome_green_minute": _coerce_int(item.get("outcome_green_minute")),
+            "outcome_red_minute": _coerce_int(item.get("outcome_red_minute")),
+            "outcome_red_if_no_green": _coerce_bool(item.get("outcome_red_if_no_green"), False),
+            "score_home": _coerce_int(item.get("score_home")),
+            "score_away": _coerce_int(item.get("score_away")),
+        }
+        signature = _rule_signature(
+            name=name,
+            conditions=conditions,
+            outcome_conditions=outcome_conditions,
+            **rule_data,
+        )
+        if signature in existing_signatures:
+            duplicated += 1
+            continue
+
         rule = Rule(
             user_id=current_user.id,
             name=name,
-            time_limit_min=_coerce_int(item.get("time_limit_min"), 90),
-            message_template=item.get("message_template") or None,
-            is_active=_coerce_bool(item.get("is_active"), True),
-            second_half_only=_coerce_bool(item.get("second_half_only"), False),
-            notify_telegram=_coerce_bool(item.get("notify_telegram"), True),
-            alert_on_penalty=_coerce_bool(item.get("alert_on_penalty"), False),
-            follow_ht=_coerce_bool(item.get("follow_ht"), True),
-            follow_ft=_coerce_bool(item.get("follow_ft"), True),
-            outcome_green_stage=str(item.get("outcome_green_stage") or "HT"),
-            outcome_red_stage=str(item.get("outcome_red_stage") or "HT"),
-            outcome_green_minute=_coerce_int(item.get("outcome_green_minute")),
-            outcome_red_minute=_coerce_int(item.get("outcome_red_minute")),
-            outcome_red_if_no_green=_coerce_bool(item.get("outcome_red_if_no_green"), False),
-            score_home=_coerce_int(item.get("score_home")),
-            score_away=_coerce_int(item.get("score_away")),
+            **rule_data,
         )
 
         db.session.add(rule)
@@ -389,15 +501,19 @@ def import_rules():
         try:
             db.session.commit()
             imported += 1
+            existing_name_keys.add(_name_key(name))
+            existing_signatures.add(signature)
         except Exception:
             db.session.rollback()
             skipped += 1
 
     if imported:
         flash(f"Importacao concluida: {imported} regra(s) importada(s).", "success")
+    if duplicated:
+        flash(f"{duplicated} regra(s) duplicada(s) foram ignoradas.", "warning")
     if skipped:
         flash(f"{skipped} item(ns) foram ignorados por formato invalido.", "warning")
-    if not imported and not skipped:
+    if not imported and not skipped and not duplicated:
         flash("Nenhuma regra encontrada para importar.", "warning")
     return redirect(url_for("rules.list_rules"))
 
