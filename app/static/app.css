@@ -22,6 +22,9 @@
     linear-gradient(170deg, #eaf2ff 0%, #dde8fb 48%, #d4e1f7 100%);
   --sidebar-border: rgba(100, 116, 139, 0.22);
   --sidebar-brand-border: rgba(100, 116, 139, 0.18);
+  --sidebar-fg: #0f2540;
+  --sidebar-title: #0f2540;
+  --sidebar-subtitle: #4f6b8a;
   --sidebar-nav-text: #27405f;
   --sidebar-nav-bg: rgba(255, 255, 255, 0.35);
   --sidebar-nav-hover-bg: rgba(255, 255, 255, 0.6);
@@ -62,6 +65,9 @@
     linear-gradient(170deg, #121c2e 0%, #0c1528 48%, #081122 100%);
   --sidebar-border: rgba(148, 163, 184, 0.16);
   --sidebar-brand-border: rgba(148, 163, 184, 0.16);
+  --sidebar-fg: #f8fafc;
+  --sidebar-title: #f8fafc;
+  --sidebar-subtitle: #94a3b8;
   --sidebar-nav-text: #c8d4e4;
   --sidebar-nav-bg: rgba(15, 23, 42, 0.2);
   --sidebar-nav-hover-bg: rgba(255, 255, 255, 0.07);
@@ -269,7 +275,7 @@ a:hover {
 .sidebar {
   width: 260px;
   background: var(--sidebar-bg);
-  color: #f8fafc;
+  color: var(--sidebar-fg);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -329,11 +335,12 @@ a:hover {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.025em;
+  color: var(--sidebar-title);
 }
 
 .brand-sub {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--sidebar-subtitle);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1428,6 +1435,105 @@ code {
   color: var(--text-muted);
 }
 
+.rules-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.rule-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.rule-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rule-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.rule-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  margin-top: 0.3rem;
+  flex-shrink: 0;
+}
+
+.rule-dot-on {
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.16);
+}
+
+.rule-dot-off {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
+}
+
+.rule-name {
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+.rule-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.rule-card-stats {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.rule-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+}
+
+.rule-pill-green {
+  background: rgba(16, 185, 129, 0.16);
+  color: #059669;
+}
+
+.rule-pill-red {
+  background: rgba(239, 68, 68, 0.16);
+  color: #dc2626;
+}
+
+.rule-last {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.rule-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .system-status-card {
   background: color-mix(in srgb, var(--bg-card) 88%, #10b981 12%);
   border: 1px solid color-mix(in srgb, var(--border-color) 70%, #10b981 30%);
@@ -1438,6 +1544,19 @@ code {
 }
 
 @media (max-width: 768px) {
+  .rules-board {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-card {
+    padding: 0.85rem;
+  }
+
+  .rule-last {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .weekly-chart {
     gap: 0.5rem;
     height: 200px;

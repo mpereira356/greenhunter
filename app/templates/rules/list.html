@@ -19,57 +19,48 @@
 </div>
 
 {% if rules %}
-  <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-clean align-middle mb-0">
-        <thead>
-          <tr>
-            <th>Nome da Regra</th>
-            <th>Status</th>
-            <th class="text-center">Greens</th>
-            <th class="text-center">Reds</th>
-            <th>Último Alerta</th>
-            <th class="text-end">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for rule in rules %}
-          <tr>
-            <td>
-              <div class="fw-bold text-main">{{ rule.name }}</div>
-              <div class="small text-muted">{{ rule.conditions|length }} condições configuradas</div>
-            </td>
-            <td>
-              {% if rule.is_active %}
-                <span class="badge-status badge-on">● Ativa</span>
-              {% else %}
-                <span class="badge-status badge-off">● Inativa</span>
-              {% endif %}
-            </td>
-            <td class="text-center fw-bold text-success">{{ rule_stats.get(rule.id, {}).get("green", 0) }}</td>
-            <td class="text-center fw-bold text-danger">{{ rule_stats.get(rule.id, {}).get("red", 0) }}</td>
-            <td class="text-muted small">
-              {{ rule.last_alert_at.strftime('%d/%m %H:%M') if rule.last_alert_at else 'Nenhum' }}
-            </td>
-            <td class="text-end">
-              <div class="d-flex justify-content-end gap-2">
-                <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
-                  <button class="btn btn-sm btn-outline-secondary">
-                    {% if rule.is_active %}Pausar{% else %}Ativar{% endif %}
-                  </button>
-                </form>
-                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
-                <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline rule-delete-form" data-alert-count="{{ rule_alert_counts.get(rule.id, 0) }}">
-                  <input type="hidden" name="confirm_password" value="">
-                  <button class="btn btn-sm btn-outline-danger">Excluir</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <div class="rules-board">
+    {% for rule in rules %}
+    {% set greens_count = rule_stats.get(rule.id, {}).get("green", 0) %}
+    {% set reds_count = rule_stats.get(rule.id, {}).get("red", 0) %}
+    <article class="rule-card">
+      <div class="rule-card-top">
+        <div class="rule-main">
+          <span class="rule-dot {{ 'rule-dot-on' if rule.is_active else 'rule-dot-off' }}"></span>
+          <div>
+            <div class="rule-name">{{ rule.name }}</div>
+            <div class="rule-meta">{{ rule.conditions|length }} condições configuradas</div>
+          </div>
+        </div>
+        <div>
+          {% if rule.is_active %}
+            <span class="badge-status badge-on">Ativa</span>
+          {% else %}
+            <span class="badge-status badge-off">Inativa</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="rule-card-stats">
+        <span class="rule-pill rule-pill-green">Greens: {{ greens_count }}</span>
+        <span class="rule-pill rule-pill-red">Reds: {{ reds_count }}</span>
+        <span class="rule-last">{{ rule.last_alert_at.strftime('%d/%m %H:%M') if rule.last_alert_at else 'Nenhum alerta' }}</span>
+      </div>
+
+      <div class="rule-card-actions">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
+        <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
+          <button class="btn btn-sm btn-outline-secondary">
+            {% if rule.is_active %}Pausar{% else %}Ativar{% endif %}
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline rule-delete-form" data-alert-count="{{ rule_alert_counts.get(rule.id, 0) }}">
+          <input type="hidden" name="confirm_password" value="">
+          <button class="btn btn-sm btn-outline-danger">Excluir</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
   </div>
 {% else %}
   <div class="card border-0 shadow-sm p-5 text-center">
