@@ -640,9 +640,15 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
 
 def follow_alerts(session):
     active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
+    stats_cache = {}
     for alert in active_alerts:
         rule = alert.rule
-        stats_payload = fetch_match_stats(session, alert.url)
+        cache_key = alert.url
+        if cache_key in stats_cache:
+            stats_payload = stats_cache[cache_key]
+        else:
+            stats_payload = fetch_match_stats(session, alert.url)
+            stats_cache[cache_key] = stats_payload
         if not stats_payload: continue
 
         ensure_second_half_baseline(alert.game_id, stats_payload)
@@ -697,6 +703,16 @@ def follow_alerts(session):
 
         green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] if rule else []
         red_conds = [c for c in rule.outcome_conditions if c.outcome_type == "red"] if rule else []
+        allow_green_eval = True
+        allow_red_eval = True
+        if rule and not rule.second_half_only:
+            green_stage = (rule.outcome_green_stage or "HT").upper()
+            red_stage = (rule.outcome_red_stage or "HT").upper()
+            in_first_half_window = is_first_half_goal(stats_payload.get("time_text", ""), minute) or is_half_time(stats_payload.get("time_text", ""), minute)
+            if green_stage == "HT" and not in_first_half_window:
+                allow_green_eval = False
+            if red_stage == "HT" and not in_first_half_window:
+                allow_red_eval = False
 
         base_stats = None
         if alert.initial_stats_json:
@@ -707,12 +723,12 @@ def follow_alerts(session):
         stats_for_outcome = apply_alert_delta(stats, base_stats, minute, alert.alert_minute) if base_stats else stats
         
         # 1. Verificar GREEN customizado
-        if green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
+        if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
             update_alert_status(alert, "green", minute, current_score, stats, "✅ GREEN - condições atingidas")
             continue
 
         # 2. Verificar RED customizado
-        if red_conds and evaluate_outcome_conditions(red_conds, stats_for_outcome):
+        if allow_red_eval and red_conds and evaluate_outcome_conditions(red_conds, stats_for_outcome):
             update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - condições de RED atingidas")
             continue
 

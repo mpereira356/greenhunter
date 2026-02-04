@@ -38,11 +38,21 @@ def _stat_total(payload: str | None, key: str) -> int | None:
     return total if isinstance(total, int) else None
 
 
-def _second_half_delta(now_value: int | None, baseline_value: int | None) -> int:
-    now_n = now_value if isinstance(now_value, int) else 0
-    base_n = baseline_value if isinstance(baseline_value, int) else 0
-    # If provider resets at HT and current drops below baseline, treat current as 2H count.
-    return now_n - base_n if now_n >= base_n else now_n
+def _stat_pair(payload: str | None, key: str) -> str:
+    if not payload:
+        return "- x -"
+    try:
+        data = json.loads(payload)
+    except Exception:
+        return "- x -"
+    value = data.get(key) if isinstance(data, dict) else None
+    if not isinstance(value, dict):
+        return "- x -"
+    home = value.get("home")
+    away = value.get("away")
+    home_txt = str(home) if isinstance(home, int) else "-"
+    away_txt = str(away) if isinstance(away, int) else "-"
+    return f"{home_txt} x {away_txt}"
 
 
 def _build_tracked_games(now: datetime) -> list[dict]:
@@ -55,28 +65,10 @@ def _build_tracked_games(now: datetime) -> list[dict]:
     )
     for row in live_rows:
         minute = row.minute if isinstance(row.minute, int) else None
-        if minute is None or minute < 45:
+        if minute is None or minute < 46:
             continue
         if is_first_half_extra_time(row.time_text or ""):
             continue
-        baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
-        if not isinstance(baseline_minute, int) or baseline_minute < 45:
-            continue
-        on_target_now = _stat_total(row.stats_json, "On Target")
-        on_target_base = _stat_total(row.second_half_baseline_json, "On Target")
-        corners_now = _stat_total(row.stats_json, "Corners")
-        corners_base = _stat_total(row.second_half_baseline_json, "Corners")
-        dangerous_now = _stat_total(row.stats_json, "Dangerous Attacks")
-        dangerous_base = _stat_total(row.second_half_baseline_json, "Dangerous Attacks")
-
-        if minute <= 45:
-            on_target_2h = 0
-            corners_2h = 0
-            dangerous_2h = 0
-        else:
-            on_target_2h = max(0, _second_half_delta(on_target_now, on_target_base))
-            corners_2h = max(0, _second_half_delta(corners_now, corners_base))
-            dangerous_2h = max(0, _second_half_delta(dangerous_now, dangerous_base))
 
         tracked_games.append(
             {
@@ -85,10 +77,9 @@ def _build_tracked_games(now: datetime) -> list[dict]:
                 "url": row.url or (f"https://betsapi.com/r/{row.game_id}" if row.game_id else ""),
                 "minute": minute,
                 "time_text": row.time_text,
-                "baseline_minute": baseline_minute,
-                "on_target_2h": on_target_2h,
-                "corners_2h": corners_2h,
-                "dangerous_2h": dangerous_2h,
+                "on_target_live": _stat_pair(row.stats_json, "On Target"),
+                "corners_live": _stat_pair(row.stats_json, "Corners"),
+                "dangerous_live": _stat_pair(row.stats_json, "Dangerous Attacks"),
                 "updated_at": row.updated_at,
                 "updated_at_fmt": row.updated_at.strftime("%d/%m %H:%M:%S") if row.updated_at else "-",
             }

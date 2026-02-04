@@ -116,7 +116,7 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="mb-0">Monitor jogos ao vivo</h5>
-          <span class="text-muted small">Reset entre 45' e 55', exibindo ate FT</span>
+          <span class="text-muted small">Atualiza em <span id="live-monitor-countdown">15</span>s</span>
         </div>
         <div class="table-responsive border rounded" style="max-height: 320px; overflow-y: auto;">
           <table class="table table-sm table-clean align-middle small mb-0">
@@ -124,10 +124,9 @@
               <tr>
                 <th>Time</th>
                 <th>Tempo</th>
-                <th>Base</th>
-                <th>Gol</th>
-                <th>Esc</th>
-                <th>Perig</th>
+                <th>Chutes no gol</th>
+                <th>Escanteios</th>
+                <th>Ataques perigosos</th>
                 <th>Ver</th>
               </tr>
             </thead>
@@ -144,10 +143,9 @@
                     -
                   {% endif %}
                 </td>
-                <td>{{ row.baseline_minute if row.baseline_minute is not none else '-' }}</td>
-                <td>{{ row.on_target_2h if row.on_target_2h is not none else '-' }}</td>
-                <td>{{ row.corners_2h if row.corners_2h is not none else '-' }}</td>
-                <td>{{ row.dangerous_2h if row.dangerous_2h is not none else '-' }}</td>
+                <td>{{ row.on_target_live }}</td>
+                <td>{{ row.corners_live }}</td>
+                <td>{{ row.dangerous_live }}</td>
                 <td>
                   {% if row.url %}
                   <a class="small" href="{{ row.url }}" target="_blank" rel="noopener">abrir</a>
@@ -158,7 +156,7 @@
               </tr>
               {% endfor %}
               {% if tracked_games|length == 0 %}
-              <tr><td colspan="7" class="text-muted">Nenhum jogo com reset 45-55 ativo no momento.</td></tr>
+              <tr><td colspan="6" class="text-muted">Nenhum jogo no 2o tempo no momento.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -282,7 +280,11 @@
 <script>
   (function () {
     const body = document.getElementById("live-monitor-body");
+    const countdownEl = document.getElementById("live-monitor-countdown");
     if (!body) return;
+    const REFRESH_SECONDS = 15;
+    let remaining = REFRESH_SECONDS;
+    let isRefreshing = false;
 
     function esc(value) {
       return String(value ?? "")
@@ -301,14 +303,12 @@
 
     function renderRow(item) {
       const link = item.url ? `<a class="small" href="${esc(item.url)}" target="_blank" rel="noopener">abrir</a>` : "-";
-      const base = item.baseline_minute ?? "-";
-      const onTarget = item.on_target_2h ?? "-";
-      const corners = item.corners_2h ?? "-";
-      const dangerous = item.dangerous_2h ?? "-";
+      const onTarget = item.on_target_live ?? "- x -";
+      const corners = item.corners_live ?? "- x -";
+      const dangerous = item.dangerous_live ?? "- x -";
       return `<tr>
         <td>${esc(item.teams)}</td>
         <td>${formatMinute(item)}</td>
-        <td>${esc(base)}</td>
         <td>${esc(onTarget)}</td>
         <td>${esc(corners)}</td>
         <td>${esc(dangerous)}</td>
@@ -317,22 +317,40 @@
     }
 
     async function refreshLiveMonitor() {
+      if (isRefreshing) return;
+      isRefreshing = true;
       try {
         const resp = await fetch("{{ url_for('admin.live_monitor') }}", { cache: "no-store" });
         if (!resp.ok) return;
         const data = await resp.json();
         const games = Array.isArray(data.games) ? data.games : [];
         if (!games.length) {
-          body.innerHTML = "<tr><td colspan='7' class='text-muted'>Nenhum jogo com reset 45-55 ativo no momento.</td></tr>";
+          body.innerHTML = "<tr><td colspan='6' class='text-muted'>Nenhum jogo no 2o tempo no momento.</td></tr>";
           return;
         }
         body.innerHTML = games.map(renderRow).join("");
       } catch (e) {
         // Keep last rendered table if the request fails.
+      } finally {
+        isRefreshing = false;
       }
     }
 
-    setInterval(refreshLiveMonitor, 15000);
+    function renderCountdown() {
+      if (countdownEl) countdownEl.textContent = String(remaining);
+    }
+
+    renderCountdown();
+    setInterval(async function () {
+      remaining -= 1;
+      if (remaining <= 0) {
+        remaining = REFRESH_SECONDS;
+        renderCountdown();
+        await refreshLiveMonitor();
+        return;
+      }
+      renderCountdown();
+    }, 1000);
   })();
 </script>
 {% endblock %}

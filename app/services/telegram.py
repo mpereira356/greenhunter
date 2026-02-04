@@ -1,4 +1,5 @@
 import requests
+import time
 
 from .scraper import make_session
 
@@ -14,10 +15,27 @@ def send_message(token: str, chat_id: str, text: str):
         "parse_mode": "Markdown",
         "disable_web_page_preview": True,
     }
+    fallback_payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
     try:
         resp = session.post(url, data=payload, timeout=15)
+        if resp.status_code == 429:
+            retry_after = 1
+            try:
+                body = resp.json()
+                retry_after = int((body.get("parameters") or {}).get("retry_after") or 1)
+            except Exception:
+                retry_after = 1
+            time.sleep(min(max(retry_after, 1), 5))
+            resp = session.post(url, data=payload, timeout=15)
+        if resp.status_code == 400:
+            # Fallback for markdown formatting errors in dynamic text.
+            resp = session.post(url, data=fallback_payload, timeout=15)
         if resp.status_code != 200:
-            return False, f"HTTP {resp.status_code}"
+            return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
         return True, "ok"
     except requests.RequestException as exc:
         return False, str(exc)
