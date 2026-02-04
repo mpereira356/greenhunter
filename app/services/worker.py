@@ -427,6 +427,29 @@ def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | N
         adjusted["Minute"] = {"home": m_delta, "away": m_delta, "total": m_delta}
     return adjusted
 
+
+def merge_score_delta_into_stats(stats_for_outcome: dict, initial_score: str | None, current_score: str | None):
+    if not isinstance(stats_for_outcome, dict):
+        return stats_for_outcome
+    if not initial_score or not current_score:
+        return stats_for_outcome
+    init_home, init_away = parse_score(initial_score)
+    curr_home, curr_away = parse_score(current_score)
+    score_delta = {
+        "home": max(0, curr_home - init_home),
+        "away": max(0, curr_away - init_away),
+        "total": max(0, (curr_home + curr_away) - (init_home + init_away)),
+    }
+    prev_goals = stats_for_outcome.get("Goals")
+    if isinstance(prev_goals, dict):
+        score_delta = {
+            "home": max(score_delta["home"], _num(prev_goals.get("home"))),
+            "away": max(score_delta["away"], _num(prev_goals.get("away"))),
+            "total": max(score_delta["total"], _num(prev_goals.get("total"))),
+        }
+    stats_for_outcome["Goals"] = score_delta
+    return stats_for_outcome
+
 def maybe_notify_penalty(alert, stats, minute, score, time_text=None):
     if not alert:
         return
@@ -721,6 +744,7 @@ def follow_alerts(session):
             except Exception:
                 base_stats = None
         stats_for_outcome = apply_alert_delta(stats, base_stats, minute, alert.alert_minute) if base_stats else stats
+        stats_for_outcome = merge_score_delta_into_stats(stats_for_outcome, alert.initial_score, current_score)
         
         # 1. Verificar GREEN customizado
         if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
@@ -734,7 +758,38 @@ def follow_alerts(session):
 
         # 3. Verificar RED por tempo (se habilitado)
         if should_time_red(rule, alert, minute):
-            update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - prazo do GREEN expirou")
+            # Dupla verificacao antes do RED: reler o jogo para evitar atraso de feed.
+            latest_payload = fetch_match_stats(session, alert.url)
+            latest_minute = minute
+            latest_score = current_score
+            latest_stats = stats
+            if latest_payload:
+                latest_minute = latest_payload.get("minute") or minute
+                latest_score = latest_payload.get("score") or current_score
+                latest_stats = latest_payload.get("stats", {}) or stats
+                if latest_score:
+                    alert.last_score = latest_score
+                    alert.last_score_minute = latest_minute
+                    db.session.commit()
+
+                latest_eval_stats = latest_stats
+                if rule and rule.second_half_only:
+                    latest_baseline = get_second_half_baseline(alert.game_id)
+                    if latest_baseline:
+                        latest_eval_stats = apply_second_half_delta(latest_stats, latest_baseline)
+                    m2h_latest = max(0, (latest_minute or 0) - 45)
+                    latest_eval_stats["Minute"] = {"home": m2h_latest, "away": m2h_latest, "total": m2h_latest}
+
+                latest_outcome_stats = (
+                    apply_alert_delta(latest_eval_stats, base_stats, latest_minute, alert.alert_minute)
+                    if base_stats else latest_eval_stats
+                )
+                latest_outcome_stats = merge_score_delta_into_stats(latest_outcome_stats, alert.initial_score, latest_score)
+                if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
+                    update_alert_status(alert, "green", latest_minute, latest_score, latest_stats, "✅ GREEN - condições atingidas")
+                    continue
+
+            update_alert_status(alert, "red", latest_minute, latest_score, latest_stats, "❌ RED - prazo do GREEN expirou")
             continue
 
         # 4. Lógica padrão (se não houver condições customizadas)
