@@ -7,6 +7,7 @@ from sqlalchemy import case, func
 
 from ..extensions import db
 from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..services.scraper import is_first_half_extra_time
 from ..services.telegram import send_message
 from ..services.worker import get_api_status
 from ..utils.time import now_sp
@@ -159,6 +160,8 @@ def dashboard():
     for row in live_rows:
         minute = row.minute if isinstance(row.minute, int) else None
         if minute is None or minute < 45 or minute > 55:
+            continue
+        if is_first_half_extra_time(row.time_text or ""):
             continue
         baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
         on_target_now = _stat_total(row.stats_json, "On Target")
