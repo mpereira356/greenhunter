@@ -526,7 +526,11 @@ def fetch_live_games(session):
             continue
         if "esoccer" in league_name.lower():
             continue
-        if not time_text or not time_text[0].isdigit():
+        if not time_text:
+            continue
+        time_norm = time_text.strip().lower()
+        is_halftime = "ht" in time_norm or "half time" in time_norm or "interval" in time_norm
+        if not time_text[0].isdigit() and not is_halftime:
             continue
 
         game_link_tag = tr.find("a", href=re.compile(r"^/r/\d+"))
@@ -537,11 +541,14 @@ def fetch_live_games(session):
         if not match_id:
             continue
         game_id = match_id.group(1)
+        minute_value = parse_minutes(time_text)
+        if minute_value is None and is_halftime:
+            minute_value = 45
         games.append(
             {
                 "game_id": game_id,
                 "url": base + game_href,
-                "minute": parse_minutes(time_text),
+                "minute": minute_value,
                 "time_text": time_text,
                 "league": league_name,
             }

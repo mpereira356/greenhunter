@@ -32,7 +32,6 @@ RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
-WORKER_STARTED_AT = now_sp()
 SECOND_HALF_BASELINES = {}
 LAST_GAME_SNAPSHOTS = {}
 HALFTIME_SEEN_AT = {}
@@ -254,8 +253,6 @@ def _load_persisted_second_half_baseline(game_id: str):
     state = LiveGameState.query.filter_by(game_id=game_id).first()
     if not state or not state.second_half_baseline_json:
         return None
-    if not state.second_half_started_at or state.second_half_started_at < WORKER_STARTED_AT:
-        return None
     try:
         baseline = json.loads(state.second_half_baseline_json)
     except Exception:
@@ -301,20 +298,6 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
         if first_half_stats:
             state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
             state.first_half_snapshot_minute = minute
-
-    # New run policy: if bot was restarted and game is already >=45,
-    # start second-half counting from the first snapshot seen in this run.
-    if (
-        minute >= 45
-        and game_id not in SECOND_HALF_BASELINES
-        and (
-            not state.second_half_started_at
-            or state.second_half_started_at < WORKER_STARTED_AT
-        )
-    ):
-        snapshot_now = copy_stats(stats_payload.get("stats", {}))
-        if snapshot_now:
-            SECOND_HALF_BASELINES[game_id] = snapshot_now
 
     baseline = SECOND_HALF_BASELINES.get(game_id)
     if baseline:
@@ -531,6 +514,9 @@ def process_live_games(session):
 
             if rule.second_half_only:
                 if is_first_half_extra_time(stats_payload.get("time_text", "")):
+                    continue
+                # Avoid false 2nd-half triggers while match is still at HT/45+.
+                if not is_second_half(stats_payload.get("time_text", ""), minute) and minute <= 47:
                     continue
                 if minute < 46:
                     continue
