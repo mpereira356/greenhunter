@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Dashboard</h1>
-    <p class="page-subtitle">Bem-vindo de volta! Aqui está o resumo da sua operação.</p>
+    <p class="page-subtitle">Bem-vindo de volta! Aqui esta o resumo da sua operacao.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary shadow-sm" href="{{ url_for('rules.create_rule') }}">
@@ -14,21 +14,59 @@
 </div>
 
 <div class="stat-grid">
-  <div class="stat-card">
-    <span class="stat-label">Regras Ativas</span>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Regras Ativas</span>
+      <span class="stat-chip">Hoje</span>
+    </div>
     <span class="stat-value">{{ active_rules }}</span>
+    <div class="mini-sparkline" aria-hidden="true">
+      {% for item in chart_days %}
+      {% set total = item.counts.green + item.counts.red + item.counts.pending %}
+      {% set bar_h = (total / max_count * 100) if max_count > 0 else 12 %}
+      <span style="height: {{ [bar_h, 12]|max }}%"></span>
+      {% endfor %}
+    </div>
   </div>
-  <div class="stat-card">
-    <span class="stat-label">Alertas Hoje</span>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Alertas Hoje</span>
+      <span class="stat-chip">7 dias</span>
+    </div>
     <span class="stat-value">{{ alerts_today }}</span>
+    <div class="mini-sparkline" aria-hidden="true">
+      {% for item in chart_days %}
+      {% set total = item.counts.green + item.counts.red + item.counts.pending %}
+      {% set bar_h = (total / max_count * 100) if max_count > 0 else 12 %}
+      <span style="height: {{ [bar_h, 12]|max }}%"></span>
+      {% endfor %}
+    </div>
   </div>
-  <div class="stat-card">
-    <span class="stat-label">Greens Hoje</span>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Greens Hoje</span>
+      <span class="stat-chip">Meta</span>
+    </div>
     <span class="stat-value text-success">{{ greens }}</span>
+    <div class="mini-sparkline spark-success" aria-hidden="true">
+      {% for item in chart_days %}
+      {% set bar_h = (item.counts.green / max_count * 100) if max_count > 0 else 12 %}
+      <span style="height: {{ [bar_h, 12]|max }}%"></span>
+      {% endfor %}
+    </div>
   </div>
-  <div class="stat-card">
-    <span class="stat-label">Reds Hoje</span>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Reds Hoje</span>
+      <span class="stat-chip">Risco</span>
+    </div>
     <span class="stat-value text-danger">{{ reds }}</span>
+    <div class="mini-sparkline spark-danger" aria-hidden="true">
+      {% for item in chart_days %}
+      {% set bar_h = (item.counts.red / max_count * 100) if max_count > 0 else 12 %}
+      <span style="height: {{ [bar_h, 12]|max }}%"></span>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
@@ -44,13 +82,13 @@
             <span class="text-warning">● Pendente</span>
           </div>
         </div>
-        <div class="d-flex gap-3 align-items-end" style="height: 200px; padding-bottom: 20px;">
+        <div class="weekly-chart">
           {% for item in chart_days %}
           {% set green_h = (item.counts.green / max_count * 100) if max_count > 0 else 0 %}
           {% set red_h = (item.counts.red / max_count * 100) if max_count > 0 else 0 %}
           {% set pending_h = (item.counts.pending / max_count * 100) if max_count > 0 else 0 %}
-          <div class="text-center flex-fill d-flex flex-column align-items-center" style="height: 100%;">
-            <div class="chart-bar flex-grow-1 w-100" style="max-width: 40px;">
+          <div class="week-col">
+            <div class="chart-bar">
               <div class="bar bg-success" style="height: {{ green_h }}%" title="Greens: {{ item.counts.green }}"></div>
               <div class="bar bg-danger" style="height: {{ red_h }}%" title="Reds: {{ item.counts.red }}"></div>
               <div class="bar bg-warning" style="height: {{ pending_h }}%" title="Pendentes: {{ item.counts.pending }}"></div>
@@ -64,7 +102,7 @@
 
     <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <h5 class="card-title">Últimos Alertas</h5>
+        <h5 class="card-title">Ultimos Alertas</h5>
         <div class="table-responsive">
           <table class="table table-clean align-middle">
             <thead>
@@ -72,13 +110,13 @@
                 <th>Regra</th>
                 <th>Partida</th>
                 <th>Status</th>
-                <th>Horário</th>
+                <th>Horario</th>
               </tr>
             </thead>
             <tbody>
               {% for alert in recent_alerts %}
               <tr>
-                <td class="fw-bold">{{ alert.rule.name }}</td>
+                <td class="fw-semibold">{{ alert.rule.name|title }}</td>
                 <td>
                   <div class="d-flex align-items-center gap-2">
                     <span>{{ alert.home_team }}</span>
@@ -115,10 +153,16 @@
         {% if top_rules %}
           <div class="d-flex flex-column gap-3">
             {% for item in top_rules %}
-              <div class="p-3 rounded-3 bg-light d-flex justify-content-between align-items-center border border-opacity-10">
-                <span class="fw-bold">{{ item.rule.name }}</span>
-                  <span class="badge bg-success rounded-pill px-3">{{ item.win_rate }}% ({{ item.total }} avisos)</span>
+              <div class="top-rule-item">
+                <div class="top-rule-head">
+                  <span class="top-rule-name">{{ item.rule.name|title }}</span>
+                  <span class="top-rule-rate">{{ item.win_rate }}%</span>
                 </div>
+                <div class="progress top-rule-progress" role="progressbar" aria-label="Win rate" aria-valuenow="{{ item.win_rate }}" aria-valuemin="0" aria-valuemax="100">
+                  <div class="progress-bar bg-success" style="width: {{ item.win_rate }}%"></div>
+                </div>
+                <div class="top-rule-meta">{{ item.total }} aviso(s)</div>
+              </div>
             {% endfor %}
           </div>
         {% else %}
@@ -127,22 +171,22 @@
       </div>
     </div>
 
-    <div class="card border-0 shadow-sm bg-primary text-white">
+    <div class="card border-0 shadow-sm system-status-card">
       <div class="card-body">
-        <h5 class="card-title text-white">Status do Sistema</h5>
+        <h5 class="card-title">Status do Sistema</h5>
         <div class="d-flex flex-column gap-2 small">
           <div class="d-flex justify-content-between">
             <span>Worker:</span>
-            <span class="fw-bold">Ativo</span>
+            <span class="fw-bold status-on-text">Ativo</span>
           </div>
           <div class="d-flex justify-content-between">
-            <span>Último Ciclo:</span>
+            <span>Ultimo Ciclo:</span>
             <span class="fw-bold">{{ worker_status.last_cycle or 'Aguardando...' }}</span>
           </div>
         </div>
-        <hr class="my-3 opacity-25">
+        <hr class="my-3">
         <div class="d-grid">
-          <a href="{{ url_for('settings.settings') }}" class="btn btn-light btn-sm fw-bold">Configurações</a>
+          <a href="{{ url_for('settings.settings') }}" class="btn btn-outline-secondary btn-sm fw-bold">Configuracoes</a>
         </div>
       </div>
     </div>

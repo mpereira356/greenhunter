@@ -54,7 +54,7 @@
           <a class="nav-link {% if request.endpoint == 'settings.settings' %}active{% endif %}" href="{{ url_for('settings.settings') }}">
             <span class="nav-icon">🔧</span> <span>Configurações</span>
           </a>
-          <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div class="sidebar-footer">
             <a class="nav-link" href="{{ url_for('auth.logout') }}">
               <span class="nav-icon">🚪</span> <span>Sair</span>
             </a>
