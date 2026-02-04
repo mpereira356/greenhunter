@@ -365,7 +365,7 @@ def list_rules():
         rules_query = rules_query.filter(Rule.second_half_only.is_(False))
     elif stage_filter == "ft":
         rules_query = rules_query.filter(Rule.second_half_only.is_(True))
-    rules = rules_query.order_by(Rule.id.desc()).all()
+    rules = rules_query.all()
     has_any_rules = Rule.query.filter_by(user_id=current_user.id).count() > 0
     rule_stats = {rule.id: {"green": 0, "red": 0} for rule in rules}
     rule_alert_counts = {rule.id: 0 for rule in rules}
@@ -380,6 +380,15 @@ def list_rules():
             rule_stats[rule_id][status] = total
         if rule_id in rule_alert_counts:
             rule_alert_counts[rule_id] += total
+    rules = sorted(
+        rules,
+        key=lambda rule: (
+            -(rule_stats.get(rule.id, {}).get("green", 0) - rule_stats.get(rule.id, {}).get("red", 0)),
+            -rule_stats.get(rule.id, {}).get("green", 0),
+            rule_stats.get(rule.id, {}).get("red", 0),
+            -rule.id,
+        ),
+    )
     return render_template(
         "rules/list.html",
         rules=rules,
