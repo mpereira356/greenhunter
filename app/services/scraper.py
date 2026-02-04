@@ -20,6 +20,7 @@ CF_CHALLENGE_MARKERS = (
 )
 _CF_LOCK = threading.Lock()
 _CF_LAST_SOLVED_AT = 0.0
+_CF_ALERT_LAST_SENT_AT = 0.0
 _BROWSER_DRIVER = None
 
 
@@ -61,6 +62,41 @@ def make_session():
 
 def _cf_mode() -> str:
     return os.environ.get("BETSAPI_CF_MODE", "manual").strip().lower()
+
+
+def _cf_alert_cooldown_seconds() -> int:
+    raw = os.environ.get("BETSAPI_CF_ALERT_COOLDOWN_SECONDS", "300").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 300
+
+
+def _send_cf_telegram_alert(url: str):
+    token = (os.environ.get("BETSAPI_CF_ALERT_TELEGRAM_TOKEN") or "").strip()
+    chat_id = (os.environ.get("BETSAPI_CF_ALERT_TELEGRAM_CHAT_ID") or "").strip()
+    if not token or not chat_id:
+        return
+
+    global _CF_ALERT_LAST_SENT_AT
+    now = time.time()
+    cooldown = _cf_alert_cooldown_seconds()
+    if cooldown > 0 and (now - _CF_ALERT_LAST_SENT_AT) < cooldown:
+        return
+
+    text = (
+        "GreenHunter: Cloudflare pediu verificacao humana novamente.\n"
+        "Abra o navegador do bot e resolva o challenge para continuar.\n"
+        f"URL: {url}"
+    )
+    api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    try:
+        resp = requests.post(api_url, data=payload, timeout=10)
+        if resp.status_code == 200:
+            _CF_ALERT_LAST_SENT_AT = now
+    except requests.RequestException:
+        pass
 
 
 class _SimpleResponse:
@@ -175,6 +211,7 @@ def _browser_fetch(url: str):
                 )
                 if _is_cloudflare_content(driver.title or "") or _is_cloudflare_content(driver.page_source or ""):
                     print("[scraper] Cloudflare detectado. Resolva manualmente no navegador...")
+                    _send_cf_telegram_alert(url)
                     try:
                         WebDriverWait(driver, wait_seconds).until(
                             lambda d: not (
@@ -738,4 +775,3 @@ def format_history_summary(label: str, summary):
         f"O2.5 {summary['over25']}/{summary['count']} | "
         f"BTTS {summary['btts']}/{summary['count']}"
     )
-

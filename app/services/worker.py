@@ -33,6 +33,7 @@ RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 SECOND_HALF_BASELINES = {}
+LAST_GAME_SNAPSHOTS = {}
 HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
@@ -132,6 +133,35 @@ def is_youth_match(stats_payload: dict) -> bool:
 def copy_stats(stats):
     return {key: value.copy() if isinstance(value, dict) else value for key, value in stats.items()}
 
+def remember_game_snapshot(game_id: str, stats_payload) -> None:
+    if not game_id or not stats_payload:
+        return
+    stats = stats_payload.get("stats")
+    if not isinstance(stats, dict) or not stats:
+        return
+    LAST_GAME_SNAPSHOTS[game_id] = {
+        "minute": stats_payload.get("minute"),
+        "time_text": stats_payload.get("time_text", ""),
+        "stats": copy_stats(stats),
+    }
+
+def _baseline_source_for_second_half(game_id: str, stats_payload):
+    current_stats = stats_payload.get("stats") if stats_payload else None
+    if not isinstance(current_stats, dict):
+        return current_stats
+    snap = LAST_GAME_SNAPSHOTS.get(game_id) or {}
+    prev_stats = snap.get("stats")
+    prev_minute = snap.get("minute")
+    prev_time = snap.get("time_text", "")
+    if not isinstance(prev_stats, dict):
+        return current_stats
+    # If we just crossed to 2nd half, prefer the last first-half snapshot as baseline.
+    if is_half_time_text(prev_time) or is_first_half_extra_time(prev_time):
+        return prev_stats
+    if isinstance(prev_minute, int) and prev_minute <= 45 and not is_second_half(prev_time, prev_minute):
+        return prev_stats
+    return current_stats
+
 def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES: return
     minute = stats_payload.get("minute") or 0
@@ -139,17 +169,17 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if is_first_half_extra_time(time_text):
         return
     if is_second_half(time_text, minute):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
     if minute >= 46:
-        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
     if minute >= FORCE_SECOND_HALF_BASELINE_MINUTE:
-        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
@@ -351,6 +381,7 @@ def process_live_games(session):
         if minute is None: continue
 
         ensure_second_half_baseline(game["game_id"], stats_payload)
+        remember_game_snapshot(game["game_id"], stats_payload)
         # Check penalty notifications as soon as this game's stats are fetched.
         maybe_notify_penalty_for_game(game["game_id"], stats_payload)
         
@@ -455,6 +486,7 @@ def follow_alerts(session):
         if not stats_payload: continue
 
         ensure_second_half_baseline(alert.game_id, stats_payload)
+        remember_game_snapshot(alert.game_id, stats_payload)
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
@@ -565,5 +597,6 @@ def finalize_full_time(session):
             db.session.commit()
             export_alert(alert, alert.rule.name, EXPORT_DIR)
             SECOND_HALF_BASELINES.pop(alert.game_id, None)
+            LAST_GAME_SNAPSHOTS.pop(alert.game_id, None)
             HALFTIME_SEEN_AT.pop(alert.game_id, None)
         time.sleep(0.4)
