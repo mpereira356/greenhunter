@@ -7,7 +7,7 @@ from sqlalchemy import case, func
 
 from ..extensions import db
 from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
-from ..services.scraper import fetch_live_games, fetch_match_stats, is_first_half_extra_time, make_session
+from ..services.scraper import is_first_half_extra_time
 from ..services.telegram import send_message
 from ..services.worker import get_api_status
 from ..utils.time import now_sp
@@ -84,68 +84,6 @@ def _build_tracked_games(now: datetime) -> list[dict]:
                 "dangerous_2h": dangerous_2h,
                 "updated_at": row.updated_at,
                 "updated_at_fmt": row.updated_at.strftime("%d/%m %H:%M:%S") if row.updated_at else "-",
-            }
-        )
-    return tracked_games
-
-
-def _build_tracked_games_live(now: datetime) -> list[dict]:
-    session = make_session()
-    games, status_code = fetch_live_games(session)
-    if status_code != 200 or not games:
-        return []
-
-    game_ids = [g.get("game_id") for g in games if g.get("game_id")]
-    baseline_map = {}
-    if game_ids:
-        rows = LiveGameState.query.filter(LiveGameState.game_id.in_(game_ids)).all()
-        baseline_map = {row.game_id: (row.second_half_baseline_json or "") for row in rows}
-
-    tracked_games = []
-    for game in games:
-        stats_payload = fetch_match_stats(session, game.get("url", ""))
-        if not stats_payload:
-            continue
-        minute = stats_payload.get("minute")
-        time_text = stats_payload.get("time_text", "")
-        if minute is None or minute < 45:
-            continue
-        if is_first_half_extra_time(time_text):
-            continue
-
-        baseline_payload = baseline_map.get(game.get("game_id"), "")
-        baseline_minute = _stat_total(baseline_payload, "Minute")
-        if not isinstance(baseline_minute, int) or baseline_minute < 45:
-            continue
-        on_target_now = (stats_payload.get("stats", {}).get("On Target", {}) or {}).get("total")
-        corners_now = (stats_payload.get("stats", {}).get("Corners", {}) or {}).get("total")
-        dangerous_now = (stats_payload.get("stats", {}).get("Dangerous Attacks", {}) or {}).get("total")
-        on_target_base = _stat_total(baseline_payload, "On Target")
-        corners_base = _stat_total(baseline_payload, "Corners")
-        dangerous_base = _stat_total(baseline_payload, "Dangerous Attacks")
-
-        if minute <= 45:
-            on_target_2h = 0
-            corners_2h = 0
-            dangerous_2h = 0
-        else:
-            on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
-            corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
-            dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
-
-        tracked_games.append(
-            {
-                "game_id": game.get("game_id"),
-                "teams": f"{stats_payload.get('home_team')} vs {stats_payload.get('away_team')}",
-                "url": game.get("url") or (f"https://betsapi.com/r/{game.get('game_id')}" if game.get("game_id") else ""),
-                "minute": minute,
-                "time_text": time_text,
-                "baseline_minute": baseline_minute,
-                "on_target_2h": on_target_2h,
-                "corners_2h": corners_2h,
-                "dangerous_2h": dangerous_2h,
-                "updated_at": now,
-                "updated_at_fmt": now.strftime("%d/%m %H:%M:%S"),
             }
         )
     return tracked_games
@@ -289,14 +227,11 @@ def dashboard():
 def live_monitor():
     _require_admin()
     now = now_sp()
-    live_games = _build_tracked_games_live(now)
-    if not live_games:
-        live_games = _build_tracked_games(now)
     return jsonify(
         {
             "ok": True,
             "server_time": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "games": live_games,
+            "games": _build_tracked_games(now),
         }
     )
 
