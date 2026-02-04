@@ -130,15 +130,25 @@ def api_status():
 @login_required
 def live():
     query = (request.args.get("q") or "").strip().lower()
-    limit = 12
+    page = max(request.args.get("page", 1, type=int), 1)
+    per_page = 24
+    start_index = (page - 1) * per_page
     session = make_session()
     games, status_code = fetch_live_games(session)
     matches = []
+    has_next = False
+    qualified_count = 0
     if status_code != 200:
-        return render_template("live/list.html", matches=[], query=query, status_code=status_code)
+        return render_template(
+            "live/list.html",
+            matches=[],
+            query=query,
+            status_code=status_code,
+            page=page,
+            has_prev=page > 1,
+            has_next=False,
+        )
     for game in games:
-        if len(matches) >= limit:
-            break
         stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload:
             continue
@@ -151,6 +161,12 @@ def live():
         ).lower()
         if query and query not in hay:
             continue
+        if qualified_count < start_index:
+            qualified_count += 1
+            continue
+        if len(matches) >= per_page:
+            has_next = True
+            break
         stats = stats_payload.get("stats", {})
         raw_stats = stats_payload.get("raw_stats", {})
         raw_dangerous = raw_stats.get("Dangerous Attacks", ("-", "-"))
@@ -183,4 +199,13 @@ def live():
                 "stats_list": stats_list,
             }
         )
-    return render_template("live/list.html", matches=matches, query=query, status_code=200)
+        qualified_count += 1
+    return render_template(
+        "live/list.html",
+        matches=matches,
+        query=query,
+        status_code=200,
+        page=page,
+        has_prev=page > 1,
+        has_next=has_next,
+    )

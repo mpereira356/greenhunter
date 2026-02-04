@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
+import json
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import case, func
 
 from ..extensions import db
-from ..models import AdminBroadcast, LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
 from ..services.telegram import send_message
 from ..services.worker import get_api_status
 from ..utils.time import now_sp
@@ -18,6 +19,22 @@ ALERTS_PER_HOUR_THRESHOLD = 20
 def _require_admin():
     if not current_user.is_authenticated or not current_user.is_admin_user:
         abort(403)
+
+
+def _stat_total(payload: str | None, key: str) -> int | None:
+    if not payload:
+        return None
+    try:
+        data = json.loads(payload)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get(key)
+    if not isinstance(value, dict):
+        return None
+    total = value.get("total")
+    return total if isinstance(total, int) else None
 
 
 @admin_bp.route("/")
@@ -132,6 +149,35 @@ def dashboard():
             continue
         risk_users.append({"user": user, "alerts": row.alerts})
 
+    tracked_games = []
+    live_rows = (
+        LiveGameState.query.filter_by(second_half_started=True)
+        .order_by(LiveGameState.updated_at.desc())
+        .limit(120)
+        .all()
+    )
+    for row in live_rows:
+        baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
+        if baseline_minute != 45:
+            continue
+        on_target_now = _stat_total(row.stats_json, "On Target")
+        on_target_base = _stat_total(row.second_half_baseline_json, "On Target")
+        corners_now = _stat_total(row.stats_json, "Corners")
+        corners_base = _stat_total(row.second_half_baseline_json, "Corners")
+        dangerous_now = _stat_total(row.stats_json, "Dangerous Attacks")
+        dangerous_base = _stat_total(row.second_half_baseline_json, "Dangerous Attacks")
+
+        tracked_games.append(
+            {
+                "game_id": row.game_id,
+                "teams": f"{row.home_team} vs {row.away_team}",
+                "on_target_2h": max(0, (on_target_now or 0) - (on_target_base or 0)),
+                "corners_2h": max(0, (corners_now or 0) - (corners_base or 0)),
+                "dangerous_2h": max(0, (dangerous_now or 0) - (dangerous_base or 0)),
+                "updated_at": row.updated_at,
+            }
+        )
+
     return render_template(
         "admin/dashboard.html",
         total_users=total_users,
@@ -143,6 +189,7 @@ def dashboard():
         users=users,
         top_rules=top_rules,
         risk_users=risk_users,
+        tracked_games=tracked_games,
         alerts_per_hour_threshold=ALERTS_PER_HOUR_THRESHOLD,
         login_attempts=LoginAttempt.query.order_by(LoginAttempt.created_at.desc()).limit(20).all(),
         broadcasts=AdminBroadcast.query.order_by(AdminBroadcast.created_at.desc()).limit(5).all(),

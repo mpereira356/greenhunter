@@ -357,7 +357,16 @@ def _build_rule_context(rule):
 @rules_bp.route("/")
 @login_required
 def list_rules():
-    rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.id.desc()).all()
+    stage_filter = (request.args.get("stage") or "all").strip().lower()
+    if stage_filter not in ("all", "ht", "ft"):
+        stage_filter = "all"
+    rules_query = Rule.query.filter_by(user_id=current_user.id)
+    if stage_filter == "ht":
+        rules_query = rules_query.filter(Rule.second_half_only.is_(False))
+    elif stage_filter == "ft":
+        rules_query = rules_query.filter(Rule.second_half_only.is_(True))
+    rules = rules_query.order_by(Rule.id.desc()).all()
+    has_any_rules = Rule.query.filter_by(user_id=current_user.id).count() > 0
     rule_stats = {rule.id: {"green": 0, "red": 0} for rule in rules}
     rule_alert_counts = {rule.id: 0 for rule in rules}
     counts = (
@@ -376,6 +385,8 @@ def list_rules():
         rules=rules,
         rule_stats=rule_stats,
         rule_alert_counts=rule_alert_counts,
+        stage_filter=stage_filter,
+        has_any_rules=has_any_rules,
     )
 
 

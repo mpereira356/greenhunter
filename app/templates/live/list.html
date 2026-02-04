@@ -19,46 +19,80 @@
 {% endif %}
 
 {% if matches %}
-  <div class="table-card">
-    <div class="table-responsive">
-      <table class="table table-clean align-middle mb-0">
-        <thead>
-          <tr>
-            <th>Liga</th>
-            <th>Jogo</th>
-            <th>Min</th>
-            <th>Placar</th>
-            <th>Chutes no alvo</th>
-            <th>Escanteios</th>
-            <th>Ataques perigosos</th>
-            <th>Stats</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in matches %}
-          <tr>
-            <td>{{ item.league }}</td>
-            <td>{{ item.home_team }} vs {{ item.away_team }}</td>
-            <td>{{ item.minute }}</td>
-            <td>{{ item.score }}</td>
-            <td>{{ item.on_target_home }} x {{ item.on_target_away }}</td>
-            <td>{{ item.corners_home }} x {{ item.corners_away }}</td>
-            <td>{{ item.dangerous_home }} x {{ item.dangerous_away }}</td>
-            <td>
-              <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#statsModal{{ loop.index }}">
-                Ver stats
-              </button>
-            </td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="row g-2">
+    {% for item in matches %}
+    <div class="col-12 col-md-6 col-xl-4 col-xxl-3">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body p-2">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+            <div>
+              <div class="text-muted small">{{ item.league }}</div>
+              <div class="fw-semibold small">{{ item.home_team }} vs {{ item.away_team }}</div>
+            </div>
+            <span class="badge text-bg-light">{{ item.minute }}'</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="text-muted small">Placar</div>
+            <div class="fw-bold">{{ item.score }}</div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-clean mb-2 small">
+              <thead>
+                <tr>
+                  <th>Stat</th>
+                  <th>Casa</th>
+                  <th>Fora</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Chutes no alvo</td>
+                  <td>{{ item.on_target_home }}</td>
+                  <td>{{ item.on_target_away }}</td>
+                </tr>
+                <tr>
+                  <td>Escanteios</td>
+                  <td>{{ item.corners_home }}</td>
+                  <td>{{ item.corners_away }}</td>
+                </tr>
+                <tr>
+                  <td>Ataques perigosos</td>
+                  <td>{{ item.dangerous_home }}</td>
+                  <td>{{ item.dangerous_away }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#statsModal{{ loop.index }}">
+              Ver mais
+            </button>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir</a>
+          </div>
+        </div>
+      </div>
     </div>
+    {% endfor %}
   </div>
+  {% if has_prev or has_next %}
+  <nav class="mt-3" aria-label="Paginação jogos ao vivo">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+      <li class="page-item {% if not has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('main.live', q=query, page=page-1) }}" tabindex="{% if not has_prev %}-1{% endif %}" aria-disabled="{% if not has_prev %}true{% else %}false{% endif %}">Anterior</a>
+      </li>
+      <li class="page-item disabled">
+        <span class="page-link">Página {{ page }}</span>
+      </li>
+      <li class="page-item {% if not has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('main.live', q=query, page=page+1) }}" tabindex="{% if not has_next %}-1{% endif %}" aria-disabled="{% if not has_next %}true{% else %}false{% endif %}">Próxima</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+
   {% for item in matches %}
   <div class="modal fade" id="statsModal{{ loop.index }}" tabindex="-1" aria-labelledby="statsModalLabel{{ loop.index }}" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -102,6 +136,11 @@
   <div class="card-soft p-4">
     <div class="fw-semibold mb-1">Nenhum jogo encontrado.</div>
     <div class="text-muted">Tente ajustar o filtro ou aguarde novos jogos ao vivo.</div>
+    {% if has_prev %}
+    <div class="mt-3">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.live', q=query, page=page-1) }}">Voltar página</a>
+    </div>
+    {% endif %}
   </div>
 {% endif %}
 {% endblock %}

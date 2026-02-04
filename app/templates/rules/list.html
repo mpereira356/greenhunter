@@ -18,6 +18,14 @@
   </div>
 </div>
 
+<div class="mb-3">
+  <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por tempo">
+    <a class="btn {% if stage_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='all') }}">Todas</a>
+    <a class="btn {% if stage_filter == 'ht' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='ht') }}">1º tempo</a>
+    <a class="btn {% if stage_filter == 'ft' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='ft') }}">2º tempo</a>
+  </div>
+</div>
+
 {% if rules %}
   <div class="rules-board">
     {% for rule in rules %}
@@ -64,12 +72,21 @@
   </div>
 {% else %}
   <div class="card border-0 shadow-sm p-5 text-center">
-    <div class="mb-3" style="font-size: 3rem;">🤖</div>
-    <h4 class="fw-bold">Nenhuma regra criada</h4>
-    <p class="text-muted">Você ainda não possui bots monitorando partidas. Comece agora mesmo!</p>
-    <div class="mt-4">
-      <a class="btn btn-primary px-4" href="{{ url_for('rules.create_rule') }}">Criar Minha Primeira Regra</a>
-    </div>
+    {% if has_any_rules %}
+      <div class="mb-3" style="font-size: 2.6rem;">🔎</div>
+      <h4 class="fw-bold">Nenhuma regra nesse filtro</h4>
+      <p class="text-muted">Troque para "Todas" ou selecione outro tempo.</p>
+      <div class="mt-3">
+        <a class="btn btn-outline-primary px-4" href="{{ url_for('rules.list_rules', stage='all') }}">Ver todas</a>
+      </div>
+    {% else %}
+      <div class="mb-3" style="font-size: 3rem;">🤖</div>
+      <h4 class="fw-bold">Nenhuma regra criada</h4>
+      <p class="text-muted">Você ainda não possui bots monitorando partidas. Comece agora mesmo!</p>
+      <div class="mt-4">
+        <a class="btn btn-primary px-4" href="{{ url_for('rules.create_rule') }}">Criar Minha Primeira Regra</a>
+      </div>
+    {% endif %}
   </div>
 {% endif %}
 

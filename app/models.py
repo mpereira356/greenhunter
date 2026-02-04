@@ -121,6 +121,24 @@ class MatchAlert(db.Model):
     __table_args__ = (db.UniqueConstraint("rule_id", "game_id", name="uix_rule_game"),)
 
 
+class LiveGameState(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    url = db.Column(db.String(255))
+    league = db.Column(db.String(120))
+    home_team = db.Column(db.String(120))
+    away_team = db.Column(db.String(120))
+    time_text = db.Column(db.String(40))
+    minute = db.Column(db.Integer)
+    score = db.Column(db.String(20))
+    stats_json = db.Column(db.Text)
+    second_half_baseline_json = db.Column(db.Text)
+    second_half_started = db.Column(db.Boolean, default=False, nullable=False)
+    second_half_started_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+
 class LoginAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80))

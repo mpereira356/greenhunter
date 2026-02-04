@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import MatchAlert, Rule, User
+from app.models import LiveGameState, MatchAlert, Rule, User
 from app.services.evaluator import compare, evaluate_rule, history_confidence, render_message, stats_to_json
 from app.services.exporter import export_alert
 from app.services.scraper import (
@@ -145,11 +145,29 @@ def remember_game_snapshot(game_id: str, stats_payload) -> None:
         "stats": copy_stats(stats),
     }
 
+def _load_persisted_game_snapshot(game_id: str):
+    if not game_id:
+        return None
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if not state or not state.stats_json:
+        return None
+    try:
+        stats = json.loads(state.stats_json)
+    except Exception:
+        return None
+    if not isinstance(stats, dict) or not stats:
+        return None
+    return {
+        "minute": state.minute,
+        "time_text": state.time_text or "",
+        "stats": copy_stats(stats),
+    }
+
 def _baseline_source_for_second_half(game_id: str, stats_payload):
     current_stats = stats_payload.get("stats") if stats_payload else None
     if not isinstance(current_stats, dict):
         return current_stats
-    snap = LAST_GAME_SNAPSHOTS.get(game_id) or {}
+    snap = LAST_GAME_SNAPSHOTS.get(game_id) or _load_persisted_game_snapshot(game_id) or {}
     prev_stats = snap.get("stats")
     prev_minute = snap.get("minute")
     prev_time = snap.get("time_text", "")
@@ -173,12 +191,12 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
-    if minute >= 46:
+    if minute == 46:
         SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
-    if minute >= FORCE_SECOND_HALF_BASELINE_MINUTE:
+    if minute >= FORCE_SECOND_HALF_BASELINE_MINUTE and HALFTIME_CONFIRMED_AT.get(game_id):
         SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
@@ -202,6 +220,73 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     else:
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
+
+
+def _load_persisted_second_half_baseline(game_id: str):
+    if not game_id:
+        return None
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if not state or not state.second_half_baseline_json:
+        return None
+    try:
+        baseline = json.loads(state.second_half_baseline_json)
+    except Exception:
+        return None
+    if isinstance(baseline, dict) and baseline:
+        minute_total = (baseline.get("Minute") or {}).get("total") if isinstance(baseline.get("Minute"), dict) else None
+        # Ignore late/wrong baselines; 2nd-half reset must come from HT/45.
+        if isinstance(minute_total, int) and minute_total > 46:
+            return None
+        return baseline
+    return None
+
+
+def get_second_half_baseline(game_id: str):
+    baseline = SECOND_HALF_BASELINES.get(game_id)
+    if baseline:
+        return baseline
+    persisted = _load_persisted_second_half_baseline(game_id)
+    if persisted:
+        SECOND_HALF_BASELINES[game_id] = copy_stats(persisted)
+        return SECOND_HALF_BASELINES[game_id]
+    return None
+
+
+def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
+    if not game or not stats_payload:
+        return False
+    game_id = game.get("game_id")
+    if not game_id:
+        return False
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if state is None:
+        state = LiveGameState(game_id=game_id)
+
+    state.url = game.get("url")
+    state.league = stats_payload.get("league")
+    state.home_team = stats_payload.get("home_team")
+    state.away_team = stats_payload.get("away_team")
+    state.time_text = stats_payload.get("time_text", "")
+    state.minute = stats_payload.get("minute")
+    state.score = stats_payload.get("score")
+    state.stats_json = json.dumps(stats_payload.get("stats", {}), ensure_ascii=False)
+
+    baseline = SECOND_HALF_BASELINES.get(game_id)
+    if baseline:
+        state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
+        if not state.second_half_started:
+            state.second_half_started = True
+            state.second_half_started_at = now_sp()
+    else:
+        minute = stats_payload.get("minute") or 0
+        time_text = stats_payload.get("time_text", "")
+        if not state.second_half_baseline_json and (is_half_time_text(time_text) or minute == 45):
+            snapshot = copy_stats(stats_payload.get("stats", {}))
+            if snapshot:
+                state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)
+
+    db.session.add(state)
+    return True
 
 def apply_second_half_delta(stats, baseline):
     adjusted = {}
@@ -382,6 +467,11 @@ def process_live_games(session):
 
         ensure_second_half_baseline(game["game_id"], stats_payload)
         remember_game_snapshot(game["game_id"], stats_payload)
+        if persist_live_game_state(game, stats_payload):
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         # Check penalty notifications as soon as this game's stats are fetched.
         maybe_notify_penalty_for_game(game["game_id"], stats_payload)
         
@@ -401,7 +491,7 @@ def process_live_games(session):
                     continue
                 if minute < 46:
                     continue
-                baseline = SECOND_HALF_BASELINES.get(game["game_id"])
+                baseline = get_second_half_baseline(game["game_id"])
                 if not baseline: continue
                 stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
                 m2h = max(0, minute - 45)
@@ -458,7 +548,6 @@ def process_live_games(session):
                 except IntegrityError:
                     db.session.rollback()
         time.sleep(GAME_DELAY)
-
 def build_message_meta(rule, stats_payload, game, history_meta=None, stats_override=None):
     stats = stats_override if isinstance(stats_override, dict) else stats_payload.get("stats", {})
     def sv(k, s): return stats.get(k, {}).get(s, "")
@@ -530,7 +619,7 @@ def follow_alerts(session):
         maybe_notify_penalty(alert, stats, minute, current_score, time_text=stats_payload.get("time_text"))
 
         if rule and rule.second_half_only:
-            baseline = SECOND_HALF_BASELINES.get(alert.game_id)
+            baseline = get_second_half_baseline(alert.game_id)
             if baseline: stats = apply_second_half_delta(stats_payload["stats"], baseline)
             m2h = max(0, minute - 45)
             stats["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
