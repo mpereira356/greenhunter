@@ -62,9 +62,14 @@ def _build_tracked_games(now: datetime) -> list[dict]:
         dangerous_now = _stat_total(row.stats_json, "Dangerous Attacks")
         dangerous_base = _stat_total(row.second_half_baseline_json, "Dangerous Attacks")
 
-        on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
-        corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
-        dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
+        if minute <= 45:
+            on_target_2h = 0
+            corners_2h = 0
+            dangerous_2h = 0
+        else:
+            on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
+            corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
+            dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
 
         tracked_games.append(
             {
@@ -119,9 +124,14 @@ def _build_tracked_games_live(now: datetime) -> list[dict]:
         corners_base = _stat_total(baseline_payload, "Corners")
         dangerous_base = _stat_total(baseline_payload, "Dangerous Attacks")
 
-        on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
-        corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
-        dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
+        if minute <= 45:
+            on_target_2h = 0
+            corners_2h = 0
+            dangerous_2h = 0
+        else:
+            on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
+            corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
+            dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
 
         tracked_games.append(
             {

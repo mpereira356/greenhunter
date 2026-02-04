@@ -165,11 +165,35 @@ def _load_persisted_game_snapshot(game_id: str):
         "stats": copy_stats(stats),
     }
 
+
+def _load_persisted_first_half_snapshot(game_id: str):
+    if not game_id:
+        return None
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if not state or not state.first_half_snapshot_json:
+        return None
+    try:
+        stats = json.loads(state.first_half_snapshot_json)
+    except Exception:
+        return None
+    if not isinstance(stats, dict) or not stats:
+        return None
+    return {
+        "minute": state.first_half_snapshot_minute,
+        "time_text": "HT",
+        "stats": copy_stats(stats),
+    }
+
 def _baseline_source_for_second_half(game_id: str, stats_payload):
     current_stats = stats_payload.get("stats") if stats_payload else None
     if not isinstance(current_stats, dict):
         return current_stats
-    snap = LAST_GAME_SNAPSHOTS.get(game_id) or _load_persisted_game_snapshot(game_id) or {}
+    snap = (
+        LAST_GAME_SNAPSHOTS.get(game_id)
+        or _load_persisted_game_snapshot(game_id)
+        or _load_persisted_first_half_snapshot(game_id)
+        or {}
+    )
     prev_stats = snap.get("stats")
     prev_minute = snap.get("minute")
     prev_time = snap.get("time_text", "")
@@ -191,7 +215,8 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
 
     in_reset_window = SECOND_HALF_RESET_MIN_MINUTE <= minute <= SECOND_HALF_RESET_MAX_MINUTE
     if is_half_time_text(time_text):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
+        # At HT, lock baseline to the current snapshot so second-half counters start from zero.
+        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
@@ -256,6 +281,13 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     state.minute = stats_payload.get("minute")
     state.score = stats_payload.get("score")
     state.stats_json = json.dumps(stats_payload.get("stats", {}), ensure_ascii=False)
+    minute = stats_payload.get("minute") or 0
+    time_text = stats_payload.get("time_text", "")
+    if minute <= 45 and not is_first_half_extra_time(time_text):
+        first_half_stats = copy_stats(stats_payload.get("stats", {}))
+        if first_half_stats:
+            state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
+            state.first_half_snapshot_minute = minute
 
     baseline = SECOND_HALF_BASELINES.get(game_id)
     if baseline:
@@ -264,11 +296,9 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
             state.second_half_started = True
             state.second_half_started_at = now_sp()
     else:
-        minute = stats_payload.get("minute") or 0
-        time_text = stats_payload.get("time_text", "")
         in_reset_window = SECOND_HALF_RESET_MIN_MINUTE <= minute <= SECOND_HALF_RESET_MAX_MINUTE
         if not state.second_half_baseline_json and (is_half_time_text(time_text) or in_reset_window):
-            snapshot = copy_stats(stats_payload.get("stats", {}))
+            snapshot = _baseline_source_for_second_half(game_id, stats_payload)
             if snapshot:
                 state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)
 
