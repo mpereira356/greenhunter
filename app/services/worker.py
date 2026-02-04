@@ -221,7 +221,8 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
     if in_reset_window and (is_second_half(time_text, minute) or minute >= 46):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
+        # If the bot starts between 45-55, reset from "now" and count forward.
+        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
@@ -298,7 +299,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     else:
         in_reset_window = SECOND_HALF_RESET_MIN_MINUTE <= minute <= SECOND_HALF_RESET_MAX_MINUTE
         if not state.second_half_baseline_json and (is_half_time_text(time_text) or in_reset_window):
-            snapshot = _baseline_source_for_second_half(game_id, stats_payload)
+            snapshot = copy_stats(stats_payload.get("stats", {}))
             if snapshot:
                 state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)
 
