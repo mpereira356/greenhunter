@@ -38,6 +38,13 @@ def _stat_total(payload: str | None, key: str) -> int | None:
     return total if isinstance(total, int) else None
 
 
+def _second_half_delta(now_value: int | None, baseline_value: int | None) -> int:
+    now_n = now_value if isinstance(now_value, int) else 0
+    base_n = baseline_value if isinstance(baseline_value, int) else 0
+    # If provider resets at HT and current drops below baseline, treat current as 2H count.
+    return now_n - base_n if now_n >= base_n else now_n
+
+
 def _build_tracked_games(now: datetime) -> list[dict]:
     tracked_games = []
     recent_window = now - timedelta(minutes=20)
@@ -67,9 +74,9 @@ def _build_tracked_games(now: datetime) -> list[dict]:
             corners_2h = 0
             dangerous_2h = 0
         else:
-            on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0))
-            corners_2h = max(0, (corners_now or 0) - (corners_base or 0))
-            dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0))
+            on_target_2h = max(0, _second_half_delta(on_target_now, on_target_base))
+            corners_2h = max(0, _second_half_delta(corners_now, corners_base))
+            dangerous_2h = max(0, _second_half_delta(dangerous_now, dangerous_base))
 
         tracked_games.append(
             {

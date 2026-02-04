@@ -237,12 +237,19 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
             return
         return
 
-    # From 46+ onward: if we have first-half context use it, otherwise reset from current minute
-    # (startup/restart mid-match).
-    if HALFTIME_CONFIRMED_AT.get(game_id) or _has_first_half_context(game_id):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
-    else:
+    # From 46+ onward:
+    # - If source explicitly marks 2nd half OR halftime was confirmed, start 2H counters.
+    # - If there is no first-half context (bot started mid-game), start from "now".
+    # - Otherwise, wait to avoid false positives while match can still be in late 1H.
+    if is_second_half(time_text, minute) or HALFTIME_CONFIRMED_AT.get(game_id):
+        if _has_first_half_context(game_id):
+            SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
+        else:
+            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+    elif not _has_first_half_context(game_id):
         SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+    else:
+        return
     HALFTIME_SEEN_AT.pop(game_id, None)
     HALFTIME_CONFIRMED_AT.pop(game_id, None)
 
@@ -258,6 +265,14 @@ def _load_persisted_second_half_baseline(game_id: str):
     except Exception:
         return None
     if isinstance(baseline, dict) and baseline:
+        minute_total = (baseline.get("Minute") or {}).get("total") if isinstance(baseline.get("Minute"), dict) else None
+        if isinstance(minute_total, int) and minute_total > 45 and state.first_half_snapshot_json:
+            try:
+                first_half = json.loads(state.first_half_snapshot_json)
+                if isinstance(first_half, dict) and first_half:
+                    return first_half
+            except Exception:
+                pass
         return baseline
     return None
 
@@ -299,6 +314,27 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
             state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
             state.first_half_snapshot_minute = minute
 
+    # If a previous run saved a late baseline but we have first-half snapshot,
+    # repair baseline to the first-half reference so 2nd-half deltas are correct.
+    if state.second_half_baseline_json and state.first_half_snapshot_json:
+        try:
+            persisted_base = json.loads(state.second_half_baseline_json)
+        except Exception:
+            persisted_base = None
+        base_minute = (
+            (persisted_base.get("Minute") or {}).get("total")
+            if isinstance(persisted_base, dict) and isinstance(persisted_base.get("Minute"), dict)
+            else None
+        )
+        if isinstance(base_minute, int) and base_minute > 45:
+            state.second_half_baseline_json = state.first_half_snapshot_json
+            try:
+                fixed_base = json.loads(state.first_half_snapshot_json)
+            except Exception:
+                fixed_base = None
+            if isinstance(fixed_base, dict) and fixed_base:
+                SECOND_HALF_BASELINES[game_id] = copy_stats(fixed_base)
+
     baseline = SECOND_HALF_BASELINES.get(game_id)
     if baseline:
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
@@ -315,6 +351,12 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     return True
 
 def apply_second_half_delta(stats, baseline):
+    def _delta(curr, base):
+        curr_n = _num(curr)
+        base_n = _num(base)
+        # Some providers reset 2H stats to zero; when that happens use current as 2H total.
+        return curr_n - base_n if curr_n >= base_n else curr_n
+
     adjusted = {}
     for key, value in stats.items():
         if not isinstance(value, dict): continue
@@ -323,9 +365,9 @@ def apply_second_half_delta(stats, baseline):
             continue
         base = baseline[key]
         adjusted[key] = {
-            "home": max(0, value.get("home", 0) - base.get("home", 0)),
-            "away": max(0, value.get("away", 0) - base.get("away", 0)),
-            "total": max(0, value.get("total", 0) - base.get("total", 0)),
+            "home": max(0, _delta(value.get("home", 0), base.get("home", 0))),
+            "away": max(0, _delta(value.get("away", 0), base.get("away", 0))),
+            "total": max(0, _delta(value.get("total", 0), base.get("total", 0))),
         }
     return adjusted
 
