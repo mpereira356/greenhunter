@@ -38,6 +38,8 @@ HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
 FORCE_SECOND_HALF_BASELINE_MINUTE = int(os.environ.get("FORCE_SECOND_HALF_BASELINE_MINUTE", "55"))
+SECOND_HALF_RESET_MIN_MINUTE = int(os.environ.get("SECOND_HALF_RESET_MIN_MINUTE", "45"))
+SECOND_HALF_RESET_MAX_MINUTE = int(os.environ.get("SECOND_HALF_RESET_MAX_MINUTE", "55"))
 NON_DELTA_KEYS = {"Minute", "Possession"}
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
@@ -186,40 +188,24 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     time_text = stats_payload.get("time_text", "")
     if is_first_half_extra_time(time_text):
         return
-    if is_second_half(time_text, minute):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
-        HALFTIME_SEEN_AT.pop(game_id, None)
-        HALFTIME_CONFIRMED_AT.pop(game_id, None)
-        return
-    if minute == 46:
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
-        HALFTIME_SEEN_AT.pop(game_id, None)
-        HALFTIME_CONFIRMED_AT.pop(game_id, None)
-        return
-    if minute >= FORCE_SECOND_HALF_BASELINE_MINUTE and HALFTIME_CONFIRMED_AT.get(game_id):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
-        HALFTIME_SEEN_AT.pop(game_id, None)
-        HALFTIME_CONFIRMED_AT.pop(game_id, None)
-        return
+
+    in_reset_window = SECOND_HALF_RESET_MIN_MINUTE <= minute <= SECOND_HALF_RESET_MAX_MINUTE
     if is_half_time_text(time_text):
-        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
-        return
-    if minute >= 45:
-        seen_at = HALFTIME_SEEN_AT.get(game_id)
-        if not seen_at:
-            HALFTIME_SEEN_AT[game_id] = now_sp()
-            return
-        if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
-            HALFTIME_CONFIRMED_AT[game_id] = now_sp()
-            return
-    if minute > 45 and HALFTIME_CONFIRMED_AT.get(game_id):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload["stats"])
+        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
-    else:
+    if in_reset_window and (is_second_half(time_text, minute) or minute >= 46):
+        SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         HALFTIME_SEEN_AT.pop(game_id, None)
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
+    if minute > SECOND_HALF_RESET_MAX_MINUTE:
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
+        return
+    HALFTIME_SEEN_AT.pop(game_id, None)
+    HALFTIME_CONFIRMED_AT.pop(game_id, None)
 
 
 def _load_persisted_second_half_baseline(game_id: str):
@@ -234,8 +220,8 @@ def _load_persisted_second_half_baseline(game_id: str):
         return None
     if isinstance(baseline, dict) and baseline:
         minute_total = (baseline.get("Minute") or {}).get("total") if isinstance(baseline.get("Minute"), dict) else None
-        # Ignore late/wrong baselines; 2nd-half reset must come from HT/45.
-        if isinstance(minute_total, int) and minute_total > 46:
+        # Ignore late/wrong baselines; reset is only accepted in the configured 45-55 window.
+        if isinstance(minute_total, int) and minute_total > SECOND_HALF_RESET_MAX_MINUTE:
             return None
         return baseline
     return None
@@ -280,7 +266,8 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     else:
         minute = stats_payload.get("minute") or 0
         time_text = stats_payload.get("time_text", "")
-        if not state.second_half_baseline_json and (is_half_time_text(time_text) or minute == 45):
+        in_reset_window = SECOND_HALF_RESET_MIN_MINUTE <= minute <= SECOND_HALF_RESET_MAX_MINUTE
+        if not state.second_half_baseline_json and (is_half_time_text(time_text) or in_reset_window):
             snapshot = copy_stats(stats_payload.get("stats", {}))
             if snapshot:
                 state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)

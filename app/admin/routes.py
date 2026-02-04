@@ -150,16 +150,17 @@ def dashboard():
         risk_users.append({"user": user, "alerts": row.alerts})
 
     tracked_games = []
+    recent_window = now - timedelta(minutes=20)
     live_rows = (
-        LiveGameState.query.filter_by(second_half_started=True)
+        LiveGameState.query.filter(LiveGameState.updated_at >= recent_window)
         .order_by(LiveGameState.updated_at.desc())
-        .limit(120)
         .all()
     )
     for row in live_rows:
-        baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
-        if baseline_minute != 45:
+        minute = row.minute if isinstance(row.minute, int) else None
+        if minute is None or minute < 45 or minute > 55:
             continue
+        baseline_minute = _stat_total(row.second_half_baseline_json, "Minute")
         on_target_now = _stat_total(row.stats_json, "On Target")
         on_target_base = _stat_total(row.second_half_baseline_json, "On Target")
         corners_now = _stat_total(row.stats_json, "Corners")
@@ -167,13 +168,22 @@ def dashboard():
         dangerous_now = _stat_total(row.stats_json, "Dangerous Attacks")
         dangerous_base = _stat_total(row.second_half_baseline_json, "Dangerous Attacks")
 
+        baseline_valid = isinstance(baseline_minute, int) and baseline_minute <= 55
+        on_target_2h = max(0, (on_target_now or 0) - (on_target_base or 0)) if baseline_valid else None
+        corners_2h = max(0, (corners_now or 0) - (corners_base or 0)) if baseline_valid else None
+        dangerous_2h = max(0, (dangerous_now or 0) - (dangerous_base or 0)) if baseline_valid else None
+
         tracked_games.append(
             {
                 "game_id": row.game_id,
                 "teams": f"{row.home_team} vs {row.away_team}",
-                "on_target_2h": max(0, (on_target_now or 0) - (on_target_base or 0)),
-                "corners_2h": max(0, (corners_now or 0) - (corners_base or 0)),
-                "dangerous_2h": max(0, (dangerous_now or 0) - (dangerous_base or 0)),
+                "url": row.url or (f"https://betsapi.com/r/{row.game_id}" if row.game_id else ""),
+                "minute": minute,
+                "time_text": row.time_text,
+                "baseline_minute": baseline_minute,
+                "on_target_2h": on_target_2h,
+                "corners_2h": corners_2h,
+                "dangerous_2h": dangerous_2h,
                 "updated_at": row.updated_at,
             }
         )
