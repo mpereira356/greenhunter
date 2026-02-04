@@ -55,6 +55,34 @@ def _stat_pair(payload: str | None, key: str) -> str:
     return f"{home_txt} x {away_txt}"
 
 
+def _stat_delta_pair(current_payload: str | None, baseline_payload: str | None, key: str) -> str:
+    def _pair(payload: str | None):
+        if not payload:
+            return None, None
+        try:
+            data = json.loads(payload)
+        except Exception:
+            return None, None
+        value = data.get(key) if isinstance(data, dict) else None
+        if not isinstance(value, dict):
+            return None, None
+        home = value.get("home")
+        away = value.get("away")
+        return (home if isinstance(home, int) else None, away if isinstance(away, int) else None)
+
+    cur_home, cur_away = _pair(current_payload)
+    base_home, base_away = _pair(baseline_payload)
+    if cur_home is None or cur_away is None:
+        return "- x -"
+    if base_home is None or base_away is None:
+        return f"{cur_home} x {cur_away}"
+
+    # If provider resets stats at HT, values may drop below baseline; in that case use current.
+    home_delta = cur_home - base_home if cur_home >= base_home else cur_home
+    away_delta = cur_away - base_away if cur_away >= base_away else cur_away
+    return f"{max(0, home_delta)} x {max(0, away_delta)}"
+
+
 def _build_tracked_games(now: datetime) -> list[dict]:
     tracked_games = []
     recent_window = now - timedelta(minutes=20)
@@ -77,9 +105,9 @@ def _build_tracked_games(now: datetime) -> list[dict]:
                 "url": row.url or (f"https://betsapi.com/r/{row.game_id}" if row.game_id else ""),
                 "minute": minute,
                 "time_text": row.time_text,
-                "on_target_live": _stat_pair(row.stats_json, "On Target"),
-                "corners_live": _stat_pair(row.stats_json, "Corners"),
-                "dangerous_live": _stat_pair(row.stats_json, "Dangerous Attacks"),
+                "on_target_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "On Target"),
+                "corners_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "Corners"),
+                "dangerous_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "Dangerous Attacks"),
                 "updated_at": row.updated_at,
                 "updated_at_fmt": row.updated_at.strftime("%d/%m %H:%M:%S") if row.updated_at else "-",
             }
