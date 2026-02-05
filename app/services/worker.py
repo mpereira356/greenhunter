@@ -405,7 +405,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if curr < base:
                     base_val[side] = curr
         SECOND_HALF_BASELINES[game_id] = baseline
-        # If baseline equals current for long after 50', start counting from "now".
+        # If baseline equals current for a while after 50', start counting from "now".
         if minute >= 50:
             zero_delta = True
             for key in ("On Target", "Corners", "Dangerous Attacks"):
@@ -420,10 +420,11 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if not zero_delta:
                     break
             started_at = state.second_half_started_at
-            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 600):
+            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 120):
                 SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
                 baseline = SECOND_HALF_BASELINES[game_id]
                 state.second_half_started_at = now_sp()
+                SECOND_HALF_FROM_NOW[game_id] = True
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
