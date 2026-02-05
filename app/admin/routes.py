@@ -55,7 +55,13 @@ def _stat_pair(payload: str | None, key: str) -> str:
     return f"{home_txt} x {away_txt}"
 
 
-def _stat_delta_pair(current_payload: str | None, baseline_payload: str | None, key: str, show_total_when_zero: bool = False) -> str:
+def _stat_delta_pair(
+    current_payload: str | None,
+    baseline_payload: str | None,
+    key: str,
+    show_total_when_zero: bool = False,
+    show_total_first: bool = False,
+) -> str:
     def _pair(payload: str | None):
         if not payload:
             return None, None
@@ -82,6 +88,10 @@ def _stat_delta_pair(current_payload: str | None, baseline_payload: str | None, 
     away_delta = cur_away - base_away if cur_away >= base_away else cur_away
     home_delta = max(0, home_delta)
     away_delta = max(0, away_delta)
+    if show_total_first and (cur_home is not None or cur_away is not None):
+        if home_delta == 0 and away_delta == 0:
+            return f"T {cur_home} x {cur_away}"
+        return f"T {cur_home} x {cur_away} (Δ {home_delta} x {away_delta})"
     if show_total_when_zero and home_delta == 0 and away_delta == 0 and (cur_home or cur_away):
         return f"{home_delta} x {away_delta} (T {cur_home} x {cur_away})"
     return f"{home_delta} x {away_delta}"
@@ -113,19 +123,19 @@ def _build_tracked_games(now: datetime) -> list[dict]:
                     row.stats_json,
                     row.first_half_snapshot_json or row.second_half_baseline_json,
                     "On Target",
-                    show_total_when_zero=True,
+                    show_total_first=True,
                 ),
                 "corners_live": _stat_delta_pair(
                     row.stats_json,
                     row.first_half_snapshot_json or row.second_half_baseline_json,
                     "Corners",
-                    show_total_when_zero=True,
+                    show_total_first=True,
                 ),
                 "dangerous_live": _stat_delta_pair(
                     row.stats_json,
                     row.first_half_snapshot_json or row.second_half_baseline_json,
                     "Dangerous Attacks",
-                    show_total_when_zero=True,
+                    show_total_first=True,
                 ),
                 "updated_at": row.updated_at,
                 "updated_at_fmt": row.updated_at.strftime("%d/%m %H:%M:%S") if row.updated_at else "-",

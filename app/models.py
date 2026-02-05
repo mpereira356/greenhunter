@@ -134,6 +134,7 @@ class LiveGameState(db.Model):
     stats_json = db.Column(db.Text)
     first_half_snapshot_json = db.Column(db.Text)
     first_half_snapshot_minute = db.Column(db.Integer)
+    ht_seen_at = db.Column(db.DateTime)
     second_half_baseline_json = db.Column(db.Text)
     second_half_started = db.Column(db.Boolean, default=False, nullable=False)
     second_half_started_at = db.Column(db.DateTime)

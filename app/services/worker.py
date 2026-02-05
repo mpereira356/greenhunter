@@ -166,21 +166,28 @@ def remember_game_snapshot(game_id: str, stats_payload) -> None:
     }
 
 
-def _ht_confirmed(game_id: str, time_text: str, minute: int | None) -> bool:
+def _ht_confirmed_with_state(state: LiveGameState | None, time_text: str, minute: int | None) -> bool:
+    if state is None:
+        return False
     if minute is None:
         return False
     if minute != 45 and not is_half_time_text(time_text):
-        HALFTIME_SEEN_AT.pop(game_id, None)
+        state.ht_seen_at = None
         return False
-    seen_at = HALFTIME_SEEN_AT.get(game_id)
+    seen_at = state.ht_seen_at
     if not seen_at:
-        HALFTIME_SEEN_AT[game_id] = now_sp()
+        state.ht_seen_at = now_sp()
         return False
     if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
-        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
-        HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT[state.game_id] = now_sp()
+        state.ht_seen_at = None
         return True
     return False
+
+
+def _ht_confirmed(game_id: str, time_text: str, minute: int | None) -> bool:
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    return _ht_confirmed_with_state(state, time_text, minute)
 
 def _load_persisted_game_snapshot(game_id: str):
     if not game_id:
@@ -356,7 +363,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     if minute == 45 and not is_first_half_extra_time(time_text):
-        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed(game_id, time_text, minute):
+        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed_with_state(state, time_text, minute):
             first_half_stats = copy_stats(stats_payload.get("stats", {}))
             if first_half_stats:
                 state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
