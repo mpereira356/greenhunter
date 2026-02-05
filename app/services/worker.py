@@ -425,6 +425,9 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 baseline = SECOND_HALF_BASELINES[game_id]
                 state.second_half_started_at = now_sp()
                 SECOND_HALF_FROM_NOW[game_id] = True
+                # Drop HT snapshot so 2H deltas reflect from now on.
+                state.first_half_snapshot_json = None
+                state.first_half_snapshot_minute = None
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
