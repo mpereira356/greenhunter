@@ -580,6 +580,10 @@ def process_live_games(session):
             if rule.second_half_only:
                 if is_first_half_extra_time(stats_payload.get("time_text", "")):
                     continue
+                # Never trigger 2H alerts while provider still marks interval/HT,
+                # even if numeric minute appears as 48+ due stale/lagged minute text.
+                if is_half_time_text(stats_payload.get("time_text", "")):
+                    continue
                 # Avoid false 2nd-half triggers while match is still at HT/45+.
                 if not is_second_half(stats_payload.get("time_text", ""), minute) and minute <= 47:
                     continue
