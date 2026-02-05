@@ -701,6 +701,9 @@ def process_live_games(session):
                 # Avoid false 2nd-half triggers while match is still at HT/45+.
                 if not is_second_half(stats_payload.get("time_text", ""), minute) and minute <= 47:
                     continue
+                # If no confirmed HT yet, only allow 2H alerts after 50'.
+                if not HALFTIME_CONFIRMED_AT.get(game["game_id"]) and not is_second_half(stats_payload.get("time_text", ""), minute) and minute < 50:
+                    continue
                 if minute < 46:
                     continue
                 baseline = get_second_half_baseline(game["game_id"])
