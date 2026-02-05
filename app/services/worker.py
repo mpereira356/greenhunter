@@ -699,9 +699,9 @@ def process_live_games(session):
                (rule.score_away is not None and a_score != rule.score_away):
                 continue
 
-            if rule.second_half_only:
-                if is_first_half_extra_time(stats_payload.get("time_text", "")):
-                    continue
+                if rule.second_half_only:
+                    if is_first_half_extra_time(stats_payload.get("time_text", "")):
+                        continue
                 # Never trigger 2H alerts while provider still marks interval/HT,
                 # even if numeric minute appears as 48+ due stale/lagged minute text.
                 if is_half_time_text(stats_payload.get("time_text", "")):
@@ -714,11 +714,18 @@ def process_live_games(session):
                     continue
                 if minute < 46:
                     continue
-                baseline = get_second_half_baseline(game["game_id"])
-                if not baseline: continue
-                stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
-                m2h = max(0, minute - 45)
-                stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
+                    baseline = get_second_half_baseline(game["game_id"])
+                    if not baseline: continue
+                    stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
+                    m2h = max(0, minute - 45)
+                    stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
+                    # If delta is stuck (baseline equals current), fall back to totals to keep 2H rules moving.
+                    if all(
+                        (stats_for_rule.get(key, {}).get("total", 0) or 0) == 0
+                        for key in ("On Target", "Corners", "Dangerous Attacks")
+                    ):
+                        stats_for_rule = stats_payload["stats"]
+                        stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
             if evaluate_rule(rule, stats_for_rule):
                 # If rule depends on mutable stats, revalidar para evitar feed atrasado.
