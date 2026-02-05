@@ -4,6 +4,23 @@ import time
 from .scraper import make_session
 
 
+def _post_with_retry(session, url, payload):
+    resp = session.post(url, data=payload, timeout=15)
+    if resp.status_code == 429:
+        retry_after = 1
+        try:
+            body = resp.json()
+            retry_after = int((body.get("parameters") or {}).get("retry_after") or 1)
+        except Exception:
+            retry_after = 1
+        time.sleep(min(max(retry_after, 1), 5))
+        resp = session.post(url, data=payload, timeout=15)
+    if resp.status_code >= 500:
+        time.sleep(1)
+        resp = session.post(url, data=payload, timeout=15)
+    return resp
+
+
 def send_message(token: str, chat_id: str, text: str):
     if not token or not chat_id:
         return False, "Token/chat_id ausente."
@@ -21,20 +38,12 @@ def send_message(token: str, chat_id: str, text: str):
         "disable_web_page_preview": True,
     }
     try:
-        resp = session.post(url, data=payload, timeout=15)
-        if resp.status_code == 429:
-            retry_after = 1
-            try:
-                body = resp.json()
-                retry_after = int((body.get("parameters") or {}).get("retry_after") or 1)
-            except Exception:
-                retry_after = 1
-            time.sleep(min(max(retry_after, 1), 5))
-            resp = session.post(url, data=payload, timeout=15)
-        if resp.status_code == 400:
-            # Fallback for markdown formatting errors in dynamic text.
-            resp = session.post(url, data=fallback_payload, timeout=15)
+        resp = _post_with_retry(session, url, payload)
         if resp.status_code != 200:
+            # Fallback for markdown or formatting errors in dynamic text.
+            resp = _post_with_retry(session, url, fallback_payload)
+        if resp.status_code != 200:
+            print(f"[telegram] falha ao enviar (HTTP {resp.status_code}): {resp.text[:180]}")
             return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
         return True, "ok"
     except requests.RequestException as exc:

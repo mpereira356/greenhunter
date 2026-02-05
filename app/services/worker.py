@@ -4,6 +4,7 @@ import re
 import threading
 import time
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 from sqlalchemy.exc import IntegrityError
 
@@ -36,7 +37,7 @@ SECOND_HALF_BASELINES = {}
 LAST_GAME_SNAPSHOTS = {}
 HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
-HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "120"))
+HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "180"))
 RED_CONFIRM_PENDING = {}
 RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "15"))
 FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST_HALF", "0").strip().lower() in ("1", "true", "yes")
@@ -81,6 +82,20 @@ def notify_api_status(ok: bool, code: int | None):
     for user in users:
         if user.telegram_token and user.telegram_chat_id:
             send_message(user.telegram_token, user.telegram_chat_id, message)
+
+
+def _cache_bust_url(url: str) -> str:
+    if not url:
+        return url
+    try:
+        parsed = urlparse(url)
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        params = [(k, v) for k, v in params if k != "_"]
+        params.append(("_", str(int(time.time()))))
+        new_query = urlencode(params)
+        return urlunparse(parsed._replace(query=new_query))
+    except Exception:
+        return url
 
 def is_half_time(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
@@ -146,6 +161,23 @@ def remember_game_snapshot(game_id: str, stats_payload) -> None:
         "time_text": stats_payload.get("time_text", ""),
         "stats": copy_stats(stats),
     }
+
+
+def _ht_confirmed(game_id: str, time_text: str, minute: int | None) -> bool:
+    if minute is None:
+        return False
+    if minute != 45 and not is_half_time_text(time_text):
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        return False
+    seen_at = HALFTIME_SEEN_AT.get(game_id)
+    if not seen_at:
+        HALFTIME_SEEN_AT[game_id] = now_sp()
+        return False
+    if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
+        HALFTIME_CONFIRMED_AT[game_id] = now_sp()
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        return True
+    return False
 
 def _load_persisted_game_snapshot(game_id: str):
     if not game_id:
@@ -229,14 +261,8 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
 
     # Consider 45/HT for >= HALFTIME_CONFIRM_SECONDS as confirmed interval.
     if minute == 45 or is_half_time_text(time_text):
-        seen_at = HALFTIME_SEEN_AT.get(game_id)
-        if not seen_at:
-            HALFTIME_SEEN_AT[game_id] = now_sp()
-            return
-        if (now_sp() - seen_at).total_seconds() >= HALFTIME_CONFIRM_SECONDS:
-            HALFTIME_CONFIRMED_AT[game_id] = now_sp()
+        if _ht_confirmed(game_id, time_text, minute):
             SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-            HALFTIME_SEEN_AT.pop(game_id, None)
             return
         return
 
@@ -250,7 +276,9 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         else:
             SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
     elif not _has_first_half_context(game_id):
-        SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+        # If bot started mid-2H, start counting from now (50+).
+        if minute >= 50:
+            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
     else:
         return
     HALFTIME_SEEN_AT.pop(game_id, None)
@@ -316,11 +344,12 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     state.stats_json = json.dumps(stats_payload.get("stats", {}), ensure_ascii=False)
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
-    if minute <= 45 and not is_first_half_extra_time(time_text):
-        first_half_stats = copy_stats(stats_payload.get("stats", {}))
-        if first_half_stats:
-            state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
-            state.first_half_snapshot_minute = minute
+    if minute == 45 and not is_first_half_extra_time(time_text):
+        if _ht_confirmed(game_id, time_text, minute):
+            first_half_stats = copy_stats(stats_payload.get("stats", {}))
+            if first_half_stats:
+                state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
+                state.first_half_snapshot_minute = minute
 
     # If a previous run saved a late baseline but we have first-half snapshot,
     # repair baseline to the first-half reference so 2nd-half deltas are correct.
@@ -577,6 +606,30 @@ def process_live_games(session):
         minute = stats_payload.get("minute")
         if minute is None: continue
 
+        # If minute advanced but score/stats are stuck, force a cache-busted re-fetch.
+        state = LiveGameState.query.filter_by(game_id=game.get("game_id")).first()
+        if state:
+            prev_minute = state.minute
+            if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
+                same_score = state.score and stats_payload.get("score") == state.score
+                same_on_target = False
+                if state.stats_json:
+                    try:
+                        prev_stats = json.loads(state.stats_json)
+                    except Exception:
+                        prev_stats = {}
+                    curr_stats = stats_payload.get("stats", {})
+                    prev_ot = (prev_stats.get("On Target") or {}).get("total")
+                    curr_ot = (curr_stats.get("On Target") or {}).get("total")
+                    if isinstance(prev_ot, int) and isinstance(curr_ot, int) and prev_ot == curr_ot:
+                        same_on_target = True
+                if same_score and same_on_target:
+                    forced_url = _cache_bust_url(game["url"])
+                    forced_payload = fetch_match_stats(session, forced_url)
+                    if forced_payload and forced_payload.get("score") and forced_payload.get("score") != stats_payload.get("score"):
+                        stats_payload = forced_payload
+                        minute = stats_payload.get("minute") or minute
+
         ensure_second_half_baseline(game["game_id"], stats_payload)
         remember_game_snapshot(game["game_id"], stats_payload)
         if persist_live_game_state(game, stats_payload):
@@ -726,15 +779,22 @@ def follow_alerts(session):
     for alert in active_alerts:
         rule = alert.rule
         cache_key = alert.url
-        if cache_key in stats_cache:
+        use_cache = not (rule and rule.second_half_only)
+        if use_cache and cache_key in stats_cache:
             stats_payload = stats_cache[cache_key]
         else:
             stats_payload = fetch_match_stats(session, alert.url)
-            stats_cache[cache_key] = stats_payload
+            if use_cache:
+                stats_cache[cache_key] = stats_payload
         if not stats_payload: continue
 
         ensure_second_half_baseline(alert.game_id, stats_payload)
         remember_game_snapshot(alert.game_id, stats_payload)
+        if persist_live_game_state({"game_id": alert.game_id, "url": alert.url}, stats_payload):
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
