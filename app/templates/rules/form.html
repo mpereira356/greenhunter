@@ -50,27 +50,7 @@
       </div>
     </div>
 
-    <!-- PASSO 2: FILTRO DE PLACAR -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white py-3 border-0">
-        <h6 class="mb-0 fw-bold text-primary">🥅 Filtro de Placar (Opcional)</h6>
-      </div>
-      <div class="card-body pt-0">
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="small text-muted">Gols Casa</label>
-            <input class="form-control" type="number" id="score-home" name="score_home" value="{{ form.score_home if form is not none else (rule.score_home if rule and rule.score_home is not none else '') }}" placeholder="Qualquer">
-          </div>
-          <div class="col-md-6">
-            <label class="small text-muted">Gols Fora</label>
-            <input class="form-control" type="number" id="score-away" name="score_away" value="{{ form.score_away if form is not none else (rule.score_away if rule and rule.score_away is not none else '') }}" placeholder="Qualquer">
-          </div>
-        </div>
-        <div class="form-text mt-2 small">Deixe em branco para monitorar qualquer placar.</div>
-      </div>
-    </div>
-
-    <!-- PASSO 3: REGRAS DE ESTATÍSTICAS (GRUPOS) -->
+    <!-- PASSO 2: REGRAS DE ESTATÍSTICAS (GRUPOS) -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-bold text-primary">📊 Regras de Estatísticas</h6>
@@ -80,6 +60,9 @@
         <div id="groups-container"></div>
         <div class="form-text mt-2 small">
           <strong>Dica:</strong> Condições dentro de um grupo funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
+        </div>
+        <div class="form-text mt-1 small">
+          Para filtrar placar no grupo, use <strong>⚽ Gols</strong> com lado <strong>Casa</strong> ou <strong>Visitante</strong>.
         </div>
       </div>
     </div>
@@ -236,7 +219,7 @@
         <select class="form-select stat-side">
           <option value="total">Total</option>
           <option value="home">Casa</option>
-          <option value="away">Fora</option>
+          <option value="away">Visitante</option>
         </select>
       </div>
       <div class="col-md-2">
@@ -273,7 +256,7 @@
         <select class="form-select outcome-stat-side">
           <option value="total">Total</option>
           <option value="home">Casa</option>
-          <option value="away">Fora</option>
+          <option value="away">Visitante</option>
         </select>
       </div>
       <div class="col-md-2">
