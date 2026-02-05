@@ -33,7 +33,10 @@ RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
+BOT_STARTED_AT = None
 SECOND_HALF_BASELINES = {}
+SECOND_HALF_FROM_NOW = {}
+GAME_FIRST_SEEN_AT = {}
 LAST_GAME_SNAPSHOTS = {}
 HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
@@ -250,6 +253,8 @@ def _has_first_half_context(game_id: str) -> bool:
 
 def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES: return
+    if game_id in SECOND_HALF_FROM_NOW:
+        return
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     if is_first_half_extra_time(time_text):
@@ -270,6 +275,8 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     # - If source explicitly marks 2nd half OR halftime was confirmed, start 2H counters.
     # - If there is no first-half context (bot started mid-game), start from "now".
     # - Otherwise, wait to avoid false positives while match can still be in late 1H.
+    if game_id in SECOND_HALF_FROM_NOW:
+        return
     if is_second_half(time_text, minute) or HALFTIME_CONFIRMED_AT.get(game_id):
         if _has_first_half_context(game_id):
             SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
@@ -314,6 +321,10 @@ def get_second_half_baseline(game_id: str):
         if persisted_first_half and isinstance(persisted_first_half.get("stats"), dict):
             SECOND_HALF_BASELINES[game_id] = copy_stats(persisted_first_half["stats"])
             return SECOND_HALF_BASELINES[game_id]
+    if game_id in SECOND_HALF_FROM_NOW:
+        baseline = SECOND_HALF_BASELINES.get(game_id)
+        if baseline:
+            return baseline
     baseline = SECOND_HALF_BASELINES.get(game_id)
     if baseline:
         return baseline
@@ -345,7 +356,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     if minute == 45 and not is_first_half_extra_time(time_text):
-        if _ht_confirmed(game_id, time_text, minute):
+        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed(game_id, time_text, minute):
             first_half_stats = copy_stats(stats_payload.get("stats", {}))
             if first_half_stats:
                 state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
@@ -353,7 +364,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
 
     # If a previous run saved a late baseline but we have first-half snapshot,
     # repair baseline to the first-half reference so 2nd-half deltas are correct.
-    if state.second_half_baseline_json and state.first_half_snapshot_json:
+    if state.second_half_baseline_json and state.first_half_snapshot_json and game_id not in SECOND_HALF_FROM_NOW:
         try:
             persisted_base = json.loads(state.second_half_baseline_json)
         except Exception:
@@ -387,6 +398,25 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if curr < base:
                     base_val[side] = curr
         SECOND_HALF_BASELINES[game_id] = baseline
+        # If baseline equals current for long after 50', start counting from "now".
+        if minute >= 50:
+            zero_delta = True
+            for key in ("On Target", "Corners", "Dangerous Attacks"):
+                cur_val = stats_payload.get("stats", {}).get(key)
+                base_val = baseline.get(key)
+                if not isinstance(cur_val, dict) or not isinstance(base_val, dict):
+                    continue
+                for side in ("home", "away"):
+                    if _num(cur_val.get(side, 0)) != _num(base_val.get(side, 0)):
+                        zero_delta = False
+                        break
+                if not zero_delta:
+                    break
+            started_at = state.second_half_started_at
+            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 600):
+                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+                baseline = SECOND_HALF_BASELINES[game_id]
+                state.second_half_started_at = now_sp()
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
@@ -581,6 +611,8 @@ def start_worker(app):
 
 def run_worker(app):
     with app.app_context():
+        global BOT_STARTED_AT
+        BOT_STARTED_AT = now_sp()
         session = make_session()
         while True:
             try:
@@ -605,6 +637,14 @@ def process_live_games(session):
         
         minute = stats_payload.get("minute")
         if minute is None: continue
+
+        game_id = game.get("game_id")
+        if game_id and game_id not in GAME_FIRST_SEEN_AT:
+            GAME_FIRST_SEEN_AT[game_id] = now_sp()
+            # If bot starts mid-2H, count from now for this game.
+            if isinstance(minute, int) and minute >= 50:
+                SECOND_HALF_FROM_NOW[game_id] = True
+                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
 
         # If minute advanced but score/stats are stuck, force a cache-busted re-fetch.
         state = LiveGameState.query.filter_by(game_id=game.get("game_id")).first()
@@ -779,12 +819,13 @@ def follow_alerts(session):
     for alert in active_alerts:
         rule = alert.rule
         cache_key = alert.url
-        use_cache = not (rule and rule.second_half_only)
-        if use_cache and cache_key in stats_cache:
-            stats_payload = stats_cache[cache_key]
+        if alert.status == "pending":
+            stats_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
         else:
-            stats_payload = fetch_match_stats(session, alert.url)
-            if use_cache:
+            if cache_key in stats_cache:
+                stats_payload = stats_cache[cache_key]
+            else:
+                stats_payload = fetch_match_stats(session, alert.url)
                 stats_cache[cache_key] = stats_payload
         if not stats_payload: continue
 
@@ -798,6 +839,15 @@ def follow_alerts(session):
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
+        prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
+        if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
+            if current_score and current_score == (alert.last_score or alert.initial_score):
+                forced_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
+                if forced_payload and forced_payload.get("score") and forced_payload.get("score") != current_score:
+                    stats_payload = forced_payload
+                    minute = stats_payload.get("minute") or minute
+                    current_score = stats_payload.get("score") or current_score
+                    stats = stats_payload.get("stats", {}) or stats
         prev_score = alert.last_score or alert.initial_score
         prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
         if alert.status != "pending" and prev_score and current_score and minute:

@@ -109,9 +109,24 @@ def _build_tracked_games(now: datetime) -> list[dict]:
                 "url": row.url or (f"https://betsapi.com/r/{row.game_id}" if row.game_id else ""),
                 "minute": minute,
                 "time_text": row.time_text,
-                "on_target_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "On Target", show_total_when_zero=True),
-                "corners_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "Corners", show_total_when_zero=True),
-                "dangerous_live": _stat_delta_pair(row.stats_json, row.second_half_baseline_json, "Dangerous Attacks", show_total_when_zero=True),
+                "on_target_live": _stat_delta_pair(
+                    row.stats_json,
+                    row.first_half_snapshot_json or row.second_half_baseline_json,
+                    "On Target",
+                    show_total_when_zero=True,
+                ),
+                "corners_live": _stat_delta_pair(
+                    row.stats_json,
+                    row.first_half_snapshot_json or row.second_half_baseline_json,
+                    "Corners",
+                    show_total_when_zero=True,
+                ),
+                "dangerous_live": _stat_delta_pair(
+                    row.stats_json,
+                    row.first_half_snapshot_json or row.second_half_baseline_json,
+                    "Dangerous Attacks",
+                    show_total_when_zero=True,
+                ),
                 "updated_at": row.updated_at,
                 "updated_at_fmt": row.updated_at.strftime("%d/%m %H:%M:%S") if row.updated_at else "-",
             }
