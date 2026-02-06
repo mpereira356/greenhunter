@@ -288,6 +288,7 @@ def get_with_fallback(session, url):
 
         if _is_cloudflare_response(resp):
             blocked_urls.append(candidate)
+            _send_cf_telegram_alert(candidate)
         last_resp = resp
 
     if _browser_fallback_enabled():

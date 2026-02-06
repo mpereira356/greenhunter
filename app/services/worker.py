@@ -280,11 +280,11 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
 
     # From 46+ onward:
     # - If source explicitly marks 2nd half OR halftime was confirmed, start 2H counters.
+    # - If minute >= 50, assume 2H even if HT confirm was missed.
     # - If there is no first-half context (bot started mid-game), start from "now".
-    # - Otherwise, wait to avoid false positives while match can still be in late 1H.
     if game_id in SECOND_HALF_FROM_NOW:
         return
-    if is_second_half(time_text, minute) or HALFTIME_CONFIRMED_AT.get(game_id):
+    if is_second_half(time_text, minute) or HALFTIME_CONFIRMED_AT.get(game_id) or minute >= 50:
         if _has_first_half_context(game_id):
             SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         else:
@@ -363,11 +363,19 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     if minute == 45 and not is_first_half_extra_time(time_text):
-        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed_with_state(state, time_text, minute):
-            first_half_stats = copy_stats(stats_payload.get("stats", {}))
-            if first_half_stats:
-                state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
-                state.first_half_snapshot_minute = minute
+        # Always capture HT snapshot at 45. Confirmation (3 min) is handled separately.
+        first_half_stats = copy_stats(stats_payload.get("stats", {}))
+        if first_half_stats:
+            state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
+            state.first_half_snapshot_minute = minute
+        if game_id not in SECOND_HALF_FROM_NOW:
+            _ht_confirmed_with_state(state, time_text, minute)
+    # If bot started in 2H and no HT snapshot exists, start baseline "from now".
+    if minute >= 46 and not state.first_half_snapshot_json and game_id in SECOND_HALF_FROM_NOW:
+        from_now_stats = copy_stats(stats_payload.get("stats", {}))
+        if from_now_stats:
+            state.first_half_snapshot_json = json.dumps(from_now_stats, ensure_ascii=False)
+            state.first_half_snapshot_minute = minute
 
     # If a previous run saved a late baseline but we have first-half snapshot,
     # repair baseline to the first-half reference so 2nd-half deltas are correct.
@@ -405,29 +413,6 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if curr < base:
                     base_val[side] = curr
         SECOND_HALF_BASELINES[game_id] = baseline
-        # If baseline equals current for a while after 50', start counting from "now".
-        if minute >= 50:
-            zero_delta = True
-            for key in ("On Target", "Corners", "Dangerous Attacks"):
-                cur_val = stats_payload.get("stats", {}).get(key)
-                base_val = baseline.get(key)
-                if not isinstance(cur_val, dict) or not isinstance(base_val, dict):
-                    continue
-                for side in ("home", "away"):
-                    if _num(cur_val.get(side, 0)) != _num(base_val.get(side, 0)):
-                        zero_delta = False
-                        break
-                if not zero_delta:
-                    break
-            started_at = state.second_half_started_at
-            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 120):
-                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-                baseline = SECOND_HALF_BASELINES[game_id]
-                state.second_half_started_at = now_sp()
-                SECOND_HALF_FROM_NOW[game_id] = True
-                # Drop HT snapshot so 2H deltas reflect from now on.
-                state.first_half_snapshot_json = None
-                state.first_half_snapshot_minute = None
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
@@ -642,8 +627,10 @@ def process_live_games(session):
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
+    second_half_active = any(rule.second_half_only for rule in active_rules)
     for game in games:
-        stats_payload = fetch_match_stats(session, game["url"])
+        stats_url = _cache_bust_url(game["url"]) if second_half_active else game["url"]
+        stats_payload = fetch_match_stats(session, stats_url)
         if not stats_payload or is_youth_match(stats_payload): continue
         
         minute = stats_payload.get("minute")
@@ -702,9 +689,9 @@ def process_live_games(session):
                (rule.score_away is not None and a_score != rule.score_away):
                 continue
 
-                if rule.second_half_only:
-                    if is_first_half_extra_time(stats_payload.get("time_text", "")):
-                        continue
+            if rule.second_half_only:
+                if is_first_half_extra_time(stats_payload.get("time_text", "")):
+                    continue
                 # Never trigger 2H alerts while provider still marks interval/HT,
                 # even if numeric minute appears as 48+ due stale/lagged minute text.
                 if is_half_time_text(stats_payload.get("time_text", "")):
@@ -717,18 +704,15 @@ def process_live_games(session):
                     continue
                 if minute < 46:
                     continue
-                    baseline = get_second_half_baseline(game["game_id"])
-                    if not baseline: continue
+                baseline = get_second_half_baseline(game["game_id"])
+                m2h = max(0, minute - 45)
+                if baseline:
                     stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
-                    m2h = max(0, minute - 45)
                     stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
-                    # If delta is stuck (baseline equals current), fall back to totals to keep 2H rules moving.
-                    if all(
-                        (stats_for_rule.get(key, {}).get("total", 0) or 0) == 0
-                        for key in ("On Target", "Corners", "Dangerous Attacks")
-                    ):
-                        stats_for_rule = stats_payload["stats"]
-                        stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
+                else:
+                    # If no baseline, use totals but keep 2H minute window.
+                    stats_for_rule = stats_payload["stats"]
+                    stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
             if evaluate_rule(rule, stats_for_rule):
                 # If rule depends on mutable stats, revalidar para evitar feed atrasado.
@@ -910,7 +894,10 @@ def follow_alerts(session):
 
         if rule and rule.second_half_only:
             baseline = get_second_half_baseline(alert.game_id)
-            if baseline: stats = apply_second_half_delta(stats_payload["stats"], baseline)
+            if baseline:
+                stats = apply_second_half_delta(stats_payload["stats"], baseline)
+            else:
+                stats = stats_payload.get("stats", {})
             m2h = max(0, minute - 45)
             stats["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
