@@ -57,6 +57,7 @@
 
       <div class="rule-card-actions">
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
+        <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="modal" data-bs-target="#ruleMore{{ rule.id }}">Ver mais</button>
         <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
           <button class="btn btn-sm btn-outline-secondary">
             {% if rule.is_active %}Pausar{% else %}Ativar{% endif %}
@@ -68,6 +69,60 @@
         </form>
       </div>
     </article>
+
+    {% set rk = rule_rankings.get(rule.id, {}) %}
+    <div class="modal fade" id="ruleMore{{ rule.id }}" tabindex="-1" aria-labelledby="ruleMoreLabel{{ rule.id }}" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="ruleMoreLabel{{ rule.id }}">Ranking da regra</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <h6 class="fw-bold">Campeonatos</h6>
+                <div class="mb-2"><span class="badge bg-success">Greens</span></div>
+                <ul class="list-group mb-3">
+                  {% for item in (rk.get('leagues', {}).get('green', []) or []) %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                  {% else %}
+                    <li class="list-group-item text-muted">Sem dados</li>
+                  {% endfor %}
+                </ul>
+                <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
+                <ul class="list-group">
+                  {% for item in (rk.get('leagues', {}).get('red', []) or []) %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                  {% else %}
+                    <li class="list-group-item text-muted">Sem dados</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <h6 class="fw-bold">Times</h6>
+                <div class="mb-2"><span class="badge bg-success">Greens</span></div>
+                <ul class="list-group mb-3">
+                  {% for item in (rk.get('teams', {}).get('green', []) or []) %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                  {% else %}
+                    <li class="list-group-item text-muted">Sem dados</li>
+                  {% endfor %}
+                </ul>
+                <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
+                <ul class="list-group">
+                  {% for item in (rk.get('teams', {}).get('red', []) or []) %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                  {% else %}
+                    <li class="list-group-item text-muted">Sem dados</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     {% endfor %}
   </div>
 {% else %}

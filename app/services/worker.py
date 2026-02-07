@@ -48,6 +48,7 @@ RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "15"))
 FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST_HALF", "0").strip().lower() in ("1", "true", "yes")
 NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
+RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
@@ -164,6 +165,19 @@ def _is_recent_game_update(game_id: str) -> bool:
         return False
     return (now_sp() - state.updated_at).total_seconds() <= ALERT_FRESH_SECONDS
 
+def _result_time_to_dt(result_time_hhmm: str | None):
+    if not result_time_hhmm:
+        return None
+    try:
+        hh, mm = result_time_hhmm.split(":")
+        dt = now_sp().replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        # handle cross-midnight edge
+        if dt > now_sp():
+            dt = dt.replace(day=dt.day - 1)
+        return dt
+    except Exception:
+        return None
+
 def parse_score(score_text: str):
     if not score_text: return 0, 0
     nums = re.findall(r"\d+", score_text)
@@ -215,6 +229,8 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
         meta["rule_confidence"] = rule_confidence_text(rule.id, rule.user_id)
     if history_meta:
         meta.update(history_meta)
+    if "history_confidence" in meta and not meta["history_confidence"]:
+        meta["history_confidence"] = "Sem historico de um contra o outro"
     return meta
 
 def is_youth_match(stats_payload: dict) -> bool:
@@ -833,10 +849,14 @@ def process_live_games(session):
                         h2h_summary = summarize_history(history.get("h2h", []))
                         home_summary = summarize_history(history.get("home", []))
                         away_summary = summarize_history(history.get("away", []))
+                        h2h_items = history.get("h2h", [])
+                        conf_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] or rule.conditions
+                        confidence = history_confidence(conf_conds, h2h_items)
                         history_meta = {
                             "history_h2h": format_history_summary("H2H", h2h_summary) if h2h_summary else "Sem historico de um contra o outro",
                             "history_home": format_history_summary("Home", home_summary),
                             "history_away": format_history_summary("Away", away_summary),
+                            "history_confidence": f"{confidence}%" if confidence is not None else "N/A",
                         }
                     except Exception:
                         pass
@@ -962,6 +982,33 @@ def follow_alerts(session):
             db.session.commit()
 
         if alert.status != "pending":
+            # Allow a short correction window after RED if a late goal appears.
+            if alert.status == "red" and rule and rule.outcome_red_if_no_green:
+                red_time = _result_time_to_dt(alert.result_time_hhmm)
+                if red_time and (now_sp() - red_time).total_seconds() <= RED_CORRECTION_SECONDS:
+                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    if latest_payload:
+                        latest_score = latest_payload.get("score") or alert.last_score
+                        latest_minute = latest_payload.get("minute") or alert.result_minute
+                        green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"]
+                        base_stats = None
+                        if alert.initial_stats_json:
+                            try:
+                                base_stats = json.loads(alert.initial_stats_json)
+                            except Exception:
+                                base_stats = None
+                        latest_stats = latest_payload.get("stats", {}) or stats
+                        eval_stats = apply_alert_delta(latest_stats, base_stats, latest_minute, alert.alert_minute) if base_stats else latest_stats
+                        eval_stats = merge_score_delta_into_stats(eval_stats, alert.initial_score, latest_score)
+                        if green_conds and evaluate_outcome_conditions(green_conds, eval_stats):
+                            update_alert_status(
+                                alert,
+                                "green",
+                                latest_minute,
+                                latest_score,
+                                latest_stats,
+                                "✅ GREEN - correção pós-RED",
+                            )
             continue
         maybe_notify_penalty(alert, stats, minute, current_score, time_text=stats_payload.get("time_text"))
 

@@ -369,6 +369,8 @@ def list_rules():
     has_any_rules = Rule.query.filter_by(user_id=current_user.id).count() > 0
     rule_stats = {rule.id: {"green": 0, "red": 0} for rule in rules}
     rule_alert_counts = {rule.id: 0 for rule in rules}
+    rule_rankings = {rule.id: {"leagues": {"green": [], "red": []}, "teams": {"green": [], "red": []}} for rule in rules}
+    rule_ids = [rule.id for rule in rules]
     counts = (
         db.session.query(MatchAlert.rule_id, MatchAlert.status, func.count(MatchAlert.id))
         .filter(MatchAlert.user_id == current_user.id)
@@ -380,6 +382,41 @@ def list_rules():
             rule_stats[rule_id][status] = total
         if rule_id in rule_alert_counts:
             rule_alert_counts[rule_id] += total
+
+    if rule_ids:
+        alerts = (
+            db.session.query(
+                MatchAlert.rule_id,
+                MatchAlert.status,
+                MatchAlert.league,
+                MatchAlert.home_team,
+                MatchAlert.away_team,
+            )
+            .filter(MatchAlert.user_id == current_user.id)
+            .filter(MatchAlert.rule_id.in_(rule_ids))
+            .filter(MatchAlert.status.in_(("green", "red")))
+            .all()
+        )
+        league_counts = {rid: {"green": {}, "red": {}} for rid in rule_ids}
+        team_counts = {rid: {"green": {}, "red": {}} for rid in rule_ids}
+        for rule_id, status, league, home_team, away_team in alerts:
+            if rule_id not in league_counts:
+                continue
+            if league:
+                league_counts[rule_id][status][league] = league_counts[rule_id][status].get(league, 0) + 1
+            for team in (home_team, away_team):
+                if team:
+                    team_counts[rule_id][status][team] = team_counts[rule_id][status].get(team, 0) + 1
+
+        def _top5(d):
+            items = sorted(d.items(), key=lambda item: (-item[1], item[0]))
+            return [{"name": name, "count": count} for name, count in items[:5]]
+
+        for rid in rule_ids:
+            rule_rankings[rid]["leagues"]["green"] = _top5(league_counts[rid]["green"])
+            rule_rankings[rid]["leagues"]["red"] = _top5(league_counts[rid]["red"])
+            rule_rankings[rid]["teams"]["green"] = _top5(team_counts[rid]["green"])
+            rule_rankings[rid]["teams"]["red"] = _top5(team_counts[rid]["red"])
     rules = sorted(
         rules,
         key=lambda rule: (
@@ -394,6 +431,7 @@ def list_rules():
         rules=rules,
         rule_stats=rule_stats,
         rule_alert_counts=rule_alert_counts,
+        rule_rankings=rule_rankings,
         stage_filter=stage_filter,
         has_any_rules=has_any_rules,
     )
