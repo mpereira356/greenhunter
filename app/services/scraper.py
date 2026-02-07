@@ -11,7 +11,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
-SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "2Âº", "2º", "second", "segundo")
+SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "second", "segundo")
 CF_CHALLENGE_MARKERS = (
     "just a moment",
     "um momento",
@@ -288,7 +288,6 @@ def get_with_fallback(session, url):
 
         if _is_cloudflare_response(resp):
             blocked_urls.append(candidate)
-            _send_cf_telegram_alert(candidate)
         last_resp = resp
 
     if _browser_fallback_enabled():
@@ -606,6 +605,7 @@ def fetch_match_stats(session, url):
     stats = {}
     raw_stats = {}
     score = "0 x 0"
+    best_goals = (0, 0)
 
     all_rows = []
     for table in stat_tables:
@@ -615,6 +615,15 @@ def fetch_match_stats(session, url):
         if not values:
             return True
         return all(not v or str(v).strip() in ("-", "â€”") for v in values)
+
+    def _pair_total(values):
+        if not values or len(values) < 2:
+            return None
+        a = parse_int(values[0])
+        b = parse_int(values[1])
+        if a is None or b is None:
+            return None
+        return a + b
 
     for row in all_rows:
         cols = row.find_all("td")
@@ -627,21 +636,33 @@ def fetch_match_stats(session, url):
         home_val = extrair_valor_td(cols[0])
         away_val = extrair_valor_td(cols[2])
         if key in raw_stats:
-            if _is_missing_pair(raw_stats.get(key)) and not _is_missing_pair((home_val, away_val)):
+            prev_pair = raw_stats.get(key)
+            prev_total = _pair_total(prev_pair)
+            new_total = _pair_total((home_val, away_val))
+            if _is_missing_pair(prev_pair) and not _is_missing_pair((home_val, away_val)):
+                raw_stats[key] = (home_val, away_val)
+            elif new_total is not None and (prev_total is None or new_total >= prev_total):
                 raw_stats[key] = (home_val, away_val)
         else:
             raw_stats[key] = (home_val, away_val)
 
-        if key == "Goals":
-            score = f"{home_val} x {away_val}"
         home_int = parse_int(home_val)
         away_int = parse_int(away_val)
+        if key == "Goals":
+            if home_int is not None and away_int is not None:
+                if (home_int + away_int) >= sum(best_goals):
+                    best_goals = (home_int, away_int)
+                    score = f"{home_int} x {away_int}"
         if home_int is not None and away_int is not None:
-            stats[key] = {
-                "home": home_int,
-                "away": away_int,
-                "total": home_int + away_int,
-            }
+            new_total = home_int + away_int
+            prev = stats.get(key)
+            prev_total = prev.get("total") if isinstance(prev, dict) else None
+            if prev_total is None or new_total >= prev_total:
+                stats[key] = {
+                    "home": home_int,
+                    "away": away_int,
+                    "total": new_total,
+                }
 
     minute_value = parse_minutes(time_text)
     raw_minute = raw_stats.get("Minute")
@@ -783,3 +804,10 @@ def format_history_summary(label: str, summary):
         f"O2.5 {summary['over25']}/{summary['count']} | "
         f"BTTS {summary['btts']}/{summary['count']}"
     )
+
+def is_second_half(time_text: str, minute: int) -> bool:
+    text = (time_text or "").lower()
+    text = text.replace("º", "o").replace("ª", "a").replace("Âº", "o")
+    if any(x in text for x in SECOND_HALF_TOKENS):
+        return True
+    return False

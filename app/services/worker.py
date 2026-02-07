@@ -21,11 +21,13 @@ from app.services.scraper import (
     make_session,
     normalize_stat_key,
     summarize_history,
+    is_second_half as scraper_is_second_half,
 )
 from app.services.telegram import send_message
 from app.utils.time import now_sp
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
+ALERTS_POLL_INTERVAL = float(os.environ.get("ALERTS_POLL_INTERVAL", "5"))
 GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
 EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
 RULE_CONF_SAMPLE = int(os.environ.get("RULE_CONF_SAMPLE", "50"))
@@ -45,6 +47,7 @@ RED_CONFIRM_PENDING = {}
 RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "15"))
 FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST_HALF", "0").strip().lower() in ("1", "true", "yes")
 NON_DELTA_KEYS = {"Minute", "Possession"}
+ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
@@ -100,6 +103,24 @@ def _cache_bust_url(url: str) -> str:
     except Exception:
         return url
 
+def fetch_match_stats_fresh(session, url: str, attempts: int = 3, delay: float = 1.0):
+    best = None
+    for _ in range(max(1, attempts)):
+        payload = fetch_match_stats(session, _cache_bust_url(url))
+        if payload:
+            if not best:
+                best = payload
+            else:
+                ma = best.get("minute") or 0
+                mb = payload.get("minute") or 0
+                sa = parse_score(best.get("score", ""))
+                sb = parse_score(payload.get("score", ""))
+                if mb > ma or sum(sb) > sum(sa):
+                    best = payload
+        if delay:
+            time.sleep(delay)
+    return best
+
 def is_half_time(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
     return "ht" in text or "half time" in text or "interval" in text or 45 <= minute <= 47
@@ -119,9 +140,29 @@ def is_full_time(time_text: str, minute: int) -> bool:
     return 90 <= minute <= 130
 
 def is_second_half(time_text: str, minute: int) -> bool:
-    text = (time_text or "").lower()
-    if any(x in text for x in ["2nd", "2o", "2h", "2Âº", "2º", "second", "segundo"]): return True
-    return False
+    return scraper_is_second_half(time_text, minute)
+
+def second_half_allowed(game_id: str, time_text: str, minute: int | None) -> bool:
+    if minute is None:
+        return False
+    if is_half_time_text(time_text):
+        return False
+    if is_first_half_extra_time(time_text):
+        return False
+    # Only allow 2H alerts after HT confirmed or 50+ to avoid 45+ stoppage false positives.
+    if not HALFTIME_CONFIRMED_AT.get(game_id) and minute < 50:
+        return False
+    if minute < 46:
+        return False
+    return True
+
+def _is_recent_game_update(game_id: str) -> bool:
+    if not game_id:
+        return False
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if not state or not state.updated_at:
+        return False
+    return (now_sp() - state.updated_at).total_seconds() <= ALERT_FRESH_SECONDS
 
 def parse_score(score_text: str):
     if not score_text: return 0, 0
@@ -144,6 +185,37 @@ def rule_confidence_text(rule_id: int | None, user_id: int | None) -> str | None
     greens = sum(1 for alert in alerts if alert.status == "green")
     pct = round((greens / total) * 100)
     return f"{pct}% ({greens}/{total})"
+
+def build_message_meta(rule, stats_payload, game, history_meta=None, stats_override=None):
+    stats = stats_override if isinstance(stats_override, dict) else stats_payload.get("stats", {})
+    def sv(k, s, default=0):
+        bucket = stats.get(k, {})
+        if not isinstance(bucket, dict):
+            return default
+        value = bucket.get(s, default)
+        if value in (None, "", "-"):
+            return default
+        return value
+    meta = {
+        "rule": rule.name if rule else "",
+        "home_team": stats_payload.get("home_team") if stats_payload else "",
+        "away_team": stats_payload.get("away_team") if stats_payload else "",
+        "minute": stats_payload.get("minute") if stats_payload else None,
+        "score": stats_payload.get("score") if stats_payload else "",
+        "url": game.get("url") if game else "",
+        "league": stats_payload.get("league") if stats_payload else "",
+        "time_limit": rule.time_limit_min if rule else None,
+        "goals_home": sv("Goals", "home"), "goals_away": sv("Goals", "away"), "goals_total": sv("Goals", "total"),
+        "corners_home": sv("Corners", "home"), "corners_away": sv("Corners", "away"), "corners_total": sv("Corners", "total"),
+        "on_target_home": sv("On Target", "home"), "on_target_away": sv("On Target", "away"), "on_target_total": sv("On Target", "total"),
+        "off_target_home": sv("Off Target", "home"), "off_target_away": sv("Off Target", "away"), "off_target_total": sv("Off Target", "total"),
+        "dangerous_attacks_home": sv("Dangerous Attacks", "home"), "dangerous_attacks_away": sv("Dangerous Attacks", "away"), "dangerous_attacks_total": sv("Dangerous Attacks", "total"),
+    }
+    if rule:
+        meta["rule_confidence"] = rule_confidence_text(rule.id, rule.user_id)
+    if history_meta:
+        meta.update(history_meta)
+    return meta
 
 def is_youth_match(stats_payload: dict) -> bool:
     if not stats_payload: return False
@@ -171,6 +243,7 @@ def _ht_confirmed_with_state(state: LiveGameState | None, time_text: str, minute
         return False
     if minute is None:
         return False
+    # Modificação solicitada: Se o jogo ficou nos 45 por 3 min, salva o HT
     if minute != 45 and not is_half_time_text(time_text):
         state.ht_seen_at = None
         return False
@@ -274,29 +347,21 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
     # Consider 45/HT for >= HALFTIME_CONFIRM_SECONDS as confirmed interval.
     if minute == 45 or is_half_time_text(time_text):
         if _ht_confirmed(game_id, time_text, minute):
-            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
             return
         return
 
     # From 46+ onward:
-    # - If source explicitly marks 2nd half OR halftime was confirmed, start 2H counters.
-    # - If minute >= 50, assume 2H even if HT confirm was missed.
-    # - If there is no first-half context (bot started mid-game), start from "now".
-    if game_id in SECOND_HALF_FROM_NOW:
-        return
-    if is_second_half(time_text, minute) or HALFTIME_CONFIRMED_AT.get(game_id) or minute >= 50:
+    # Modificação solicitada: Se o bot está ligado e o jogo já está no 2º tempo, ele cria baseline imediatamente na hora e começa a contar a partir dali.
+    if is_second_half(time_text, minute) or minute >= 46:
         if _has_first_half_context(game_id):
             SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
         else:
+            # Se não tem contexto do 1º tempo, cria baseline imediatamente com os stats atuais
             SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-    elif not _has_first_half_context(game_id):
-        # If bot started mid-2H, start counting from now (50+).
-        if minute >= 50:
-            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-    else:
-        return
-    HALFTIME_SEEN_AT.pop(game_id, None)
-    HALFTIME_CONFIRMED_AT.pop(game_id, None)
+            SECOND_HALF_FROM_NOW[game_id] = True
+        
+        HALFTIME_SEEN_AT.pop(game_id, None)
+        HALFTIME_CONFIRMED_AT.pop(game_id, None)
 
 
 def _load_persisted_second_half_baseline(game_id: str):
@@ -362,20 +427,14 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     state.stats_json = json.dumps(stats_payload.get("stats", {}), ensure_ascii=False)
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
+    
+    # Se o jogo ficou nos 45 por 3 min, salva o HT
     if minute == 45 and not is_first_half_extra_time(time_text):
-        # Always capture HT snapshot at 45. Confirmation (3 min) is handled separately.
-        first_half_stats = copy_stats(stats_payload.get("stats", {}))
-        if first_half_stats:
-            state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
-            state.first_half_snapshot_minute = minute
-        if game_id not in SECOND_HALF_FROM_NOW:
-            _ht_confirmed_with_state(state, time_text, minute)
-    # If bot started in 2H and no HT snapshot exists, start baseline "from now".
-    if minute >= 46 and not state.first_half_snapshot_json and game_id in SECOND_HALF_FROM_NOW:
-        from_now_stats = copy_stats(stats_payload.get("stats", {}))
-        if from_now_stats:
-            state.first_half_snapshot_json = json.dumps(from_now_stats, ensure_ascii=False)
-            state.first_half_snapshot_minute = minute
+        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed_with_state(state, time_text, minute):
+            first_half_stats = copy_stats(stats_payload.get("stats", {}))
+            if first_half_stats:
+                state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
+                state.first_half_snapshot_minute = minute
 
     # If a previous run saved a late baseline but we have first-half snapshot,
     # repair baseline to the first-half reference so 2nd-half deltas are correct.
@@ -413,6 +472,29 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if curr < base:
                     base_val[side] = curr
         SECOND_HALF_BASELINES[game_id] = baseline
+        # If baseline equals current for a while after 50', start counting from "now".
+        if minute >= 50:
+            zero_delta = True
+            for key in ("On Target", "Corners", "Dangerous Attacks"):
+                cur_val = stats_payload.get("stats", {}).get(key)
+                base_val = baseline.get(key)
+                if not isinstance(cur_val, dict) or not isinstance(base_val, dict):
+                    continue
+                for side in ("home", "away"):
+                    if _num(cur_val.get(side, 0)) != _num(base_val.get(side, 0)):
+                        zero_delta = False
+                        break
+                if not zero_delta:
+                    break
+            started_at = state.second_half_started_at
+            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 120):
+                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+                baseline = SECOND_HALF_BASELINES[game_id]
+                state.second_half_started_at = now_sp()
+                SECOND_HALF_FROM_NOW[game_id] = True
+                # Drop HT snapshot so 2H deltas reflect from now on.
+                state.first_half_snapshot_json = None
+                state.first_half_snapshot_minute = None
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
@@ -516,13 +598,6 @@ def merge_score_delta_into_stats(stats_for_outcome: dict, initial_score: str | N
         "away": max(0, curr_away - init_away),
         "total": max(0, (curr_home + curr_away) - (init_home + init_away)),
     }
-    prev_goals = stats_for_outcome.get("Goals")
-    if isinstance(prev_goals, dict):
-        score_delta = {
-            "home": max(score_delta["home"], _num(prev_goals.get("home"))),
-            "away": max(score_delta["away"], _num(prev_goals.get("away"))),
-            "total": max(score_delta["total"], _num(prev_goals.get("total"))),
-        }
     stats_for_outcome["Goals"] = score_delta
     return stats_for_outcome
 
@@ -531,57 +606,36 @@ def maybe_notify_penalty(alert, stats, minute, score, time_text=None):
         return
     rule = alert.rule
     user = alert.user
-    if not rule or not rule.alert_on_penalty:
+    if not rule or not rule.alert_on_penalty or not user:
         return
-    if not rule.notify_telegram:
-        return
-    if not user or not user.telegram_token or not user.telegram_chat_id:
+    if not alert.penalty_baseline_set:
         return
     if minute is None or minute <= 0:
         return
     if is_full_time(time_text or "", minute):
         return
-    penalties_total = stats.get("Penalties", {}).get("total", 0) if isinstance(stats, dict) else 0
-    if penalties_total <= 0:
+    
+    penalties_total = stats.get("Penalties", {}).get("total", 0)
+    if not isinstance(penalties_total, int):
         return
-    if rule.time_limit_min and minute is not None and minute > rule.time_limit_min:
-        return
-    if not alert.penalty_baseline_set:
-        alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
-        alert.penalty_notified = False
-        alert.penalty_baseline_set = True
-        db.session.commit()
-        return
-    last_total = alert.penalty_last_total if alert.penalty_last_total is not None else 0
-    if penalties_total <= last_total:
-        return
-    alert.penalty_last_total = penalties_total
-    if alert.penalty_notified:
-        db.session.commit()
-        return
-    ok, _ = send_message(
-        user.telegram_token,
-        user.telegram_chat_id,
-        f"Penalti agora!\nRegra: {rule.name}\n{alert.home_team} vs {alert.away_team}\nTempo: {minute}'\nPlacar: {score}\nLink: {alert.url}",
-    )
-    if ok:
+        
+    if penalties_total > alert.penalty_last_total:
+        alert.penalty_last_total = penalties_total
         alert.penalty_notified = True
-    db.session.commit()
+        db.session.commit()
+        
+        if rule.notify_telegram and user.telegram_token and user.telegram_chat_id:
+            msg = (
+                f"🚨 PÊNALTI DETECTADO!\n"
+                f"Jogo: {alert.home_team} vs {alert.away_team}\n"
+                f"Tempo: {minute}'\n"
+                f"Placar: {score}\n"
+                f"Regra: {rule.name}\n"
+                f"Link: {alert.url}"
+            )
+            send_message(user.telegram_token, user.telegram_chat_id, msg)
 
-def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
-    if not conditions: return False
-    for cond in conditions:
-        key = normalize_stat_key(cond.stat_key)
-        if key not in stats: return False
-        side_values = stats[key]
-        if cond.side not in side_values: return False
-        value = side_values[cond.side]
-        if value is None or not compare(cond.operator, value, cond.value): return False
-    return True
-
-def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
-    if not game_id or not stats_payload:
-        return
+def maybe_notify_penalty_for_game(game_id, stats_payload):
     minute = stats_payload.get("minute")
     if minute is None:
         return
@@ -596,6 +650,8 @@ def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
         MatchAlert.status == "pending",
     ).all()
     for alert in alerts:
+        if not _is_recent_game_update(game_id):
+            continue
         if home_team:
             alert.home_team = home_team
         if away_team:
@@ -604,6 +660,7 @@ def maybe_notify_penalty_for_game(game_id: str, stats_payload: dict):
 
 def start_worker(app):
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
+    threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
 
 def run_worker(app):
     with app.app_context():
@@ -613,7 +670,6 @@ def run_worker(app):
         while True:
             try:
                 process_live_games(session)
-                follow_alerts(session)
                 finalize_full_time(session)
             except Exception as exc:
                 db.session.rollback()
@@ -621,16 +677,25 @@ def run_worker(app):
             API_STATUS["last_cycle"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
             time.sleep(POLL_INTERVAL)
 
+def run_alerts_worker(app):
+    with app.app_context():
+        session = make_session()
+        while True:
+            try:
+                follow_alerts(session)
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[alerts] erro: {exc}")
+            time.sleep(ALERTS_POLL_INTERVAL)
+
 def process_live_games(session):
     games, status_code = fetch_live_games(session)
     update_api_status(status_code == 200, status_code)
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
-    second_half_active = any(rule.second_half_only for rule in active_rules)
     for game in games:
-        stats_url = _cache_bust_url(game["url"]) if second_half_active else game["url"]
-        stats_payload = fetch_match_stats(session, stats_url)
+        stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
         if not stats_payload or is_youth_match(stats_payload): continue
         
         minute = stats_payload.get("minute")
@@ -640,7 +705,7 @@ def process_live_games(session):
         if game_id and game_id not in GAME_FIRST_SEEN_AT:
             GAME_FIRST_SEEN_AT[game_id] = now_sp()
             # If bot starts mid-2H, count from now for this game.
-            if isinstance(minute, int) and minute >= 50:
+            if isinstance(minute, int) and minute >= 46:
                 SECOND_HALF_FROM_NOW[game_id] = True
                 SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
 
@@ -690,27 +755,19 @@ def process_live_games(session):
                 continue
 
             if rule.second_half_only:
-                if is_first_half_extra_time(stats_payload.get("time_text", "")):
+                if not second_half_allowed(game["game_id"], stats_payload.get("time_text", ""), minute):
                     continue
-                # Never trigger 2H alerts while provider still marks interval/HT,
-                # even if numeric minute appears as 48+ due stale/lagged minute text.
-                if is_half_time_text(stats_payload.get("time_text", "")):
-                    continue
-                # Avoid false 2nd-half triggers while match is still at HT/45+.
-                if not is_second_half(stats_payload.get("time_text", ""), minute) and minute <= 47:
-                    continue
-                # If no confirmed HT yet, only allow 2H alerts after 50'.
-                if not HALFTIME_CONFIRMED_AT.get(game["game_id"]) and not is_second_half(stats_payload.get("time_text", ""), minute) and minute < 50:
-                    continue
-                if minute < 46:
-                    continue
+                
                 baseline = get_second_half_baseline(game["game_id"])
+                if not baseline: continue
+                stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
                 m2h = max(0, minute - 45)
-                if baseline:
-                    stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
-                    stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
-                else:
-                    # If no baseline, use totals but keep 2H minute window.
+                stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
+                # If delta is stuck (baseline equals current), fall back to totals to keep 2H rules moving.
+                if all(
+                    (stats_for_rule.get(key, {}).get("total", 0) or 0) == 0
+                    for key in ("On Target", "Corners", "Dangerous Attacks")
+                ):
                     stats_for_rule = stats_payload["stats"]
                     stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
@@ -731,13 +788,7 @@ def process_live_games(session):
                            (rule.score_away is not None and la_score != rule.score_away):
                             continue
                         if rule.second_half_only:
-                            if is_first_half_extra_time(latest_payload.get("time_text", "")):
-                                continue
-                            if is_half_time_text(latest_payload.get("time_text", "")):
-                                continue
-                            if not is_second_half(latest_payload.get("time_text", ""), latest_minute or 0) and (latest_minute or 0) <= 47:
-                                continue
-                            if (latest_minute or 0) < 46:
+                            if not second_half_allowed(game["game_id"], latest_payload.get("time_text", ""), latest_minute):
                                 continue
                             baseline = get_second_half_baseline(game["game_id"])
                             if not baseline:
@@ -782,50 +833,70 @@ def process_live_games(session):
                         h2h_summary = summarize_history(history.get("h2h", []))
                         home_summary = summarize_history(history.get("home", []))
                         away_summary = summarize_history(history.get("away", []))
-                        h2h_items = history.get("h2h", [])
                         history_meta = {
                             "history_h2h": format_history_summary("H2H", h2h_summary) if h2h_summary else "Sem historico de um contra o outro",
                             "history_home": format_history_summary("Home", home_summary),
                             "history_away": format_history_summary("Away", away_summary),
                         }
-                        conf_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] or rule.conditions
-                        confidence = history_confidence(conf_conds, h2h_items)
-                        history_meta["history_confidence"] = f"{confidence}%" if confidence is not None else "Sem historico de um contra o outro"
                     except Exception:
-                        history_meta = {}
+                        pass
+                    
+                    # Re-fetch latest stats for accurate initial alert message.
+                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    if latest_payload:
+                        stats_payload = latest_payload
+                        if rule.second_half_only:
+                            baseline = get_second_half_baseline(game["game_id"])
+                            if baseline:
+                                stats_for_rule = apply_second_half_delta(latest_payload.get("stats", {}), baseline)
+                                m2h_latest = max(0, (latest_payload.get("minute") or 0) - 45)
+                                stats_for_rule["Minute"] = {"home": m2h_latest, "away": m2h_latest, "total": m2h_latest}
+                        else:
+                            stats_for_rule = latest_payload.get("stats", {})
+                        alert.initial_score = stats_payload.get("score")
+                        alert.last_score = stats_payload.get("score")
+                        alert.last_score_minute = stats_payload.get("minute")
+                        alert.initial_stats_json = stats_to_json(stats_for_rule)
+                        db.session.commit()
                     meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
-                    if rule.notify_telegram and user.telegram_token and user.telegram_chat_id:
-                        send_message(user.telegram_token, user.telegram_chat_id, render_message(rule, meta))
+                    message = render_message(rule, meta)
+                    if rule.notify_telegram:
+                        send_message(user.telegram_token, user.telegram_chat_id, message)
                 except IntegrityError:
                     db.session.rollback()
-        time.sleep(GAME_DELAY)
-def build_message_meta(rule, stats_payload, game, history_meta=None, stats_override=None):
-    stats = stats_override if isinstance(stats_override, dict) else stats_payload.get("stats", {})
-    def sv(k, s): return stats.get(k, {}).get(s, "")
-    meta = {
-        "rule": rule.name, "home_team": stats_payload.get("home_team"), "away_team": stats_payload.get("away_team"),
-        "minute": stats_payload.get("minute"), "score": stats_payload.get("score"), "url": game.get("url"),
-        "league": stats_payload.get("league"), "time_limit": rule.time_limit_min,
-        "goals_home": sv("Goals", "home"), "goals_away": sv("Goals", "away"), "goals_total": sv("Goals", "total"),
-        "corners_home": sv("Corners", "home"), "corners_away": sv("Corners", "away"), "corners_total": sv("Corners", "total"),
-        "on_target_home": sv("On Target", "home"), "on_target_away": sv("On Target", "away"), "on_target_total": sv("On Target", "total"),
-        "off_target_home": sv("Off Target", "home"), "off_target_away": sv("Off Target", "away"), "off_target_total": sv("Off Target", "total"),
-        "dangerous_attacks_home": sv("Dangerous Attacks", "home"), "dangerous_attacks_away": sv("Dangerous Attacks", "away"), "dangerous_attacks_total": sv("Dangerous Attacks", "total"),
-    }
-    if rule:
-        meta["rule_confidence"] = rule_confidence_text(rule.id, rule.user_id)
-    if history_meta:
-        meta.update(history_meta)
-    return meta
+                except Exception as e:
+                    print(f"[worker] erro ao criar alerta: {e}")
+                    db.session.rollback()
+
+def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
+    if not conditions:
+        return False
+    # outcome conditions are usually ANDed within the same type (green/red)
+    for cond in conditions:
+        key = normalize_stat_key(cond.stat_key)
+        if key not in stats:
+            return False
+        side_values = stats[key]
+        if cond.side not in side_values:
+            return False
+        value = side_values[cond.side]
+        if value is None:
+            return False
+        if not compare(cond.operator, value, cond.value):
+            return False
+    return True
 
 def follow_alerts(session):
     active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
     stats_cache = {}
     for alert in active_alerts:
         rule = alert.rule
+        if not _is_recent_game_update(alert.game_id):
+            continue
         cache_key = alert.url
         if alert.status == "pending":
-            stats_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
+            # Double-check with multiple reads to catch recent score changes.
+            stats_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
         else:
             if cache_key in stats_cache:
                 stats_payload = stats_cache[cache_key]
@@ -844,6 +915,8 @@ def follow_alerts(session):
         minute = stats_payload.get("minute") or 0
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
+        if minute <= 0:
+            continue
         prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
         if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
             if current_score and current_score == (alert.last_score or alert.initial_score):
@@ -894,10 +967,7 @@ def follow_alerts(session):
 
         if rule and rule.second_half_only:
             baseline = get_second_half_baseline(alert.game_id)
-            if baseline:
-                stats = apply_second_half_delta(stats_payload["stats"], baseline)
-            else:
-                stats = stats_payload.get("stats", {})
+            if baseline: stats = apply_second_half_delta(stats_payload["stats"], baseline)
             m2h = max(0, minute - 45)
             stats["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
@@ -925,6 +995,11 @@ def follow_alerts(session):
         
         # 1. Verificar GREEN customizado
         if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
+            latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+            if latest_payload:
+                minute = latest_payload.get("minute") or minute
+                current_score = latest_payload.get("score") or current_score
+                stats = latest_payload.get("stats", {}) or stats
             update_alert_status(alert, "green", minute, current_score, stats, "✅ GREEN - condições atingidas")
             continue
 
@@ -939,7 +1014,7 @@ def follow_alerts(session):
             RED_CONFIRM_PENDING.pop(alert.id, None)
         if time_red_due:
             # Dupla verificacao antes do RED: reler o jogo para evitar atraso de feed.
-            latest_payload = fetch_match_stats(session, alert.url)
+            latest_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
             latest_minute = minute
             latest_score = current_score
             latest_stats = stats
@@ -966,7 +1041,12 @@ def follow_alerts(session):
                 )
                 latest_outcome_stats = merge_score_delta_into_stats(latest_outcome_stats, alert.initial_score, latest_score)
                 if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
-                    update_alert_status(alert, "green", latest_minute, latest_score, latest_stats, "✅ GREEN - condições atingidas")
+                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    if latest_payload:
+                        latest_minute = latest_payload.get("minute") or latest_minute
+                        latest_score = latest_payload.get("score") or latest_score
+                        latest_stats = latest_payload.get("stats", {}) or latest_stats
+                    update_alert_status(alert, "green", latest_minute, latest_score, latest_stats, "GREEN - condicoes atingidas")
                     RED_CONFIRM_PENDING.pop(alert.id, None)
                     continue
 
@@ -977,6 +1057,12 @@ def follow_alerts(session):
             if (now_sp() - pending["seen_at"]).total_seconds() < RED_CONFIRM_SECONDS:
                 continue
 
+            # Final refresh to avoid stale score in RED message.
+            final_payload = fetch_match_stats_fresh(session, alert.url, attempts=2, delay=1)
+            if final_payload:
+                latest_minute = final_payload.get("minute") or latest_minute
+                latest_score = final_payload.get("score") or latest_score
+                latest_stats = final_payload.get("stats", {}) or latest_stats
             RED_CONFIRM_PENDING.pop(alert.id, None)
             update_alert_status(alert, "red", latest_minute, latest_score, latest_stats, "❌ RED - prazo do GREEN expirou")
             continue
