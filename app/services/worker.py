@@ -990,6 +990,15 @@ def follow_alerts(session):
                     if latest_payload:
                         latest_score = latest_payload.get("score") or alert.last_score
                         latest_minute = latest_payload.get("minute") or alert.result_minute
+                        # Only allow correction if there was a new goal after RED.
+                        red_score = alert.ht_score or alert.last_score or alert.initial_score
+                        if red_score and latest_score:
+                            red_home, red_away = parse_score(red_score)
+                            latest_home, latest_away = parse_score(latest_score)
+                            if (latest_home + latest_away) <= (red_home + red_away) and latest_home <= red_home and latest_away <= red_away:
+                                continue
+                        if alert.result_minute is not None and latest_minute is not None and latest_minute <= alert.result_minute:
+                            continue
                         green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"]
                         base_stats = None
                         if alert.initial_stats_json:

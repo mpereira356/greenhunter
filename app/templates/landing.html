@@ -4,313 +4,870 @@
 {% block main_class %}landing-shell{% endblock %}
 
 {% block content %}
-  <!-- Header / Navigation -->
-  <header class="landing-nav landing-animate landing-delay-1">
-    <div class="landing-brand">
-      <div class="brand-icon">GH</div>
-      <div>
-        <div class="landing-brand-title">GreenHunter</div>
-        <div class="text-muted small">Inteligência em Tempo Real</div>
+  <header class="gh-nav">
+    <div class="gh-brand">
+      <div class="gh-mark">GH</div>
+      <div class="gh-brand-text">
+        <div class="gh-brand-title">GreenHunter</div>
+        <div class="gh-brand-sub">Inteligência em Tempo Real</div>
       </div>
     </div>
-    <nav class="d-none d-md-flex gap-4 me-auto ms-5">
-      <a href="#features" class="text-muted small fw-bold">Funcionalidades</a>
-      <a href="#how-it-works" class="text-muted small fw-bold">Como Funciona</a>
-      <a href="#pricing" class="text-muted small fw-bold">Planos</a>
+    <nav class="gh-links d-none d-md-flex">
+      <a href="#features">Funcionalidades</a>
+      <a href="#engine">Como Funciona</a>
+      <a href="#pricing">Planos</a>
     </nav>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-secondary" href="{{ url_for('auth.login') }}">Entrar</a>
-      <a class="btn btn-primary" href="{{ url_for('auth.register') }}">Criar conta</a>
+    <div class="gh-cta">
+      <a class="btn btn-ghost" href="{{ url_for('auth.login') }}">Entrar</a>
+      <a class="btn btn-accent" href="{{ url_for('auth.register') }}">Criar conta</a>
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <section class="landing-hero mb-5">
-    <div class="landing-hero-content landing-animate landing-delay-2">
-      <div class="landing-badge">
-        <i class="bi bi-cpu-fill me-1"></i> Bet Intelligence AI
-      </div>
-      <h1 class="mt-3">Pare de "caçar" jogos. Deixe que o GreenHunter encontre o valor para você.</h1>
-      <p class="lead mb-4">
-        Monitoramos milhares de partidas simultaneamente. Receba alertas cirúrgicos no Telegram baseados em estatísticas reais e padrões vencedores.
+  <section class="gh-hero">
+    <div class="gh-hero-left">
+      <div class="gh-chip">Bet Intelligence AI</div>
+      <h1>Transforme leitura de jogo em sinais cirúrgicos, em tempo real.</h1>
+      <p>
+        O GreenHunter monitora milhares de partidas ao vivo, cruza estatísticas e
+        envia alertas de valor direto no seu Telegram com latência mínima.
       </p>
-      <div class="landing-cta">
-        <a class="btn btn-primary btn-lg px-5 shadow-lg" href="{{ url_for('auth.register') }}">
-          Começar Agora <i class="bi bi-arrow-right ms-2"></i>
-        </a>
-        <a class="btn btn-outline-secondary btn-lg" href="#how-it-works">Ver Demonstração</a>
+      <div class="gh-hero-actions">
+        <a class="btn btn-accent btn-lg" href="{{ url_for('auth.register') }}">Começar agora</a>
+        <a class="btn btn-ghost btn-lg" href="#engine">Ver como funciona</a>
       </div>
-      <div class="landing-metrics mt-4">
-        <div class="row g-3">
-          <div class="col-6 col-md-4">
-            <div class="landing-metric">
-              <span class="landing-metric-title">Latência</span>
-              <span class="landing-metric-value text-success">< 1s</span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4">
-            <div class="landing-metric">
-              <span class="landing-metric-title">Partidas/Dia</span>
-              <span class="landing-metric-value">2.500+</span>
-            </div>
-          </div>
-          <div class="col-12 col-md-4 d-none d-md-block">
-            <div class="landing-metric">
-              <span class="landing-metric-title">Precisão</span>
-              <span class="landing-metric-value">99.9%</span>
-            </div>
-          </div>
+      <div class="gh-stats">
+        <div class="gh-stat">
+          <span class="gh-stat-label">Latência</span>
+          <span class="gh-stat-value">< 1s</span>
+        </div>
+        <div class="gh-stat">
+          <span class="gh-stat-label">Partidas/dia</span>
+          <span class="gh-stat-value">2.500+</span>
+        </div>
+        <div class="gh-stat">
+          <span class="gh-stat-label">Precisão</span>
+          <span class="gh-stat-value">99.9%</span>
         </div>
       </div>
     </div>
-    <div class="landing-hero-panel landing-animate landing-delay-3">
-      <!-- Simulação de Alerta -->
-      <div class="landing-card border-primary shadow-lg transform-hover mb-3" style="border-left: 4px solid var(--primary) !important;">
-        <div class="d-flex justify-content-between align-items-start">
+    <div class="gh-hero-right">
+      <div class="gh-live-card">
+        <div class="gh-live-head">
           <div>
-            <div class="landing-card-title text-primary">
-              <i class="bi bi-bell-fill me-2"></i> Alerta de Valor: Over 0.5 HT
-            </div>
-            <div class="landing-card-muted">Real Madrid vs Barcelona</div>
+            <div class="gh-live-title">Alerta de Valor: Over 0.5 HT</div>
+            <div class="gh-live-sub">Real Madrid vs Barcelona</div>
           </div>
-          <span class="badge bg-success">LIVE</span>
+          <span class="gh-pill">LIVE</span>
         </div>
-        <div class="mt-3 row text-center g-2">
-          <div class="col-4">
-            <div class="small text-muted">Tempo</div>
-            <div class="fw-bold">28'</div>
+        <div class="gh-live-grid">
+          <div>
+            <span>Tempo</span>
+            <strong>28'</strong>
           </div>
-          <div class="col-4">
-            <div class="small text-muted">Ataques P.</div>
-            <div class="fw-bold">18 x 12</div>
+          <div>
+            <span>Ataques P.</span>
+            <strong>18 x 12</strong>
           </div>
-          <div class="col-4">
-            <div class="small text-muted">Chutes</div>
-            <div class="fw-bold">5 x 2</div>
+          <div>
+            <span>Chutes</span>
+            <strong>5 x 2</strong>
           </div>
         </div>
-        <div class="mt-3">
-          <div class="progress" style="height: 6px;">
-            <div class="progress-bar bg-primary" role="progressbar" style="width: 75%"></div>
-          </div>
-          <div class="small text-muted mt-1 text-center">Probabilidade: 84%</div>
+        <div class="gh-live-bar">
+          <div class="gh-live-bar-fill"></div>
         </div>
+        <div class="gh-live-foot">Probabilidade: 84%</div>
       </div>
-      
-      <div class="landing-card opacity-75">
-        <div class="landing-card-title">
-          <i class="bi bi-gear-fill me-2"></i> Sua Estratégia Ativa
-        </div>
-        <div class="landing-card-muted">Filtro: Pressão Total (Home)</div>
-        <div class="mt-2 small">
-          <span class="badge bg-light text-dark border">AP > 1.2/min</span>
-          <span class="badge bg-light text-dark border">Posse > 60%</span>
+      <div class="gh-rule-card">
+        <div class="gh-rule-title">Sua Estratégia Ativa</div>
+        <div class="gh-rule-sub">Filtro: Pressão Total (Home)</div>
+        <div class="gh-tags">
+          <span>AP > 1.2/min</span>
+          <span>Posse > 60%</span>
+          <span>Chutes > 5</span>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Features Section -->
-  <section id="features" class="py-5">
-    <div class="text-center mb-5 landing-animate landing-delay-2">
-      <h2 class="fw-800">Tudo o que você precisa para lucrar no live</h2>
-      <p class="text-muted">Ferramentas profissionais simplificadas para o apostador moderno.</p>
+  <section id="features" class="gh-section">
+    <div class="gh-section-head">
+      <h2>Tudo o que você precisa para lucrar no live</h2>
+      <p>Ferramentas profissionais simplificadas para o apostador moderno.</p>
     </div>
-    <div class="landing-grid">
-      <div class="landing-feature landing-animate landing-delay-2">
-        <div class="feature-icon mb-3 bg-primary-soft">
-          <i class="bi bi-funnel text-primary fs-4"></i>
-        </div>
+    <div class="gh-feature-grid">
+      <article class="gh-feature">
+        <div class="gh-feature-icon">⛃</div>
         <h3>Filtros Avançados</h3>
-        <p class="text-muted mb-0">Crie regras complexas cruzando tempo de jogo, placar, escanteios, chutes e ataques perigosos.</p>
-      </div>
-      <div class="landing-feature landing-animate landing-delay-3">
-        <div class="feature-icon mb-3 bg-info-soft">
-          <i class="bi bi-lightning-charge text-info fs-4"></i>
-        </div>
+        <p>Crie regras cruzando tempo de jogo, placar, escanteios, chutes e ataques perigosos.</p>
+      </article>
+      <article class="gh-feature">
+        <div class="gh-feature-icon">⚡</div>
         <h3>Alertas Instantâneos</h3>
-        <p class="text-muted mb-0">Integração nativa com Telegram. Receba o sinal com todas as estatísticas direto no seu celular.</p>
-      </div>
-      <div class="landing-feature landing-animate landing-delay-4">
-        <div class="feature-icon mb-3 bg-warning-soft">
-          <i class="bi bi-graph-up-arrow text-warning fs-4"></i>
-        </div>
+        <p>Integração nativa com Telegram. Receba o sinal com todas as estatísticas no celular.</p>
+      </article>
+      <article class="gh-feature">
+        <div class="gh-feature-icon">▢</div>
         <h3>Backtest de Estratégias</h3>
-        <p class="text-muted mb-0">Analise o histórico de sinais e veja como sua estratégia teria performado no passado.</p>
-      </div>
+        <p>Analise o histórico de sinais e veja como sua estratégia teria performado.</p>
+      </article>
     </div>
   </section>
 
-  <!-- How it Works -->
-  <section id="how-it-works" class="py-5 bg-light rounded-4 px-4 my-5">
-    <div class="row align-items-center">
-      <div class="col-lg-6 landing-animate landing-delay-2">
-        <h2 class="fw-800 mb-4">Como o GreenHunter transforma seus resultados</h2>
-        <div class="landing-step-list">
-          <div class="landing-step-item mb-4">
-            <div class="d-flex gap-3">
-              <div class="step-number">1</div>
-              <div>
-                <h4 class="mb-1">Configure seus gatilhos</h4>
-                <p class="text-muted">Defina exatamente o que você procura: "Mínimo de 10 ataques perigosos nos últimos 10 minutos".</p>
-              </div>
+  <section id="engine" class="gh-section gh-surface">
+    <div class="gh-engine">
+      <div class="gh-engine-left">
+        <h2>Como o GreenHunter transforma seus resultados</h2>
+        <div class="gh-steps">
+          <div class="gh-step">
+            <div class="gh-step-number">1</div>
+            <div>
+              <h4>Configure seus gatilhos</h4>
+              <p>Defina exatamente o que procura: "10 ataques perigosos nos últimos 10 minutos".</p>
             </div>
           </div>
-          <div class="landing-step-item mb-4">
-            <div class="d-flex gap-3">
-              <div class="step-number">2</div>
-              <div>
-                <h4 class="mb-1">Monitoramento 24/7</h4>
-                <p class="text-muted">Nossos servidores escaneiam jogos do mundo todo, desde a Champions League até a Série C do Uzbequistão.</p>
-              </div>
+          <div class="gh-step">
+            <div class="gh-step-number">2</div>
+            <div>
+              <h4>Monitoramento 24/7</h4>
+              <p>Escaneamos jogos do mundo todo, da Champions League à Série C do Uzbequistão.</p>
             </div>
           </div>
-          <div class="landing-step-item">
-            <div class="d-flex gap-3">
-              <div class="step-number">3</div>
-              <div>
-                <h4 class="mb-1">Ação e Green</h4>
-                <p class="text-muted">Receba o alerta, clique no link direto para a partida e faça sua entrada com a confiança dos dados.</p>
-              </div>
+          <div class="gh-step">
+            <div class="gh-step-number">3</div>
+            <div>
+              <h4>Ação e Green</h4>
+              <p>Receba o alerta, clique no link da partida e faça sua entrada com confiança.</p>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-lg-6 mt-5 mt-lg-0 landing-animate landing-delay-3 text-center">
-        <img src="https://img.freepik.com/free-vector/data-analysis-concept-illustration_114360-8014.jpg" alt="Data Analysis" class="img-fluid rounded-4 shadow">
-      </div>
-    </div>
-  </section>
-
-  <!-- Pricing -->
-  <section id="pricing" class="py-5">
-    <div class="text-center mb-5">
-      <h2 class="fw-800">Planos que cabem na sua banca</h2>
-      <p class="text-muted">Escolha a melhor opção para sua jornada como trader esportivo.</p>
-    </div>
-    <div class="row g-4 justify-content-center">
-      <div class="col-md-4">
-        <div class="card h-100 border-0 shadow-sm p-4">
-          <div class="card-body text-center">
-            <h5 class="text-muted">Iniciante</h5>
-            <h2 class="fw-800 my-3">Grátis</h2>
-            <ul class="list-unstyled text-start mb-4">
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> 2 Regras Ativas</li>
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Alertas no Telegram</li>
-              <li class="mb-2 text-muted"><i class="bi bi-x text-danger me-2"></i> Histórico de 24h</li>
-              <li class="text-muted"><i class="bi bi-x text-danger me-2"></i> Backtest</li>
-            </ul>
-            <a href="{{ url_for('auth.register') }}" class="btn btn-outline-primary w-100">Começar Agora</a>
+      <div class="gh-engine-right">
+        <div class="gh-graph-card">
+          <div class="gh-graph-title">Intensidade de Pressão</div>
+          <div class="gh-graph-bars">
+            <span style="height: 40%"></span>
+            <span style="height: 62%"></span>
+            <span style="height: 78%"></span>
+            <span style="height: 52%"></span>
+            <span style="height: 88%"></span>
+            <span style="height: 64%"></span>
           </div>
+          <div class="gh-graph-sub">Últimos 10 minutos</div>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card h-100 border-primary shadow-lg p-4 position-relative overflow-hidden">
-          <div class="bg-primary text-white text-center position-absolute top-0 start-50 translate-middle-x py-1 px-4 small fw-bold" style="border-radius: 0 0 10px 10px;">MAIS POPULAR</div>
-          <div class="card-body text-center">
-            <h5 class="text-muted">Pro Hunter</h5>
-            <h2 class="fw-800 my-3">R$ 49,90<span class="fs-6 text-muted fw-normal">/mês</span></h2>
-            <ul class="list-unstyled text-start mb-4">
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Regras Ilimitadas</li>
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Alertas Prioritários</li>
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Histórico Completo</li>
-              <li class="mb-2"><i class="bi bi-check2 text-success me-2"></i> Backtest Ilimitado</li>
-            </ul>
-            <a href="{{ url_for('auth.register') }}" class="btn btn-primary w-100 shadow">Assinar Agora</a>
-          </div>
+        <div class="gh-pulse-card">
+          <div class="gh-pulse-title">Sinal detectado</div>
+          <div class="gh-pulse-metric">AP 1.8/min</div>
+          <div class="gh-pulse-sub">Acima do limite da regra</div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="py-5">
-    <div class="max-width-800 mx-auto">
-      <h3 class="fw-800 mb-4 text-center">Dúvidas Frequentes</h3>
-      <div class="accordion accordion-flush" id="faqAccordion">
-        <div class="accordion-item bg-transparent">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed bg-transparent fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-              Preciso deixar o computador ligado?
-            </button>
-          </h2>
-          <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-            <div class="accordion-body text-muted">
-              Não! O GreenHunter roda 100% na nuvem. Uma vez configurada sua regra, você pode fechar o site e os alertas chegarão no seu Telegram automaticamente.
-            </div>
-          </div>
+  <section id="pricing" class="gh-section">
+    <div class="gh-section-head">
+      <h2>Planos que cabem na sua banca</h2>
+      <p>Escolha a melhor opção para sua jornada como trader esportivo.</p>
+    </div>
+    <div class="gh-pricing">
+      <div class="gh-price-card">
+        <div class="gh-price-label">Iniciante</div>
+        <div class="gh-price">Grátis</div>
+        <div class="gh-price-sub">Para testar o fluxo</div>
+        <div class="gh-price-list">
+          <span>2 Regras Ativas</span>
+          <span>Alertas no Telegram</span>
+          <span class="muted">Histórico de 24h</span>
+          <span class="muted">Backtest</span>
         </div>
-        <div class="accordion-item bg-transparent">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed bg-transparent fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-              Quais esportes são monitorados?
-            </button>
-          </h2>
-          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-            <div class="accordion-body text-muted">
-              Atualmente focamos 100% em Futebol, cobrindo mais de 1.500 ligas ao redor do mundo, incluindo divisões de base e ligas alternativas.
-            </div>
-          </div>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-ghost w-100">Começar agora</a>
+      </div>
+      <div class="gh-price-card gh-price-highlight">
+        <div class="gh-price-badge">MAIS POPULAR</div>
+        <div class="gh-price-label">Pro Hunter</div>
+        <div class="gh-price">R$ 49,90 <span>/mês</span></div>
+        <div class="gh-price-sub">Para operar como profissional</div>
+        <div class="gh-price-list">
+          <span>Regras Ilimitadas</span>
+          <span>Alertas Prioritários</span>
+          <span>Histórico Completo</span>
+          <span>Backtest Ilimitado</span>
         </div>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-accent w-100">Assinar agora</a>
       </div>
     </div>
   </section>
 
-  <!-- Final CTA -->
-  <section class="landing-cta-panel landing-animate landing-delay-2 text-center py-5">
-    <h2 class="mb-3 fw-800">Chega de perder o timing das entradas.</h2>
-    <p class="lead mb-4">Junte-se a mais de 1.200 traders que automatizaram sua leitura de jogo.</p>
-    <div class="d-flex gap-3 justify-content-center flex-wrap">
-      <a class="btn btn-light btn-lg fw-bold px-5" href="{{ url_for('auth.register') }}">Criar Minha Conta Grátis</a>
+  <section class="gh-section gh-faq">
+    <div class="gh-section-head">
+      <h2>Dúvidas Frequentes</h2>
+      <p>Respostas diretas para decisões rápidas.</p>
+    </div>
+    <div class="gh-faq-grid">
+      <div class="gh-faq-item">
+        <h4>Preciso deixar o computador ligado?</h4>
+        <p>Não. O GreenHunter roda na nuvem e envia alertas automaticamente para o Telegram.</p>
+      </div>
+      <div class="gh-faq-item">
+        <h4>Quais esportes são monitorados?</h4>
+        <p>Hoje focamos 100% em Futebol, cobrindo milhares de ligas e divisões.</p>
+      </div>
+      <div class="gh-faq-item">
+        <h4>Em quanto tempo recebo o alerta?</h4>
+        <p>Em geral, abaixo de 1 segundo após a condição ser atingida.</p>
+      </div>
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer class="mt-5 pt-5 border-top">
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="landing-brand mb-3">
-          <div class="brand-icon">GH</div>
-          <span class="landing-brand-title">GreenHunter</span>
-        </div>
-        <p class="small text-muted">A ferramenta definitiva para quem busca profissionalismo e agilidade no mercado de apostas esportivas.</p>
+  <section class="gh-final">
+    <div>
+      <h2>Chega de perder o timing das entradas.</h2>
+      <p>Junte-se a traders que automatizaram sua leitura de jogo.</p>
+    </div>
+    <div>
+      <a class="btn btn-accent btn-lg" href="{{ url_for('auth.register') }}">Criar minha conta grátis</a>
+    </div>
+  </section>
+
+  <footer class="gh-footer">
+    <div>
+      <div class="gh-brand">
+        <div class="gh-mark">GH</div>
+        <div class="gh-brand-title">GreenHunter</div>
       </div>
-      <div class="col-md-2 ms-auto">
-        <h6 class="fw-bold">Produto</h6>
-        <ul class="list-unstyled small">
-          <li><a href="#features" class="text-muted">Funcionalidades</a></li>
-          <li><a href="#pricing" class="text-muted">Preços</a></li>
-          <li><a href="#" class="text-muted">API</a></li>
-        </ul>
+      <p>A ferramenta definitiva para quem busca profissionalismo e agilidade no mercado de apostas esportivas.</p>
+    </div>
+    <div class="gh-footer-links">
+      <div>
+        <h6>Produto</h6>
+        <a href="#features">Funcionalidades</a>
+        <a href="#pricing">Preços</a>
+        <a href="#">API</a>
       </div>
-      <div class="col-md-2">
-        <h6 class="fw-bold">Suporte</h6>
-        <ul class="list-unstyled small">
-          <li><a href="#" class="text-muted">Central de Ajuda</a></li>
-          <li><a href="#" class="text-muted">Contato</a></li>
-          <li><a href="#" class="text-muted">Telegram</a></li>
-        </ul>
+      <div>
+        <h6>Suporte</h6>
+        <a href="#">Central de Ajuda</a>
+        <a href="#">Contato</a>
+        <a href="#">Telegram</a>
       </div>
     </div>
-    <div class="mt-5 pb-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
-      <span class="small text-muted">&copy; 2026 GreenHunter. Todos os direitos reservados.</span>
-      <div class="d-flex gap-3">
-        <a href="#" class="text-muted small">Termos de Uso</a>
-        <a href="#" class="text-muted small">Privacidade</a>
+    <div class="gh-footer-bottom">
+      <span>&copy; 2026 GreenHunter. Todos os direitos reservados.</span>
+      <div class="gh-footer-legal">
+        <a href="#">Termos de Uso</a>
+        <a href="#">Privacidade</a>
       </div>
     </div>
   </footer>
 
   <style>
-    .fw-800 { font-weight: 800; }
-    .bg-primary-soft { background: rgba(16, 185, 129, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-    .bg-info-soft { background: rgba(59, 130, 246, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-    .bg-warning-soft { background: rgba(245, 158, 11, 0.1); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-    .step-number { width: 32px; height: 32px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
-    .max-width-800 { max-width: 800px; }
-    .transform-hover { transition: transform 0.3s ease; }
-    .transform-hover:hover { transform: translateY(-5px); }
-    /* Adicionando suporte a ícones do Bootstrap para facilitar */
-    @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css");
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Archivo:wght@400;600;700&display=swap");
+
+    :root {
+      --gh-bg: #0b0d12;
+      --gh-surface: #121723;
+      --gh-card: #171e2b;
+      --gh-accent: #f6c445;
+      --gh-accent-dark: #d7a826;
+      --gh-text: #f4f6fb;
+      --gh-muted: #b5bdc9;
+      --gh-line: rgba(255, 255, 255, 0.08);
+    }
+
+    .landing-shell {
+      background: radial-gradient(1200px 500px at 15% 10%, #1a2436, transparent 65%),
+        radial-gradient(1000px 400px at 85% 0%, #2c1c1f, transparent 70%),
+        var(--gh-bg);
+      color: var(--gh-text);
+      font-family: "Archivo", system-ui, sans-serif;
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 32px 24px 80px;
+    }
+
+    .gh-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .gh-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .gh-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(140deg, #f6c445, #ff8a3d);
+      color: #1b1408;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .gh-brand-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .gh-brand-sub {
+      color: var(--gh-muted);
+      font-size: 0.85rem;
+    }
+
+    .gh-links a {
+      color: var(--gh-muted);
+      text-decoration: none;
+      margin-right: 24px;
+      font-weight: 600;
+    }
+
+    .gh-links a:hover {
+      color: var(--gh-text);
+    }
+
+    .gh-cta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border-radius: 999px;
+      font-weight: 600;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--gh-line);
+      color: var(--gh-text);
+      padding: 10px 20px;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--gh-accent);
+      color: var(--gh-accent);
+    }
+
+    .btn-accent {
+      background: linear-gradient(135deg, var(--gh-accent), #ff8a3d);
+      color: #1b1408;
+      border: none;
+      padding: 10px 22px;
+      box-shadow: 0 12px 30px rgba(246, 196, 69, 0.35);
+    }
+
+    .btn-accent:hover {
+      background: linear-gradient(135deg, #ffcc59, #ff9c53);
+      color: #15110a;
+    }
+
+    .gh-hero {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 36px;
+      align-items: center;
+      margin-bottom: 80px;
+    }
+
+    .gh-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--gh-line);
+      border-radius: 999px;
+      padding: 6px 16px;
+      color: var(--gh-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .gh-hero h1 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2.2rem, 4vw, 3.4rem);
+      font-weight: 700;
+      margin: 16px 0;
+    }
+
+    .gh-hero p {
+      color: var(--gh-muted);
+      font-size: 1.05rem;
+      max-width: 560px;
+    }
+
+    .gh-hero-actions {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .gh-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .gh-stat {
+      padding: 14px 16px;
+      border: 1px solid var(--gh-line);
+      border-radius: 14px;
+      background: rgba(15, 20, 30, 0.7);
+    }
+
+    .gh-stat-label {
+      color: var(--gh-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .gh-stat-value {
+      display: block;
+      font-weight: 700;
+      font-size: 1.2rem;
+      margin-top: 6px;
+    }
+
+    .gh-hero-right {
+      display: grid;
+      gap: 18px;
+    }
+
+    .gh-live-card,
+    .gh-rule-card,
+    .gh-graph-card,
+    .gh-pulse-card,
+    .gh-price-card,
+    .gh-faq-item {
+      background: var(--gh-card);
+      border: 1px solid var(--gh-line);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .gh-live-card {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gh-live-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      background: radial-gradient(circle at top right, rgba(246, 196, 69, 0.2), transparent 60%);
+      pointer-events: none;
+    }
+
+    .gh-live-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .gh-live-title {
+      font-weight: 700;
+    }
+
+    .gh-live-sub {
+      color: var(--gh-muted);
+      font-size: 0.9rem;
+    }
+
+    .gh-pill {
+      background: #1b2817;
+      border: 1px solid rgba(88, 227, 139, 0.4);
+      color: #58e38b;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      height: fit-content;
+    }
+
+    .gh-live-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    .gh-live-grid span {
+      color: var(--gh-muted);
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .gh-live-bar {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      margin: 18px 0 8px;
+      overflow: hidden;
+    }
+
+    .gh-live-bar-fill {
+      height: 100%;
+      width: 84%;
+      background: linear-gradient(90deg, var(--gh-accent), #ff8a3d);
+      animation: gh-fill 4s ease-in-out infinite;
+    }
+
+    .gh-live-foot {
+      text-align: center;
+      color: var(--gh-muted);
+      font-size: 0.85rem;
+    }
+
+    .gh-rule-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .gh-rule-sub {
+      color: var(--gh-muted);
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
+
+    .gh-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .gh-tags span {
+      border: 1px solid var(--gh-line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      color: var(--gh-muted);
+    }
+
+    .gh-section {
+      margin: 70px 0;
+    }
+
+    .gh-section-head {
+      max-width: 720px;
+      margin-bottom: 36px;
+    }
+
+    .gh-section-head h2 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      margin-bottom: 8px;
+    }
+
+    .gh-section-head p {
+      color: var(--gh-muted);
+    }
+
+    .gh-feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .gh-feature {
+      padding: 24px;
+      background: var(--gh-card);
+      border: 1px solid var(--gh-line);
+      border-radius: 18px;
+    }
+
+    .gh-feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: rgba(246, 196, 69, 0.12);
+      color: var(--gh-accent);
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+    }
+
+    .gh-feature p {
+      color: var(--gh-muted);
+      margin: 0;
+    }
+
+    .gh-surface {
+      background: linear-gradient(135deg, rgba(25, 32, 48, 0.9), rgba(18, 23, 35, 0.6));
+      border: 1px solid var(--gh-line);
+      border-radius: 28px;
+      padding: 32px;
+    }
+
+    .gh-engine {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 32px;
+      align-items: center;
+    }
+
+    .gh-steps {
+      display: grid;
+      gap: 18px;
+    }
+
+    .gh-step {
+      display: flex;
+      gap: 16px;
+    }
+
+    .gh-step-number {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--gh-accent);
+      color: #1b1408;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .gh-step p {
+      color: var(--gh-muted);
+      margin: 0;
+    }
+
+    .gh-engine-right {
+      display: grid;
+      gap: 18px;
+    }
+
+    .gh-graph-bars {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      height: 120px;
+      margin: 18px 0;
+    }
+
+    .gh-graph-bars span {
+      width: 18px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--gh-accent), #ff8a3d);
+      animation: gh-rise 3s ease-in-out infinite alternate;
+    }
+
+    .gh-graph-sub {
+      color: var(--gh-muted);
+      font-size: 0.85rem;
+    }
+
+    .gh-pulse-card {
+      background: linear-gradient(145deg, rgba(246, 196, 69, 0.12), rgba(255, 138, 61, 0.2));
+      border-color: rgba(246, 196, 69, 0.3);
+    }
+
+    .gh-pulse-title {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.75rem;
+      color: var(--gh-muted);
+    }
+
+    .gh-pulse-metric {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 8px 0;
+    }
+
+    .gh-pulse-sub {
+      color: var(--gh-muted);
+    }
+
+    .gh-pricing {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .gh-price-card {
+      display: grid;
+      gap: 14px;
+    }
+
+    .gh-price-label {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--gh-muted);
+      font-size: 0.75rem;
+    }
+
+    .gh-price {
+      font-size: 2rem;
+      font-weight: 700;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .gh-price span {
+      font-size: 1rem;
+      color: var(--gh-muted);
+    }
+
+    .gh-price-sub {
+      color: var(--gh-muted);
+    }
+
+    .gh-price-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .gh-price-list span {
+      font-size: 0.95rem;
+    }
+
+    .gh-price-list .muted {
+      color: var(--gh-muted);
+    }
+
+    .gh-price-highlight {
+      border: 1px solid rgba(246, 196, 69, 0.4);
+      background: linear-gradient(170deg, rgba(246, 196, 69, 0.1), rgba(23, 30, 43, 0.9));
+      position: relative;
+    }
+
+    .gh-price-badge {
+      position: absolute;
+      top: -12px;
+      right: 18px;
+      background: var(--gh-accent);
+      color: #1b1408;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .gh-faq {
+      margin-top: 90px;
+    }
+
+    .gh-faq-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .gh-faq-item h4 {
+      margin-bottom: 10px;
+    }
+
+    .gh-faq-item p {
+      color: var(--gh-muted);
+      margin: 0;
+    }
+
+    .gh-final {
+      margin: 90px 0 60px;
+      padding: 32px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(246, 196, 69, 0.18), rgba(255, 138, 61, 0.12));
+      border: 1px solid rgba(246, 196, 69, 0.3);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .gh-footer {
+      border-top: 1px solid var(--gh-line);
+      padding-top: 32px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .gh-footer p {
+      color: var(--gh-muted);
+      max-width: 420px;
+    }
+
+    .gh-footer-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 18px;
+    }
+
+    .gh-footer-links a {
+      color: var(--gh-muted);
+      text-decoration: none;
+      margin-bottom: 6px;
+      display: inline-block;
+    }
+
+    .gh-footer-links a:hover {
+      color: var(--gh-text);
+    }
+
+    .gh-footer-bottom {
+      border-top: 1px solid var(--gh-line);
+      padding-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      color: var(--gh-muted);
+      font-size: 0.85rem;
+    }
+
+    .gh-footer-legal a {
+      color: var(--gh-muted);
+      text-decoration: none;
+      margin-left: 12px;
+    }
+
+    @keyframes gh-fill {
+      0% { width: 72%; }
+      50% { width: 88%; }
+      100% { width: 72%; }
+    }
+
+    @keyframes gh-rise {
+      from { transform: translateY(6px); opacity: 0.7; }
+      to { transform: translateY(-6px); opacity: 1; }
+    }
+
+    @media (max-width: 768px) {
+      .gh-nav {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .gh-links a {
+        margin-right: 16px;
+      }
+
+      .gh-final {
+        text-align: left;
+      }
+
+      .gh-footer-bottom {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
   </style>
 {% endblock %}
