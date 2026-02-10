@@ -4,6 +4,7 @@ import threading
 import time
 import unicodedata
 from urllib.parse import urlparse
+import tempfile
 
 import requests
 from bs4 import BeautifulSoup
@@ -22,6 +23,7 @@ _CF_LOCK = threading.Lock()
 _CF_LAST_SOLVED_AT = 0.0
 _CF_ALERT_LAST_SENT_AT = 0.0
 _BROWSER_DRIVER = None
+_BROWSER_PROFILE_DIR = None
 
 
 def make_session():
@@ -156,19 +158,71 @@ def _build_browser_driver():
         print(f"[scraper] falha ao carregar selenium: {exc}")
         return None
 
-    profile_dir = os.environ.get("BETSAPI_BROWSER_PROFILE_DIR", "data/browser_profile")
-    profile_dir = os.path.abspath(profile_dir)
-    os.makedirs(profile_dir, exist_ok=True)
+    # Use a stable profile dir by default, but fall back to a temp dir in headless
+    # or when explicitly requested to avoid profile locks on VPS.
+    global _BROWSER_PROFILE_DIR
+    profile_dir_env = os.environ.get("BETSAPI_BROWSER_PROFILE_DIR", "data/browser_profile").strip()
+    force_temp = os.environ.get("BETSAPI_BROWSER_PROFILE_TEMP", "0").strip().lower() in ("1", "true", "yes")
+
+    headless_env = os.environ.get("BETSAPI_BROWSER_HEADLESS", "0").strip().lower() in ("1", "true", "yes")
+    forced_display = (os.environ.get("BETSAPI_DISPLAY") or "").strip()
+    if forced_display:
+        os.environ["DISPLAY"] = forced_display
+    elif not os.environ.get("DISPLAY"):
+        # Common default for local GUI sessions.
+        os.environ["DISPLAY"] = ":0"
+    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    headless = headless_env or not has_display
+    profile_dir = None
+    lock_detected = False
+    if profile_dir_env and not headless and not force_temp:
+        candidate_dir = os.path.abspath(profile_dir_env)
+        # Chrome creates these files when a profile is in use.
+        lock_files = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+        lock_detected = any(os.path.exists(os.path.join(candidate_dir, lf)) for lf in lock_files)
+        if not lock_detected:
+            profile_dir = candidate_dir
+
+    if force_temp or headless or not profile_dir_env or profile_dir is None:
+        if _BROWSER_PROFILE_DIR is None:
+            _BROWSER_PROFILE_DIR = tempfile.mkdtemp(prefix="gh_chrome_profile_")
+        profile_dir = _BROWSER_PROFILE_DIR
+    else:
+        os.makedirs(profile_dir, exist_ok=True)
 
     options = Options()
+    chrome_binary = (os.environ.get("BETSAPI_CHROME_BINARY") or os.environ.get("CHROME_BIN") or "").strip()
+    if chrome_binary:
+        options.binary_location = chrome_binary
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--start-maximized")
     options.add_argument("--disable-notifications")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument("--remote-debugging-port=9222")
     options.add_argument(f"--user-data-dir={profile_dir}")
 
-    headless = os.environ.get("BETSAPI_BROWSER_HEADLESS", "0").strip().lower() in ("1", "true", "yes")
+    print(
+        f"[scraper] chrome display={'yes' if has_display else 'no'} "
+        f"display_var={os.environ.get('DISPLAY') or 'unset'} "
+        f"headless={'yes' if headless else 'no'} "
+        f"profile={profile_dir} "
+        f"lock={'yes' if lock_detected else 'no'} "
+        f"binary={chrome_binary or 'auto'}"
+    )
+
     if headless:
         options.add_argument("--headless=new")
+        options.add_argument("--window-size=1280,720")
+
+    chromedriver_path = (os.environ.get("BETSAPI_CHROMEDRIVER") or "").strip()
+    if chromedriver_path:
+        from selenium.webdriver.chrome.service import Service
+        service = Service(executable_path=chromedriver_path)
+        return webdriver.Chrome(service=service, options=options)
 
     return webdriver.Chrome(options=options)
 

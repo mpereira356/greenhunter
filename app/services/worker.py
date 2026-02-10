@@ -1154,6 +1154,56 @@ def finalize_full_time(session):
         if not stats_payload: continue
         minute = stats_payload.get("minute") or 0
         if is_full_time(stats_payload.get("time_text", ""), minute):
+            # If still pending, decide final GREEN/RED now to avoid leaving pending alerts.
+            if alert.status == "pending":
+                rule = alert.rule
+                current_score = stats_payload.get("score")
+                stats = stats_payload.get("stats", {}) or {}
+                base_stats = None
+                if alert.initial_stats_json:
+                    try:
+                        base_stats = json.loads(alert.initial_stats_json)
+                    except Exception:
+                        base_stats = None
+                stats_for_outcome = (
+                    apply_alert_delta(stats, base_stats, minute, alert.alert_minute)
+                    if base_stats else stats
+                )
+                stats_for_outcome = merge_score_delta_into_stats(
+                    stats_for_outcome, alert.initial_score, current_score
+                )
+
+                green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] if rule else []
+                red_conds = [c for c in rule.outcome_conditions if c.outcome_type == "red"] if rule else []
+
+                if green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
+                    update_alert_status(
+                        alert,
+                        "green",
+                        minute,
+                        current_score,
+                        stats,
+                        "✅ GREEN - fim do jogo",
+                    )
+                elif red_conds and evaluate_outcome_conditions(red_conds, stats_for_outcome):
+                    update_alert_status(
+                        alert,
+                        "red",
+                        minute,
+                        current_score,
+                        stats,
+                        "❌ RED - fim do jogo",
+                    )
+                else:
+                    # If no GREEN at FT, finalize as RED to avoid pending.
+                    update_alert_status(
+                        alert,
+                        "red",
+                        minute,
+                        current_score,
+                        stats,
+                        "❌ RED - fim do jogo",
+                    )
             alert.ft_score = stats_payload.get("score")
             alert.ft_stats_json = stats_to_json(stats_payload["stats"])
             alert.ft_completed = True
