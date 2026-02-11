@@ -43,6 +43,17 @@ def send_message(token: str, chat_id: str, text: str):
             # Fallback for markdown or formatting errors in dynamic text.
             resp = _post_with_retry(session, url, fallback_payload)
         if resp.status_code != 200:
+            description = ""
+            try:
+                body = resp.json()
+                description = (body.get("description") or "").strip()
+            except Exception:
+                description = ""
+            if "chat not found" in description.lower():
+                return (
+                    False,
+                    "Chat nao encontrado. Adicione o bot ao grupo e envie uma mensagem no grupo antes de testar.",
+                )
             print(f"[telegram] falha ao enviar (HTTP {resp.status_code}): {resp.text[:180]}")
             return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
         return True, "ok"

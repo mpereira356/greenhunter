@@ -763,6 +763,18 @@ def process_live_games(session):
             user = rule.user
             existing = MatchAlert.query.filter_by(game_id=game["game_id"], rule_id=rule.id).first()
             if existing: continue
+            # Optional league filter: if configured, only emit alerts for matching leagues.
+            allowed_json = getattr(rule, "allowed_leagues_json", None)
+            if allowed_json:
+                try:
+                    allowed_items = json.loads(allowed_json)
+                except Exception:
+                    allowed_items = []
+                if isinstance(allowed_items, list) and allowed_items:
+                    allowed = {str(x).strip().casefold() for x in allowed_items if str(x).strip()}
+                    league_name = str(stats_payload.get("league") or "").strip().casefold()
+                    if allowed and league_name not in allowed:
+                        continue
 
             stats_for_rule = stats_payload["stats"]
             h_score, a_score = parse_score(stats_payload.get("score", ""))
