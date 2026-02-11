@@ -242,6 +242,11 @@
     </div>
     <div class="league-wrap mt-2" style="display:none;">
       <div class="small text-muted mb-1">Selecione as ligas/campeonatos para esta regra:</div>
+      <div class="d-flex gap-2 align-items-center mb-2">
+        <button type="button" class="btn btn-sm btn-outline-primary league-select-all">Marcar todas</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary league-select-none">Limpar</button>
+        <div class="small text-muted ms-auto league-count"></div>
+      </div>
       <input type="text" class="form-control form-control-sm league-search" placeholder="Filtrar ligas...">
       <div class="league-list mt-2" style="max-height: 220px; overflow:auto;"></div>
       <input type="hidden" class="league-selected-json" value="[]">
@@ -413,6 +418,16 @@
     const leagueList = cond.querySelector('.league-list');
     const leagueSearch = cond.querySelector('.league-search');
     const leagueHidden = cond.querySelector('.league-selected-json');
+    const leagueSelectAllBtn = cond.querySelector('.league-select-all');
+    const leagueSelectNoneBtn = cond.querySelector('.league-select-none');
+    const leagueCountEl = cond.querySelector('.league-count');
+
+    function updateLeagueCount() {
+      if (!leagueCountEl) return;
+      const selected = getRowLeagues().length;
+      const total = Array.isArray(availableLeagues) ? availableLeagues.length : 0;
+      leagueCountEl.textContent = total ? `Selecionadas: ${selected} / ${total}` : `Selecionadas: ${selected}`;
+    }
 
     function getRowLeagues() {
       return parseJsonList(leagueHidden ? leagueHidden.value : '[]')
@@ -435,6 +450,7 @@
       });
       leagueHidden.value = JSON.stringify(out);
       syncAllowedLeaguesFromRows();
+      updateLeagueCount();
     }
 
     function renderLeagueList() {
@@ -479,6 +495,7 @@
           setRowLeagues(Array.from(map.values()));
         });
       });
+      updateLeagueCount();
     }
 
     function syncStatMode() {
@@ -511,6 +528,18 @@
     }
 
     if (leagueSearch) leagueSearch.addEventListener('input', renderLeagueList);
+    if (leagueSelectAllBtn) {
+      leagueSelectAllBtn.addEventListener('click', () => {
+        setRowLeagues(Array.isArray(availableLeagues) ? availableLeagues : []);
+        renderLeagueList();
+      });
+    }
+    if (leagueSelectNoneBtn) {
+      leagueSelectNoneBtn.addEventListener('click', () => {
+        setRowLeagues([]);
+        renderLeagueList();
+      });
+    }
 
     let prevStatValue = statSelect ? statSelect.value : '';
     if (statSelect) {
