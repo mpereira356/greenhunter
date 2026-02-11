@@ -13,6 +13,7 @@
   </div>
 
   <form method="post" id="rule-form" class="rule-form" novalidate>
+    <input type="hidden" name="allowed_leagues_json" id="allowed-leagues-json" value="">
     
     <!-- PASSO 1: IDENTIFICAÇÃO -->
     <div class="card border-0 shadow-sm mb-4">
@@ -211,6 +212,7 @@
             <option value="goals">⚽ Gols</option>
             <option value="yellow-cards">🟨 Cartões Amarelos</option>
             <option value="red-cards">🔴 Cartões Vermelhos</option>
+            <option value="League">🏆 Liga/Campeonato</option>
             <option value="Minute">⏱️ Minutos</option>
           </optgroup>
         </select>
@@ -222,7 +224,7 @@
           <option value="away">Visitante</option>
         </select>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-2 operator-wrap">
         <select class="form-select stat-operator">
           <option value=">=">&gt;=</option>
           <option value="<=">&lt;=</option>
@@ -231,12 +233,18 @@
           <option value="<"><</option>
         </select>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-2 value-wrap">
         <input class="form-control stat-value" type="number" value="0">
       </div>
       <div class="col-md-2 text-end">
         <button type="button" class="btn btn-sm btn-outline-danger remove-condition">✕</button>
       </div>
+    </div>
+    <div class="league-wrap mt-2" style="display:none;">
+      <div class="small text-muted mb-1">Selecione as ligas/campeonatos para esta regra:</div>
+      <input type="text" class="form-control form-control-sm league-search" placeholder="Filtrar ligas...">
+      <div class="league-list mt-2" style="max-height: 220px; overflow:auto;"></div>
+      <input type="hidden" class="league-selected-json" value="[]">
     </div>
   </div>
 </template>
@@ -287,6 +295,48 @@
   const existingConditions = {{ (form_conditions if form_conditions else (rule.conditions if rule else [])) | tojson }};
   const existingOutcomeGreen = {{ (form_outcome_green if form_outcome_green else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'green') | list if rule else [])) | tojson }};
   const existingOutcomeRed = {{ (form_outcome_red if form_outcome_red else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'red') | list if rule else [])) | tojson }};
+  const availableLeagues = {{ (available_leagues if available_leagues is defined else []) | tojson }};
+  const initialAllowedLeagues = {{ (allowed_leagues if allowed_leagues is defined else []) | tojson }};
+
+  const allowedLeaguesHidden = document.getElementById('allowed-leagues-json');
+
+  function normalizeLeagueName(value) {
+    return (value || '').toString().trim().replace(/\s+/g, ' ');
+  }
+
+  function parseJsonList(value) {
+    try {
+      const data = JSON.parse(value || '[]');
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function getAllowedLeagues() {
+    const raw = allowedLeaguesHidden ? allowedLeaguesHidden.value : '[]';
+    const items = parseJsonList(raw);
+    const out = [];
+    const seen = new Set();
+    items.forEach(x => {
+      const name = normalizeLeagueName(x);
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(name);
+    });
+    return out;
+  }
+
+  function setAllowedLeagues(leagues) {
+    if (!allowedLeaguesHidden) return;
+    const list = Array.isArray(leagues) ? leagues : [];
+    allowedLeaguesHidden.value = JSON.stringify(list.map(normalizeLeagueName).filter(Boolean));
+  }
+
+  // Initialize hidden field with persisted value.
+  setAllowedLeagues(initialAllowedLeagues);
 
   function addGroup(groupId = null) {
     const group = groupTemplate.content.firstElementChild.cloneNode(true);
@@ -327,15 +377,156 @@
       'yellow-cards': 'yellow-cards',
       'red cards': 'red-cards',
       'red-cards': 'red-cards',
+      'league': 'League',
+      'liga': 'League',
       'minute': 'Minute',
     };
     return map[lowered] || raw;
   }
 
+  function syncAllowedLeaguesFromRows() {
+    const selected = new Map(); // lower -> original
+    document.querySelectorAll('.league-selected-json').forEach((el) => {
+      const items = parseJsonList(el.value);
+      items.forEach(x => {
+        const name = normalizeLeagueName(x);
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (!selected.has(key)) selected.set(key, name);
+      });
+    });
+    setAllowedLeagues(Array.from(selected.values()));
+  }
+
   function addConditionToGroup(group, prefill = null) {
     const list = group.querySelector('.conditions-list');
     const cond = conditionTemplate.content.firstElementChild.cloneNode(true);
-    
+
+    const statSelect = cond.querySelector('.stat-select');
+    const sideWrap = cond.querySelector('.side-wrap');
+    const operatorWrap = cond.querySelector('.operator-wrap');
+    const valueWrap = cond.querySelector('.value-wrap');
+    const valueInput = cond.querySelector('.stat-value');
+    const operatorSelect = cond.querySelector('.stat-operator');
+
+    const leagueWrap = cond.querySelector('.league-wrap');
+    const leagueList = cond.querySelector('.league-list');
+    const leagueSearch = cond.querySelector('.league-search');
+    const leagueHidden = cond.querySelector('.league-selected-json');
+
+    function getRowLeagues() {
+      return parseJsonList(leagueHidden ? leagueHidden.value : '[]')
+        .map(normalizeLeagueName)
+        .filter(Boolean);
+    }
+
+    function setRowLeagues(items) {
+      if (!leagueHidden) return;
+      const list = Array.isArray(items) ? items : [];
+      const out = [];
+      const seen = new Set();
+      list.forEach(x => {
+        const name = normalizeLeagueName(x);
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(name);
+      });
+      leagueHidden.value = JSON.stringify(out);
+      syncAllowedLeaguesFromRows();
+    }
+
+    function renderLeagueList() {
+      if (!leagueList) return;
+      const filter = (leagueSearch ? leagueSearch.value : '').toString().trim().toLowerCase();
+      const selected = new Set(getRowLeagues().map(x => x.toLowerCase()));
+      const items = (availableLeagues || []).filter(x => normalizeLeagueName(x));
+      const filtered = filter
+        ? items.filter(x => normalizeLeagueName(x).toLowerCase().includes(filter))
+        : items;
+
+      if (filtered.length === 0) {
+        leagueList.innerHTML = `<div class="small text-muted">Nenhuma liga disponivel.</div>`;
+        return;
+      }
+
+      leagueList.innerHTML = filtered.map((name, idx) => {
+        const clean = normalizeLeagueName(name);
+        const esc = clean
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+        const checked = selected.has(clean.toLowerCase()) ? 'checked' : '';
+        const id = `lg_${Math.random().toString(16).slice(2)}_${idx}`;
+        return `
+          <div class="form-check">
+            <input class="form-check-input league-check" type="checkbox" id="${id}" data-league="${esc}" ${checked}>
+            <label class="form-check-label small" for="${id}">${esc}</label>
+          </div>
+        `.trim();
+      }).join('');
+
+      leagueList.querySelectorAll('.league-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const league = normalizeLeagueName(cb.getAttribute('data-league'));
+          const current = getRowLeagues();
+          const map = new Map(current.map(x => [x.toLowerCase(), x]));
+          if (cb.checked) map.set(league.toLowerCase(), league);
+          else map.delete(league.toLowerCase());
+          setRowLeagues(Array.from(map.values()));
+        });
+      });
+    }
+
+    function syncStatMode() {
+      const v = statSelect ? statSelect.value : '';
+      const isMinute = v === 'Minute';
+      const isLeague = v === 'League';
+
+      if (sideWrap) sideWrap.style.visibility = (isMinute || isLeague) ? 'hidden' : 'visible';
+      if (operatorWrap) operatorWrap.style.display = isLeague ? 'none' : '';
+      if (valueWrap) valueWrap.style.display = isLeague ? 'none' : '';
+      if (leagueWrap) leagueWrap.style.display = isLeague ? '' : 'none';
+
+      if (isMinute) {
+        // Minute ignores side; keep it stable.
+        const side = cond.querySelector('.stat-side');
+        if (side) side.value = 'total';
+      }
+
+      if (isLeague) {
+        // League filter is persisted separately.
+        const side = cond.querySelector('.stat-side');
+        if (side) side.value = 'total';
+        if (operatorSelect) operatorSelect.value = '==';
+        if (valueInput) valueInput.value = 0;
+        if (leagueHidden && leagueHidden.value === '[]') {
+          setRowLeagues(getAllowedLeagues());
+        }
+        renderLeagueList();
+      }
+    }
+
+    if (leagueSearch) leagueSearch.addEventListener('input', renderLeagueList);
+
+    let prevStatValue = statSelect ? statSelect.value : '';
+    if (statSelect) {
+      statSelect.addEventListener('change', () => {
+        const next = statSelect.value;
+        if (prevStatValue === 'League' && next !== 'League') {
+          // User left the League filter condition: drop its selection.
+          setRowLeagues([]);
+        }
+        // When switching into League, prefill from global allowed list.
+        if (next === 'League') setRowLeagues(getAllowedLeagues());
+        prevStatValue = next;
+        syncStatMode();
+      });
+    }
+
     if (prefill) {
       cond.querySelector('.stat-select').value = normalizeStatKey(prefill.stat_key);
       cond.querySelector('.stat-side').value = prefill.side;
@@ -343,29 +534,70 @@
       cond.querySelector('.stat-value').value = prefill.value;
     }
 
-    cond.querySelector('.remove-condition').addEventListener('click', () => cond.remove());
-    
-    const statSelect = cond.querySelector('.stat-select');
-    const sideWrap = cond.querySelector('.side-wrap');
-    statSelect.addEventListener('change', () => {
-      sideWrap.style.visibility = statSelect.value === 'Minute' ? 'hidden' : 'visible';
+    cond.querySelector('.remove-condition').addEventListener('click', () => {
+      cond.remove();
+      syncAllowedLeaguesFromRows();
     });
-    if (prefill && prefill.stat_key === 'Minute') sideWrap.style.visibility = 'hidden';
+
+    syncStatMode();
 
     list.appendChild(cond);
     refreshNames();
+    return cond;
   }
 
   function addOutcome(type, prefill = null) {
     const container = type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
     const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
     
-    if (prefill) {
-      cond.querySelector('.outcome-stat-select').value = normalizeStatKey(prefill.stat_key);
-      cond.querySelector('.outcome-stat-side').value = prefill.side;
-      cond.querySelector('.outcome-stat-operator').value = prefill.operator;
-      cond.querySelector('.outcome-stat-value').value = prefill.value;
+    const statSelect = cond.querySelector('.outcome-stat-select');
+    const sideWrap = cond.querySelector('.outcome-side-wrap');
+    const sideSelect = cond.querySelector('.outcome-stat-side');
+    const opSelect = cond.querySelector('.outcome-stat-operator');
+
+    // Keep outcome condition options in sync with the main "Regras de Estatisticas".
+    if (statSelect) {
+      statSelect.innerHTML = `
+        <optgroup label="Estatisticas">
+          <option value="corners">🚩 Escanteios</option>
+          <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
+          <option value="on-target">🎯 Chutes no Alvo</option>
+          <option value="attacks">⚔️ Ataques</option>
+          <option value="off-target">❌ Chutes para Fora</option>
+          <option value="possession">🔄 Posse de Bola (%)</option>
+          <option value="goals">⚽ Gols</option>
+          <option value="yellow-cards">🟨 Cartoes Amarelos</option>
+          <option value="red-cards">🔴 Cartoes Vermelhos</option>
+          <option value="Minute">⏱️ Minutos</option>
+        </optgroup>
+      `.trim();
     }
+
+    if (opSelect) {
+      opSelect.innerHTML = `
+        <option value=">=">&gt;=</option>
+        <option value="<=">&lt;=</option>
+        <option value="==">=</option>
+        <option value=">">></option>
+        <option value="<"><</option>
+      `.trim();
+    }
+
+    if (prefill) {
+      if (statSelect) statSelect.value = normalizeStatKey(prefill.stat_key);
+      if (sideSelect) sideSelect.value = prefill.side;
+      if (opSelect) opSelect.value = prefill.operator;
+      const v = cond.querySelector('.outcome-stat-value');
+      if (v) v.value = prefill.value;
+    }
+
+    function syncOutcomeSideVisibility() {
+      const isMinute = statSelect && statSelect.value === 'Minute';
+      if (sideWrap) sideWrap.style.visibility = isMinute ? 'hidden' : 'visible';
+      if (isMinute && sideSelect) sideSelect.value = 'total';
+    }
+    if (statSelect) statSelect.addEventListener('change', syncOutcomeSideVisibility);
+    syncOutcomeSideVisibility();
 
     cond.querySelector('.remove-outcome-condition').addEventListener('click', () => cond.remove());
     container.appendChild(cond);
@@ -389,6 +621,8 @@
         cond.querySelector('.stat-side').name = `group-${gIdx}-cond-${cIdx}-side`;
         cond.querySelector('.stat-operator').name = `group-${gIdx}-cond-${cIdx}-operator`;
         cond.querySelector('.stat-value').name = `group-${gIdx}-cond-${cIdx}-value`;
+        const leagues = cond.querySelector('.league-selected-json');
+        if (leagues) leagues.name = `group-${gIdx}-cond-${cIdx}-leagues_json`;
       });
     });
 
@@ -431,10 +665,34 @@
     addConditionToGroup(group);
   }
 
+  // Restore league filter when editing (rule.allowed_leagues_json) or after validation errors.
+  const persistedLeagues = getAllowedLeagues();
+  if (persistedLeagues.length) {
+    let hasLeagueRow = false;
+    document.querySelectorAll('.stat-select').forEach(sel => {
+      if (sel && sel.value === 'League') hasLeagueRow = true;
+    });
+    if (!hasLeagueRow && groupsContainer.children.length) {
+      const row = addConditionToGroup(groupsContainer.children[0]);
+      const sel = row ? row.querySelector('.stat-select') : null;
+      if (sel) {
+        sel.value = 'League';
+        sel.dispatchEvent(new Event('change'));
+      }
+    } else {
+      document.querySelectorAll('.stat-select').forEach(sel => {
+        if (sel && sel.value === 'League') sel.dispatchEvent(new Event('change'));
+      });
+    }
+  }
+
   existingOutcomeGreen.forEach(c => addOutcome('green', c));
   existingOutcomeRed.forEach(c => addOutcome('red', c));
 
-  document.getElementById('rule-form').addEventListener('submit', refreshNames);
+  document.getElementById('rule-form').addEventListener('submit', () => {
+    syncAllowedLeaguesFromRows();
+    refreshNames();
+  });
 
   const redToggle = document.getElementById('outcome-red-if-no-green');
   const redMinuteWrap = document.getElementById('outcome-red-minute-wrap');
@@ -461,6 +719,7 @@
         const side = row.querySelector('.stat-side')?.value || '';
         const op = row.querySelector('.stat-operator')?.value || '';
         const val = row.querySelector('.stat-value')?.value || '';
+        if (stat === 'League') return;
         if (!stat || !op || val === '') return;
         const sideLabel = stat === 'Minute' ? '' : ` ${side}`;
         parts.push(`${stat}${sideLabel} ${formatOperator(op)} ${val}`.trim());
@@ -483,6 +742,7 @@
       alert_on_penalty: !!fd.get('alert_on_penalty'),
       score_home: fd.get('score_home') || '',
       score_away: fd.get('score_away') || '',
+      allowed_leagues: getAllowedLeagues(),
       outcome_green_minute: fd.get('outcome_green_minute') || '',
       outcome_red_minute: fd.get('outcome_red_minute') || '',
       outcome_red_if_no_green: !!fd.get('outcome_red_if_no_green'),
@@ -500,6 +760,7 @@
         const side = row.querySelector('.stat-side')?.value || '';
         const op = row.querySelector('.stat-operator')?.value || '';
         const val = row.querySelector('.stat-value')?.value || '';
+        if (stat === 'League') return;
         if (!stat || !op || val === '') return;
         data.conditions.push({
           group_id: gIdx,

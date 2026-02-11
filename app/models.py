@@ -58,6 +58,8 @@ class Rule(db.Model):
     last_match_desc = db.Column(db.String(255))
     last_alert_at = db.Column(db.DateTime)
     last_alert_desc = db.Column(db.String(255))
+    # Optional league filter (JSON list of league names). If set, alerts are emitted only for matching leagues.
+    allowed_leagues_json = db.Column(db.Text)
 
     conditions = db.relationship(
         "RuleCondition", backref="rule", cascade="all, delete-orphan", order_by="RuleCondition.id"

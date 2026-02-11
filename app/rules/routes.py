@@ -6,7 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from ..extensions import db
-from ..models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
+from ..models import LiveGameState, MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
 from ..services.evaluator import evaluate_rule, history_confidence
 from ..services.scraper import (
     fetch_live_games,
@@ -21,6 +21,53 @@ from ..services.worker import parse_score
 from ..utils.time import now_sp
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
+
+
+def _clean_league_name(value: str) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def _parse_allowed_leagues_json(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    leagues = []
+    seen = set()
+    for item in data:
+        name = _clean_league_name(item)
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        leagues.append(name)
+    return leagues
+
+
+def _available_leagues(limit: int = 250) -> list[str]:
+    leagues = set()
+    for col in (LiveGameState.league, MatchAlert.league):
+        try:
+            rows = (
+                db.session.query(col)
+                .filter(col.isnot(None))
+                .distinct()
+                .limit(limit)
+                .all()
+            )
+        except Exception:
+            rows = []
+        for (val,) in rows:
+            name = _clean_league_name(val)
+            if name:
+                leagues.add(name)
+    return sorted(leagues, key=lambda s: s.casefold())
 
 
 def _parse_conditions(form):
@@ -45,6 +92,9 @@ def _parse_conditions(form):
             group_id = int(parts[1])
             index = int(parts[3])
             stat_key = form.get(f"group-{group_id}-cond-{index}-stat_key", "").strip()
+            if stat_key.casefold() in ("league", "liga"):
+                # League filter is stored at the Rule level (allowed_leagues_json), not as a numeric stat condition.
+                continue
             side = form.get(f"group-{group_id}-cond-{index}-side", "").strip()
             if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
                 side = "total"
@@ -69,6 +119,10 @@ def _parse_conditions(form):
         if stat_key is None:
             break
         stat_key = stat_key.strip()
+        if stat_key.casefold() in ("league", "liga"):
+            # League filter is stored at the Rule level (allowed_leagues_json), not as a numeric stat condition.
+            index += 1
+            continue
         side = form.get(f"conditions-{index}-side", "").strip()
         if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
             side = "total"
@@ -175,6 +229,7 @@ def _serialize_rule(rule: Rule) -> dict:
         "outcome_red_if_no_green": rule.outcome_red_if_no_green,
         "score_home": rule.score_home,
         "score_away": rule.score_away,
+        "allowed_leagues": _parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
         "conditions": [_condition_dict(c) for c in (rule.conditions or [])],
         "outcome_conditions": [_condition_dict(c) | {"outcome_type": c.outcome_type} for c in (rule.outcome_conditions or [])],
     }
@@ -265,6 +320,7 @@ def _rule_signature(
     outcome_red_if_no_green,
     score_home,
     score_away,
+    allowed_leagues,
     conditions,
     outcome_conditions,
 ):
@@ -285,6 +341,7 @@ def _rule_signature(
         _coerce_bool(outcome_red_if_no_green, False),
         _coerce_int(score_home),
         _coerce_int(score_away),
+        tuple(sorted(_clean_league_name(x).casefold() for x in (allowed_leagues or []) if _clean_league_name(x))),
         tuple(sorted(_condition_signature(c) for c in (conditions or []))),
         tuple(sorted(_condition_signature(c, include_outcome_type=True) for c in (outcome_conditions or []))),
     )
@@ -308,12 +365,14 @@ def _rule_model_signature(rule: Rule):
         outcome_red_if_no_green=rule.outcome_red_if_no_green,
         score_home=rule.score_home,
         score_away=rule.score_away,
+        allowed_leagues=_parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
         conditions=rule.conditions or [],
         outcome_conditions=rule.outcome_conditions or [],
     )
 
 
 def _build_form_context(form):
+    allowed_leagues = _parse_allowed_leagues_json(form.get("allowed_leagues_json"))
     form_data = {
         "name": form.get("name", "").strip(),
         "message_template": form.get("message_template", "").strip(),
@@ -335,6 +394,7 @@ def _build_form_context(form):
         "form_conditions": conditions,
         "form_outcome_green": outcome_green,
         "form_outcome_red": outcome_red,
+        "allowed_leagues": allowed_leagues,
     }
 
 
@@ -351,6 +411,7 @@ def _build_rule_context(rule):
             for c in (rule.outcome_conditions or [])
             if c.outcome_type == "red"
         ],
+        "allowed_leagues": _parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
     }
 
 
@@ -514,6 +575,14 @@ def import_rules():
         outcome_conditions = [_deserialize_outcome_condition(c) for c in outcome_conditions_raw if isinstance(c, dict)]
         outcome_conditions = [c for c in outcome_conditions if c]
 
+        allowed_leagues_raw = item.get("allowed_leagues") or []
+        allowed_leagues = []
+        if isinstance(allowed_leagues_raw, list):
+            for x in allowed_leagues_raw:
+                name = _clean_league_name(x)
+                if name:
+                    allowed_leagues.append(name)
+
         rule_data = {
             "time_limit_min": _coerce_int(item.get("time_limit_min"), 90),
             "message_template": item.get("message_template") or None,
@@ -530,9 +599,11 @@ def import_rules():
             "outcome_red_if_no_green": _coerce_bool(item.get("outcome_red_if_no_green"), False),
             "score_home": _coerce_int(item.get("score_home")),
             "score_away": _coerce_int(item.get("score_away")),
+            "allowed_leagues_json": json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
         }
         signature = _rule_signature(
             name=name,
+            allowed_leagues=allowed_leagues,
             conditions=conditions,
             outcome_conditions=outcome_conditions,
             **rule_data,
@@ -596,10 +667,16 @@ def create_rule():
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
+        allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
 
         if not name:
             flash("Nome e obrigatorio.", "warning")
-            return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if notify_telegram and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified):
             flash("Configure e teste o Telegram antes de criar regras que avisam.", "warning")
             return redirect(url_for("settings.settings"))
@@ -612,16 +689,31 @@ def create_rule():
         conditions = _parse_conditions(request.form)
         if not conditions:
             flash("Adicione ao menos uma condicao.", "warning")
-            return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
 
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
-            return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if outcome_red_if_no_green and outcome_red_minute is None:
             flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
-            return render_template("rules/form.html", rule=None, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
 
         rule = Rule(
             user_id=current_user.id,
@@ -641,6 +733,7 @@ def create_rule():
             outcome_red_if_no_green=outcome_red_if_no_green,
             score_home=score_home,
             score_away=score_away,
+            allowed_leagues_json=json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
         )
         db.session.add(rule)
         db.session.flush()
@@ -654,7 +747,12 @@ def create_rule():
         db.session.commit()
         flash("Regra criada.", "success")
         return redirect(url_for("rules.list_rules"))
-    return render_template("rules/form.html", rule=None)
+    return render_template(
+        "rules/form.html",
+        rule=None,
+        available_leagues=_available_leagues(),
+        allowed_leagues=[],
+    )
 
 
 @rules_bp.route("/<int:rule_id>/edit", methods=["GET", "POST"])
@@ -678,10 +776,16 @@ def edit_rule(rule_id):
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
+        allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
 
         if not name:
             flash("Nome e obrigatorio.", "warning")
-            return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if notify_telegram and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified):
             flash("Configure e teste o Telegram antes de ativar avisos.", "warning")
             return redirect(url_for("settings.settings"))
@@ -707,20 +811,36 @@ def edit_rule(rule_id):
         rule.outcome_red_if_no_green = outcome_red_if_no_green
         rule.score_home = score_home
         rule.score_away = score_away
+        rule.allowed_leagues_json = json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None
 
         conditions = _parse_conditions(request.form)
         if not conditions:
             flash("Adicione ao menos uma condicao.", "warning")
             db.session.rollback()
-            return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
-            return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if outcome_red_if_no_green and outcome_red_minute is None:
             flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
-            return render_template("rules/form.html", rule=rule, **_build_form_context(request.form))
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
 
         RuleCondition.query.filter_by(rule_id=rule.id).delete()
         RuleOutcomeCondition.query.filter_by(rule_id=rule.id).delete()
@@ -733,7 +853,12 @@ def edit_rule(rule_id):
         db.session.commit()
         flash("Regra atualizada.", "success")
         return redirect(url_for("rules.list_rules"))
-    return render_template("rules/form.html", rule=rule, **_build_rule_context(rule))
+    return render_template(
+        "rules/form.html",
+        rule=rule,
+        available_leagues=_available_leagues(),
+        **_build_rule_context(rule),
+    )
 
 
 @rules_bp.route("/<int:rule_id>/delete", methods=["POST"])
@@ -791,6 +916,8 @@ def test_rule():
     conditions = _parse_conditions(request.form)
     if not conditions:
         return jsonify({"ok": False, "message": "Adicione condicoes antes de testar."}), 400
+    allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
+    allowed_leagues_set = {name.casefold() for name in allowed_leagues}
     temp_rule = Rule(
         user_id=current_user.id,
         name=request.form.get("name", "Regra teste"),
@@ -815,6 +942,10 @@ def test_rule():
             continue
         if is_youth_match(stats_payload):
             continue
+        if allowed_leagues_set:
+            league_name = _clean_league_name(stats_payload.get("league"))
+            if league_name.casefold() not in allowed_leagues_set:
+                continue
         minute = stats_payload.get("minute") or game["minute"]
         home_score, away_score = parse_score(stats_payload.get("score", ""))
         if temp_rule.score_home is not None and home_score != temp_rule.score_home:

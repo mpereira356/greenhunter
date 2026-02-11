@@ -151,6 +151,7 @@ def _ensure_rule_columns():
         "score_home": "INTEGER",
         "score_away": "INTEGER",
         "second_half_only": "BOOLEAN DEFAULT 0",
+        "allowed_leagues_json": "TEXT",
     }
 
     with db.engine.connect() as conn:
