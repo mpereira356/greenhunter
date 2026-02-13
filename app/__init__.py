@@ -80,6 +80,7 @@ def create_app():
         _ensure_user_columns()
         _ensure_rule_columns()
         _ensure_rule_condition_columns()
+        _ensure_rule_outcome_condition_columns()
         _ensure_alert_columns()
         _ensure_live_game_state_columns()
 
@@ -146,6 +147,7 @@ def _ensure_rule_columns():
         "outcome_green_minute": "INTEGER",
         "outcome_red_minute": "INTEGER",
         "outcome_red_if_no_green": "BOOLEAN DEFAULT 0",
+        "green_allow_score_swap": "BOOLEAN DEFAULT 0",
         "notify_telegram": "BOOLEAN DEFAULT 1",
         "alert_on_penalty": "BOOLEAN DEFAULT 0",
         "score_home": "INTEGER",
@@ -172,6 +174,17 @@ def _ensure_rule_condition_columns():
 
         if "group_id" not in existing:
             conn.execute(text("ALTER TABLE rule_condition ADD COLUMN group_id INTEGER DEFAULT 0"))
+
+        conn.commit()
+
+
+def _ensure_rule_outcome_condition_columns():
+    with db.engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info('rule_outcome_condition')"))
+        existing = {row[1] for row in result}
+
+        if "group_id" not in existing:
+            conn.execute(text("ALTER TABLE rule_outcome_condition ADD COLUMN group_id INTEGER DEFAULT 0"))
 
         conn.commit()
 

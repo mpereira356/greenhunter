@@ -32,6 +32,8 @@ GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
 EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
 RULE_CONF_SAMPLE = int(os.environ.get("RULE_CONF_SAMPLE", "50"))
 RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
+FETCH_STATS_ATTEMPTS = int(os.environ.get("FETCH_STATS_ATTEMPTS", "3"))
+FETCH_STATS_DELAY = float(os.environ.get("FETCH_STATS_DELAY", "1"))
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
@@ -711,7 +713,12 @@ def process_live_games(session):
 
     active_rules = Rule.query.filter_by(is_active=True).all()
     for game in games:
-        stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
+        stats_payload = fetch_match_stats_fresh(
+            session,
+            game["url"],
+            attempts=FETCH_STATS_ATTEMPTS,
+            delay=FETCH_STATS_DELAY,
+        )
         if not stats_payload or is_youth_match(stats_payload): continue
         
         minute = stats_payload.get("minute")
@@ -874,7 +881,12 @@ def process_live_games(session):
                         pass
                     
                     # Re-fetch latest stats for accurate initial alert message.
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    latest_payload = fetch_match_stats_fresh(
+                        session,
+                        alert.url,
+                        attempts=FETCH_STATS_ATTEMPTS,
+                        delay=FETCH_STATS_DELAY,
+                    )
                     if latest_payload:
                         stats_payload = latest_payload
                         if rule.second_half_only:
@@ -900,10 +912,9 @@ def process_live_games(session):
                     print(f"[worker] erro ao criar alerta: {e}")
                     db.session.rollback()
 
-def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
+def _evaluate_outcome_group_conditions(conditions, stats: dict) -> bool:
     if not conditions:
         return False
-    # outcome conditions are usually ANDed within the same type (green/red)
     for cond in conditions:
         key = normalize_stat_key(cond.stat_key)
         if key not in stats:
@@ -918,6 +929,21 @@ def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
             return False
     return True
 
+
+def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
+    if not conditions:
+        return False
+    groups = {}
+    for cond in conditions:
+        gid = getattr(cond, "group_id", 0)
+        if gid is None:
+            gid = 0
+        groups.setdefault(gid, []).append(cond)
+    for conds in groups.values():
+        if _evaluate_outcome_group_conditions(conds, stats):
+            return True
+    return False
+
 def follow_alerts(session):
     active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
     stats_cache = {}
@@ -928,7 +954,12 @@ def follow_alerts(session):
         cache_key = alert.url
         if alert.status == "pending":
             # Double-check with multiple reads to catch recent score changes.
-            stats_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+            stats_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=FETCH_STATS_ATTEMPTS,
+                delay=FETCH_STATS_DELAY,
+            )
         else:
             if cache_key in stats_cache:
                 stats_payload = stats_cache[cache_key]
@@ -998,7 +1029,12 @@ def follow_alerts(session):
             if alert.status == "red" and rule and rule.outcome_red_if_no_green:
                 red_time = _result_time_to_dt(alert.result_time_hhmm)
                 if red_time and (now_sp() - red_time).total_seconds() <= RED_CORRECTION_SECONDS:
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    latest_payload = fetch_match_stats_fresh(
+                        session,
+                        alert.url,
+                        attempts=FETCH_STATS_ATTEMPTS,
+                        delay=FETCH_STATS_DELAY,
+                    )
                     if latest_payload:
                         latest_score = latest_payload.get("score") or alert.last_score
                         latest_minute = latest_payload.get("minute") or alert.result_minute
@@ -1063,7 +1099,12 @@ def follow_alerts(session):
         
         # 1. Verificar GREEN customizado
         if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
-            latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+            latest_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=FETCH_STATS_ATTEMPTS,
+                delay=FETCH_STATS_DELAY,
+            )
             if latest_payload:
                 minute = latest_payload.get("minute") or minute
                 current_score = latest_payload.get("score") or current_score
@@ -1109,7 +1150,12 @@ def follow_alerts(session):
                 )
                 latest_outcome_stats = merge_score_delta_into_stats(latest_outcome_stats, alert.initial_score, latest_score)
                 if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    latest_payload = fetch_match_stats_fresh(
+                        session,
+                        alert.url,
+                        attempts=FETCH_STATS_ATTEMPTS,
+                        delay=FETCH_STATS_DELAY,
+                    )
                     if latest_payload:
                         latest_minute = latest_payload.get("minute") or latest_minute
                         latest_score = latest_payload.get("score") or latest_score
@@ -1126,7 +1172,12 @@ def follow_alerts(session):
                 continue
 
             # Final refresh to avoid stale score in RED message.
-            final_payload = fetch_match_stats_fresh(session, alert.url, attempts=2, delay=1)
+            final_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=max(1, FETCH_STATS_ATTEMPTS - 1),
+                delay=FETCH_STATS_DELAY,
+            )
             if final_payload:
                 latest_minute = final_payload.get("minute") or latest_minute
                 latest_score = final_payload.get("score") or latest_score

@@ -49,6 +49,7 @@ class Rule(db.Model):
     outcome_green_minute = db.Column(db.Integer)
     outcome_red_minute = db.Column(db.Integer)
     outcome_red_if_no_green = db.Column(db.Boolean, default=False, nullable=False)
+    green_allow_score_swap = db.Column(db.Boolean, default=False, nullable=False)
     notify_telegram = db.Column(db.Boolean, default=True, nullable=False)
     alert_on_penalty = db.Column(db.Boolean, default=False, nullable=False)
     score_home = db.Column(db.Integer)
@@ -91,6 +92,7 @@ class RuleOutcomeCondition(db.Model):
     side = db.Column(db.String(10), nullable=False)
     operator = db.Column(db.String(4), nullable=False)
     value = db.Column(db.Integer, nullable=False)
+    group_id = db.Column(db.Integer, default=0, nullable=False)
 
 
 class MatchAlert(db.Model):

@@ -154,6 +154,37 @@ def _parse_outcome_conditions(form, prefix):
             return "=="
         return value
 
+    outcome_type = prefix.split("-")[-1]
+
+    # New grouped format: outcome-<type>-group-<g>-cond-<i>-stat_key
+    grouped_keys = [k for k in form.keys() if k.startswith(f"{prefix}-group-") and k.endswith("-stat_key")]
+    if grouped_keys:
+        for key in grouped_keys:
+            parts = key.split("-")
+            if len(parts) < 7:
+                continue
+            group_id = _coerce_int(parts[3], default=0)
+            index = _coerce_int(parts[5], default=0)
+            stat_key = form.get(f"{prefix}-group-{group_id}-cond-{index}-stat_key", "").strip()
+            side = form.get(f"{prefix}-group-{group_id}-cond-{index}-side", "").strip()
+            if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
+                side = "total"
+            operator = _normalize_operator(form.get(f"{prefix}-group-{group_id}-cond-{index}-operator", ""))
+            value_raw = form.get(f"{prefix}-group-{group_id}-cond-{index}-value", "").strip()
+            if stat_key and side and operator and value_raw.isdigit():
+                conditions.append(
+                    RuleOutcomeCondition(
+                        outcome_type=outcome_type,
+                        stat_key=stat_key,
+                        side=side,
+                        operator=operator,
+                        value=int(value_raw),
+                        group_id=group_id,
+                    )
+                )
+        return conditions
+
+    # Legacy flat format
     index = 0
     while True:
         stat_key = form.get(f"{prefix}-{index}-stat_key")
@@ -168,11 +199,12 @@ def _parse_outcome_conditions(form, prefix):
         if stat_key and side and operator and value_raw.isdigit():
             conditions.append(
                 RuleOutcomeCondition(
-                    outcome_type=prefix.split("-")[-1],
+                    outcome_type=outcome_type,
                     stat_key=stat_key,
                     side=side,
                     operator=operator,
                     value=int(value_raw),
+                    group_id=0,
                 )
             )
         index += 1
@@ -227,6 +259,7 @@ def _serialize_rule(rule: Rule) -> dict:
         "outcome_green_minute": rule.outcome_green_minute,
         "outcome_red_minute": rule.outcome_red_minute,
         "outcome_red_if_no_green": rule.outcome_red_if_no_green,
+        "green_allow_score_swap": bool(getattr(rule, "green_allow_score_swap", False)),
         "score_home": rule.score_home,
         "score_away": rule.score_away,
         "allowed_leagues": _parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
@@ -258,6 +291,7 @@ def _deserialize_outcome_condition(item: dict):
     side = str(item.get("side", "")).strip()
     operator = _normalize_import_operator(item.get("operator", ""))
     value = _coerce_int(item.get("value"))
+    group_id = _coerce_int(item.get("group_id"), default=0)
     if outcome_type not in ("green", "red") or not stat_key or not side or value is None:
         return None
     return RuleOutcomeCondition(
@@ -266,6 +300,7 @@ def _deserialize_outcome_condition(item: dict):
         side=side,
         operator=operator,
         value=value,
+        group_id=group_id,
     )
 
 
@@ -318,6 +353,7 @@ def _rule_signature(
     outcome_green_minute,
     outcome_red_minute,
     outcome_red_if_no_green,
+    green_allow_score_swap,
     score_home,
     score_away,
     allowed_leagues,
@@ -339,6 +375,7 @@ def _rule_signature(
         _coerce_int(outcome_green_minute),
         _coerce_int(outcome_red_minute),
         _coerce_bool(outcome_red_if_no_green, False),
+        _coerce_bool(green_allow_score_swap, False),
         _coerce_int(score_home),
         _coerce_int(score_away),
         tuple(sorted(_clean_league_name(x).casefold() for x in (allowed_leagues or []) if _clean_league_name(x))),
@@ -363,6 +400,7 @@ def _rule_model_signature(rule: Rule):
         outcome_green_minute=rule.outcome_green_minute,
         outcome_red_minute=rule.outcome_red_minute,
         outcome_red_if_no_green=rule.outcome_red_if_no_green,
+        green_allow_score_swap=bool(getattr(rule, "green_allow_score_swap", False)),
         score_home=rule.score_home,
         score_away=rule.score_away,
         allowed_leagues=_parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
@@ -385,6 +423,7 @@ def _build_form_context(form):
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
         "outcome_red_minute": form.get("outcome_red_minute", "").strip(),
         "outcome_red_if_no_green": bool(form.get("outcome_red_if_no_green")),
+        "green_allow_score_swap": bool(form.get("green_allow_score_swap")),
     }
     conditions = [_condition_dict(c) for c in _parse_conditions(form)]
     outcome_green = [_condition_dict(c) for c in _parse_outcome_conditions(form, "outcome-green")]
@@ -597,6 +636,7 @@ def import_rules():
             "outcome_green_minute": _coerce_int(item.get("outcome_green_minute")),
             "outcome_red_minute": _coerce_int(item.get("outcome_red_minute")),
             "outcome_red_if_no_green": _coerce_bool(item.get("outcome_red_if_no_green"), False),
+            "green_allow_score_swap": _coerce_bool(item.get("green_allow_score_swap"), False),
             "score_home": _coerce_int(item.get("score_home")),
             "score_away": _coerce_int(item.get("score_away")),
             "allowed_leagues_json": json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
@@ -665,6 +705,7 @@ def create_rule():
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
+        green_allow_score_swap = bool(request.form.get("green_allow_score_swap"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
@@ -731,6 +772,7 @@ def create_rule():
             outcome_green_minute=outcome_green_minute,
             outcome_red_minute=outcome_red_minute,
             outcome_red_if_no_green=outcome_red_if_no_green,
+            green_allow_score_swap=green_allow_score_swap,
             score_home=score_home,
             score_away=score_away,
             allowed_leagues_json=json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
@@ -774,6 +816,7 @@ def edit_rule(rule_id):
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
+        green_allow_score_swap = bool(request.form.get("green_allow_score_swap"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
@@ -809,6 +852,7 @@ def edit_rule(rule_id):
         rule.outcome_green_minute = outcome_green_minute
         rule.outcome_red_minute = outcome_red_minute
         rule.outcome_red_if_no_green = outcome_red_if_no_green
+        rule.green_allow_score_swap = green_allow_score_swap
         rule.score_home = score_home
         rule.score_away = score_away
         rule.allowed_leagues_json = json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None

@@ -79,18 +79,24 @@
             <div class="p-3 border rounded-3 bg-light h-100">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-bold text-success">GREEN</h6>
-                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome="green">+ Condição GREEN</button>
+                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-group="green">+ Grupo (OU)</button>
               </div>
               <div id="outcome-green-container"></div>
+              <div class="form-text mt-2 small">
+                Condições no mesmo grupo: <strong>E</strong>. Grupos diferentes: <strong>OU</strong>.
+              </div>
             </div>
           </div>
           <div class="col-md-6">
             <div class="p-3 border rounded-3 bg-light h-100">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-bold text-danger">RED</h6>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome="red">+ Condição RED</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Grupo (OU)</button>
               </div>
               <div id="outcome-red-container"></div>
+              <div class="form-text mt-2 small">
+                Condições no mesmo grupo: <strong>E</strong>. Grupos diferentes: <strong>OU</strong>.
+              </div>
             </div>
           </div>
         </div>
@@ -289,6 +295,17 @@
   </div>
 </template>
 
+<template id="outcome-group-template">
+  <div class="outcome-group mb-3 p-3 border rounded-3 bg-white">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0 fw-semibold outcome-group-title">Grupo 1 (OU)</h6>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-group">Remover Grupo</button>
+    </div>
+    <div class="outcome-conditions-list"></div>
+    <button type="button" class="btn btn-sm btn-outline-primary add-outcome-to-group mt-2">+ Condição</button>
+  </div>
+</template>
+
 <script>
   const groupsContainer = document.getElementById('groups-container');
   const groupTemplate = document.getElementById('group-template');
@@ -296,6 +313,7 @@
   const outcomeGreenContainer = document.getElementById('outcome-green-container');
   const outcomeRedContainer = document.getElementById('outcome-red-container');
   const outcomeTemplate = document.getElementById('outcome-condition-template');
+  const outcomeGroupTemplate = document.getElementById('outcome-group-template');
 
   const existingConditions = {{ (form_conditions if form_conditions else (rule.conditions if rule else [])) | tojson }};
   const existingOutcomeGreen = {{ (form_outcome_green if form_outcome_green else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'green') | list if rule else [])) | tojson }};
@@ -575,16 +593,37 @@
     return cond;
   }
 
-  function addOutcome(type, prefill = null) {
-    const container = type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
+  function outcomeContainer(type) {
+    return type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
+  }
+
+  function addOutcomeGroup(type, groupId = null) {
+    const container = outcomeContainer(type);
+    const group = outcomeGroupTemplate.content.firstElementChild.cloneNode(true);
+    const id = groupId !== null ? groupId : container.children.length;
+    group.dataset.groupId = id;
+
+    group.querySelector('.remove-outcome-group').addEventListener('click', () => {
+      group.remove();
+      refreshOutcomeGroupIndices(type);
+    });
+    group.querySelector('.add-outcome-to-group').addEventListener('click', () => {
+      addOutcomeConditionToGroup(type, group);
+    });
+
+    container.appendChild(group);
+    refreshOutcomeGroupIndices(type);
+    return group;
+  }
+
+  function addOutcomeConditionToGroup(type, group, prefill = null) {
+    const list = group.querySelector('.outcome-conditions-list');
     const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
-    
     const statSelect = cond.querySelector('.outcome-stat-select');
     const sideWrap = cond.querySelector('.outcome-side-wrap');
     const sideSelect = cond.querySelector('.outcome-stat-side');
     const opSelect = cond.querySelector('.outcome-stat-operator');
 
-    // Keep outcome condition options in sync with the main "Regras de Estatisticas".
     if (statSelect) {
       statSelect.innerHTML = `
         <optgroup label="Estatisticas">
@@ -601,7 +640,6 @@
         </optgroup>
       `.trim();
     }
-
     if (opSelect) {
       opSelect.innerHTML = `
         <option value=">=">&gt;=</option>
@@ -611,7 +649,6 @@
         <option value="<"><</option>
       `.trim();
     }
-
     if (prefill) {
       if (statSelect) statSelect.value = normalizeStatKey(prefill.stat_key);
       if (sideSelect) sideSelect.value = prefill.side;
@@ -628,8 +665,22 @@
     if (statSelect) statSelect.addEventListener('change', syncOutcomeSideVisibility);
     syncOutcomeSideVisibility();
 
-    cond.querySelector('.remove-outcome-condition').addEventListener('click', () => cond.remove());
-    container.appendChild(cond);
+    cond.querySelector('.remove-outcome-condition').addEventListener('click', () => {
+      cond.remove();
+      refreshNames();
+    });
+    list.appendChild(cond);
+    refreshNames();
+    return cond;
+  }
+
+  function refreshOutcomeGroupIndices(type) {
+    const container = outcomeContainer(type);
+    Array.from(container.children).forEach((group, i) => {
+      group.dataset.groupId = i;
+      const title = group.querySelector('.outcome-group-title');
+      if (title) title.textContent = `Grupo ${i + 1} (OU)`;
+    });
     refreshNames();
   }
 
@@ -657,12 +708,15 @@
 
     // Outcomes
     ['green', 'red'].forEach(type => {
-      const container = type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
-      Array.from(container.children).forEach((cond, i) => {
-        cond.querySelector('.outcome-stat-select').name = `outcome-${type}-${i}-stat_key`;
-        cond.querySelector('.outcome-stat-side').name = `outcome-${type}-${i}-side`;
-        cond.querySelector('.outcome-stat-operator').name = `outcome-${type}-${i}-operator`;
-        cond.querySelector('.outcome-stat-value').name = `outcome-${type}-${i}-value`;
+      const container = outcomeContainer(type);
+      Array.from(container.children).forEach((group, gIdx) => {
+        const rows = group.querySelectorAll('.outcome-condition-block');
+        rows.forEach((cond, cIdx) => {
+          cond.querySelector('.outcome-stat-select').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-stat_key`;
+          cond.querySelector('.outcome-stat-side').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-side`;
+          cond.querySelector('.outcome-stat-operator').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-operator`;
+          cond.querySelector('.outcome-stat-value').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-value`;
+        });
       });
     });
   }
@@ -673,8 +727,12 @@
     addConditionToGroup(group);
   });
 
-  document.querySelectorAll('[data-add-outcome]').forEach(btn => {
-    btn.addEventListener('click', () => addOutcome(btn.dataset.addOutcome));
+  document.querySelectorAll('[data-add-outcome-group]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.addOutcomeGroup;
+      const group = addOutcomeGroup(type);
+      addOutcomeConditionToGroup(type, group);
+    });
   });
 
   // Carregar dados existentes
@@ -715,8 +773,30 @@
     }
   }
 
-  existingOutcomeGreen.forEach(c => addOutcome('green', c));
-  existingOutcomeRed.forEach(c => addOutcome('red', c));
+  function loadOutcomeGroups(type, items, createDefault = true) {
+    const groups = {};
+    (items || []).forEach(c => {
+      const gid = c.group_id || 0;
+      if (!groups[gid]) groups[gid] = [];
+      groups[gid].push(c);
+    });
+    const groupIds = Object.keys(groups);
+    if (groupIds.length) {
+      groupIds.sort((a, b) => Number(a) - Number(b)).forEach(gid => {
+        const group = addOutcomeGroup(type, Number(gid));
+        groups[gid].forEach(c => addOutcomeConditionToGroup(type, group, c));
+      });
+      return;
+    }
+    if (!createDefault) {
+      return;
+    }
+    const group = addOutcomeGroup(type);
+    addOutcomeConditionToGroup(type, group);
+  }
+
+  loadOutcomeGroups('green', existingOutcomeGreen);
+  loadOutcomeGroups('red', existingOutcomeRed, false);
 
   document.getElementById('rule-form').addEventListener('submit', () => {
     syncAllowedLeaguesFromRows();
@@ -802,17 +882,21 @@
     });
 
     [['green', outcomeGreenContainer], ['red', outcomeRedContainer]].forEach(([type, container]) => {
-      Array.from(container.children).forEach((row) => {
-        const stat = row.querySelector('.outcome-stat-select')?.value || '';
-        const side = row.querySelector('.outcome-stat-side')?.value || '';
-        const op = row.querySelector('.outcome-stat-operator')?.value || '';
-        const val = row.querySelector('.outcome-stat-value')?.value || '';
-        if (!stat || !op || val === '') return;
-        data[type === 'green' ? 'outcome_green' : 'outcome_red'].push({
-          stat_key: stat,
-          side: stat === 'Minute' ? 'total' : side,
-          operator: op,
-          value: Number(val),
+      Array.from(container.children).forEach((group, gIdx) => {
+        const rows = group.querySelectorAll('.outcome-condition-block');
+        rows.forEach((row) => {
+          const stat = row.querySelector('.outcome-stat-select')?.value || '';
+          const side = row.querySelector('.outcome-stat-side')?.value || '';
+          const op = row.querySelector('.outcome-stat-operator')?.value || '';
+          const val = row.querySelector('.outcome-stat-value')?.value || '';
+          if (!stat || !op || val === '') return;
+          data[type === 'green' ? 'outcome_green' : 'outcome_red'].push({
+            group_id: gIdx,
+            stat_key: stat,
+            side: stat === 'Minute' ? 'total' : side,
+            operator: op,
+            value: Number(val),
+          });
         });
       });
     });
