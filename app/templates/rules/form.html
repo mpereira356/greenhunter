@@ -2,7 +2,7 @@
 {% block title %}Configurar Regra{% endblock %}
 {% block content %}
 {% set form = form_data if form_data is defined and form_data else None %}
-{% set default_message = '📢 {rule}\n⏱️ Tempo: {minute}\'\n🏟️ {home_team} vs {away_team}\n🥅 Placar: {score}\n🎯 À Baliza: {on_target_home} x {on_target_away}\n🚩 Escanteios: {corners_home} x {corners_away}\n🔗 Abrir no site ({url})' %}
+{% set default_message = 'ALERTA DE ENTRADA\n\nRegra: {rule}\nLiga: {league}\nMinuto: {minute}\'\nJogo: {home_team} vs {away_team}\nPlacar: {score}\n\nLeitura do jogo\nChutes no alvo: {on_target_home} x {on_target_away} (total: {on_target_total})\nAtaques perigosos: {dangerous_attacks_home} x {dangerous_attacks_away} (total: {dangerous_attacks_total})\nEscanteios: {corners_home} x {corners_away} (total: {corners_total})\n\nContexto\nH2H: {history_h2h}\nMandante: {history_home}\nVisitante: {history_away}\nConf. H2H: {history_confidence}\nConf. Regra: {rule_confidence}\nConf. Liga: {league_rule_confidence}\n\nAnalise IA e ML\nIA: {ai_commentary}\nVeredito IA: {ai_verdict} ({ai_score}/100)\nVeredito ML: {ml_verdict} ({ml_score}/100)\nVariaveis ML: {ml_feature_count}\nAmostras ML: {ml_samples}\nUltimo treino ML: {ml_trained_at}\n\nLink: {url}' %}
 
 <div class="builder-shell rule-editor">
   <div class="page-header mb-4">
@@ -79,26 +79,23 @@
             <div class="p-3 border rounded-3 bg-light h-100">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-bold text-success">GREEN</h6>
-                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-group="green">+ Grupo (OU)</button>
+                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-group="green">+ Adicionar Grupo (OU)</button>
               </div>
               <div id="outcome-green-container"></div>
-              <div class="form-text mt-2 small">
-                Condições no mesmo grupo: <strong>E</strong>. Grupos diferentes: <strong>OU</strong>.
-              </div>
             </div>
           </div>
           <div class="col-md-6">
             <div class="p-3 border rounded-3 bg-light h-100">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="mb-0 fw-bold text-danger">RED</h6>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Grupo (OU)</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Adicionar Grupo (OU)</button>
               </div>
               <div id="outcome-red-container"></div>
-              <div class="form-text mt-2 small">
-                Condições no mesmo grupo: <strong>E</strong>. Grupos diferentes: <strong>OU</strong>.
-              </div>
             </div>
           </div>
+        </div>
+        <div class="form-text mt-2 small">
+          Condições dentro do mesmo grupo de resultado funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
         </div>
       </div>
     </div>
@@ -175,6 +172,15 @@
               <div><code>{history_away}</code> - resumo do historico do visitante.</div>
               <div><code>{history_confidence}</code> - confianca baseada no H2H (gols).</div>
               <div><code>{rule_confidence}</code> - confianca da regra (greens/reds pos-alerta).</div>
+              <div><code>{league_rule_confidence}</code> - confianca da regra nesta liga.</div>
+              <div><code>{ai_commentary}</code> - comentario automatico da IA para o jogo.</div>
+              <div><code>{ai_verdict}</code> - recomendacao da IA (entrada/cautela/evitar).</div>
+              <div><code>{ai_score}</code> - nota da IA de 0 a 100.</div>
+              <div><code>{ml_verdict}</code> - recomendacao do modelo de ML.</div>
+              <div><code>{ml_score}</code> - score do modelo de ML (0 a 100).</div>
+              <div><code>{ml_samples}</code> - total de amostras usadas no treino.</div>
+              <div><code>{ml_trained_at}</code> - data/hora do ultimo treino do ML.</div>
+              <div><code>{ml_feature_count}</code> - quantidade de variaveis aprendidas pelo modelo.</div>
             </div>
           </div>
         </div>
@@ -183,12 +189,33 @@
 
     <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-3">
       <a href="{{ url_for('rules.list_rules') }}" class="btn btn-light px-4">Cancelar</a>
+      <button type="button" class="btn btn-outline-info px-3" id="open-ai-hint" data-bs-toggle="modal" data-bs-target="#aiHintModal">Dica IA</button>
       <button type="button" class="btn btn-outline-secondary px-4" id="test-rule">Testar bot</button>
       <button type="button" class="btn btn-outline-dark px-4" id="copy-debug">Copiar debug</button>
       <button type="submit" class="btn btn-primary px-5">Salvar Estratégia</button>
     </div>
     <div id="test-rule-result" class="test-rule-result mb-5" role="status" aria-live="polite"></div>
   </form>
+</div>
+
+<div class="modal fade" id="aiHintModal" tabindex="-1" aria-labelledby="aiHintModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="aiHintModalLabel">Dica IA para montar regra</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <label for="ai-hint-objective" class="form-label">Qual mercado/objetivo voce quer testar?</label>
+        <textarea id="ai-hint-objective" class="form-control" rows="3" placeholder="Ex: quero buscar 1 gol HT com entrada ate 20 minutos"></textarea>
+        <div class="d-flex gap-2 mt-3">
+          <button type="button" class="btn btn-primary" id="ai-hint-generate">Gerar sugestao</button>
+          <button type="button" class="btn btn-outline-success" id="ai-hint-apply" disabled>Aplicar na regra</button>
+        </div>
+        <div id="ai-hint-result" class="mt-3 small text-muted"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- TEMPLATES -->
@@ -260,6 +287,17 @@
   </div>
 </template>
 
+<template id="outcome-group-template">
+  <div class="outcome-group mb-3 p-3 border rounded-3 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0 fw-bold text-secondary outcome-group-title">Grupo 1 (OU)</h6>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-group">Remover Grupo</button>
+    </div>
+    <div class="outcome-conditions-list"></div>
+    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-outcome-group mt-2">+ Condição</button>
+  </div>
+</template>
+
 <template id="outcome-condition-template">
   <div class="outcome-condition-block mb-2 p-2 border rounded bg-white">
     <div class="row g-2 align-items-end">
@@ -295,25 +333,14 @@
   </div>
 </template>
 
-<template id="outcome-group-template">
-  <div class="outcome-group mb-3 p-3 border rounded-3 bg-white">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0 fw-semibold outcome-group-title">Grupo 1 (OU)</h6>
-      <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-group">Remover Grupo</button>
-    </div>
-    <div class="outcome-conditions-list"></div>
-    <button type="button" class="btn btn-sm btn-outline-primary add-outcome-to-group mt-2">+ Condição</button>
-  </div>
-</template>
-
 <script>
   const groupsContainer = document.getElementById('groups-container');
   const groupTemplate = document.getElementById('group-template');
   const conditionTemplate = document.getElementById('condition-template');
   const outcomeGreenContainer = document.getElementById('outcome-green-container');
   const outcomeRedContainer = document.getElementById('outcome-red-container');
-  const outcomeTemplate = document.getElementById('outcome-condition-template');
   const outcomeGroupTemplate = document.getElementById('outcome-group-template');
+  const outcomeTemplate = document.getElementById('outcome-condition-template');
 
   const existingConditions = {{ (form_conditions if form_conditions else (rule.conditions if rule else [])) | tojson }};
   const existingOutcomeGreen = {{ (form_outcome_green if form_outcome_green else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'green') | list if rule else [])) | tojson }};
@@ -322,6 +349,11 @@
   const initialAllowedLeagues = {{ (allowed_leagues if allowed_leagues is defined else []) | tojson }};
 
   const allowedLeaguesHidden = document.getElementById('allowed-leagues-json');
+  const aiHintObjective = document.getElementById('ai-hint-objective');
+  const aiHintGenerateBtn = document.getElementById('ai-hint-generate');
+  const aiHintApplyBtn = document.getElementById('ai-hint-apply');
+  const aiHintResult = document.getElementById('ai-hint-result');
+  let lastAiHint = null;
 
   function normalizeLeagueName(value) {
     return (value || '').toString().trim().replace(/\s+/g, ' ');
@@ -334,6 +366,15 @@
     } catch (e) {
       return [];
     }
+  }
+
+  function escapeHtml(value) {
+    return (value || '').toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function getAllowedLeagues() {
@@ -378,6 +419,78 @@
 
     groupsContainer.appendChild(group);
     return group;
+  }
+
+  function clearAllConditionsAndOutcomes() {
+    groupsContainer.innerHTML = '';
+    outcomeGreenContainer.innerHTML = '';
+    outcomeRedContainer.innerHTML = '';
+    setAllowedLeagues([]);
+  }
+
+  function renderAiHint(hint) {
+    if (!aiHintResult) return;
+    if (!hint || !hint.suggestion) {
+      aiHintResult.innerHTML = '<div class="text-danger">Nao foi possivel gerar a sugestao.</div>';
+      return;
+    }
+    const notes = Array.isArray(hint.suggestion.notes) ? hint.suggestion.notes : [];
+    const notesHtml = notes.length ? `<ul class="mb-0 mt-2">${notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
+    aiHintResult.innerHTML = `
+      <div class="border rounded-3 p-3 bg-light">
+        <div class="fw-bold mb-1">${escapeHtml(hint.title || 'Sugestao')}</div>
+        <div class="text-muted">${escapeHtml(hint.rationale || '')}</div>
+        ${notesHtml}
+      </div>
+    `;
+  }
+
+  function applyAiHintSuggestion(hint) {
+    if (!hint || !hint.suggestion) return;
+    const s = hint.suggestion;
+    clearAllConditionsAndOutcomes();
+
+    const nameInput = document.getElementById('rule-name');
+    const msgInput = document.querySelector('textarea[name="message_template"]');
+    const greenMinuteInput = document.querySelector('input[name="outcome_green_minute"]');
+    const redMinuteInput = document.querySelector('input[name="outcome_red_minute"]');
+    const redToggleInput = document.getElementById('outcome-red-if-no-green');
+    const secondHalfOnlyInput = document.getElementById('second_half_only');
+
+    if (nameInput && s.name) nameInput.value = s.name;
+    if (msgInput && s.message_template) msgInput.value = s.message_template;
+    if (greenMinuteInput) greenMinuteInput.value = s.outcome_green_minute ?? '';
+    if (redMinuteInput) redMinuteInput.value = s.outcome_red_minute ?? '';
+    if (redToggleInput) redToggleInput.checked = !!s.outcome_red_if_no_green;
+    if (secondHalfOnlyInput && Object.prototype.hasOwnProperty.call(s, 'second_half_only')) {
+      secondHalfOnlyInput.checked = !!s.second_half_only;
+    }
+
+    const grouped = {};
+    (s.conditions || []).forEach(cond => {
+      const gid = Number.isInteger(cond.group_id) ? cond.group_id : 0;
+      if (!grouped[gid]) grouped[gid] = [];
+      grouped[gid].push(cond);
+    });
+    const groupIds = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
+    if (groupIds.length) {
+      groupIds.forEach(gid => {
+        const group = addGroup(Number(gid));
+        grouped[gid].forEach(c => addConditionToGroup(group, c));
+      });
+    } else {
+      const group = addGroup();
+      addConditionToGroup(group);
+    }
+
+    loadOutcomeGroupsForType('green', s.outcome_green || []);
+    loadOutcomeGroupsForType('red', s.outcome_red || []);
+
+    setAllowedLeagues(Array.isArray(s.allowed_leagues) ? s.allowed_leagues : []);
+    syncAllowedLeaguesFromRows();
+    refreshGroupIndices();
+    refreshNames();
+    if (typeof syncRedMinute === 'function') syncRedMinute();
   }
 
   function normalizeStatKey(value) {
@@ -593,53 +706,57 @@
     return cond;
   }
 
-  function outcomeContainer(type) {
+  function outcomeContainerByType(type) {
     return type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
   }
 
   function addOutcomeGroup(type, groupId = null) {
-    const container = outcomeContainer(type);
+    const container = outcomeContainerByType(type);
     const group = outcomeGroupTemplate.content.firstElementChild.cloneNode(true);
-    const id = groupId !== null ? groupId : container.children.length;
-    group.dataset.groupId = id;
+    const nextIndex = groupId !== null ? groupId : container.children.length;
+
+    group.dataset.groupId = nextIndex;
+    group.querySelector('.outcome-group-title').textContent = `Grupo ${nextIndex + 1} (OU)`;
 
     group.querySelector('.remove-outcome-group').addEventListener('click', () => {
       group.remove();
       refreshOutcomeGroupIndices(type);
     });
-    group.querySelector('.add-outcome-to-group').addEventListener('click', () => {
-      addOutcomeConditionToGroup(type, group);
+    group.querySelector('.add-condition-to-outcome-group').addEventListener('click', () => {
+      addOutcomeCondition(type, group);
     });
 
     container.appendChild(group);
-    refreshOutcomeGroupIndices(type);
     return group;
   }
 
-  function addOutcomeConditionToGroup(type, group, prefill = null) {
+  function addOutcomeCondition(type, group, prefill = null) {
     const list = group.querySelector('.outcome-conditions-list');
     const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
+
     const statSelect = cond.querySelector('.outcome-stat-select');
     const sideWrap = cond.querySelector('.outcome-side-wrap');
     const sideSelect = cond.querySelector('.outcome-stat-side');
     const opSelect = cond.querySelector('.outcome-stat-operator');
 
+    // Keep outcome condition options in sync with the main "Regras de Estatisticas".
     if (statSelect) {
       statSelect.innerHTML = `
         <optgroup label="Estatisticas">
-          <option value="corners">🚩 Escanteios</option>
-          <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
-          <option value="on-target">🎯 Chutes no Alvo</option>
-          <option value="attacks">⚔️ Ataques</option>
-          <option value="off-target">❌ Chutes para Fora</option>
-          <option value="possession">🔄 Posse de Bola (%)</option>
-          <option value="goals">⚽ Gols</option>
-          <option value="yellow-cards">🟨 Cartoes Amarelos</option>
-          <option value="red-cards">🔴 Cartoes Vermelhos</option>
-          <option value="Minute">⏱️ Minutos</option>
+          <option value="corners">Escanteios</option>
+          <option value="dangerous-attacks">Ataques Perigosos</option>
+          <option value="on-target">Chutes no Alvo</option>
+          <option value="attacks">Ataques</option>
+          <option value="off-target">Chutes para Fora</option>
+          <option value="possession">Posse de Bola (%)</option>
+          <option value="goals">Gols</option>
+          <option value="yellow-cards">Cartoes Amarelos</option>
+          <option value="red-cards">Cartoes Vermelhos</option>
+          <option value="Minute">Minutos</option>
         </optgroup>
       `.trim();
     }
+
     if (opSelect) {
       opSelect.innerHTML = `
         <option value=">=">&gt;=</option>
@@ -649,6 +766,7 @@
         <option value="<"><</option>
       `.trim();
     }
+
     if (prefill) {
       if (statSelect) statSelect.value = normalizeStatKey(prefill.stat_key);
       if (sideSelect) sideSelect.value = prefill.side;
@@ -674,15 +792,47 @@
     return cond;
   }
 
+  function addOutcome(type, prefill = null, targetGroup = null) {
+    let group = targetGroup;
+    if (!group) {
+      const container = outcomeContainerByType(type);
+      group = container.children[0] || addOutcomeGroup(type);
+    }
+    return addOutcomeCondition(type, group, prefill);
+  }
+
   function refreshOutcomeGroupIndices(type) {
-    const container = outcomeContainer(type);
+    const container = outcomeContainerByType(type);
     Array.from(container.children).forEach((group, i) => {
       group.dataset.groupId = i;
-      const title = group.querySelector('.outcome-group-title');
-      if (title) title.textContent = `Grupo ${i + 1} (OU)`;
+      group.querySelector('.outcome-group-title').textContent = `Grupo ${i + 1} (OU)`;
     });
     refreshNames();
   }
+
+  function loadOutcomeGroupsForType(type, conditions) {
+    const container = outcomeContainerByType(type);
+    container.innerHTML = '';
+
+    const byGroup = {};
+    (conditions || []).forEach((cond) => {
+      const gid = Number.isInteger(cond.group_id) ? cond.group_id : 0;
+      if (!byGroup[gid]) byGroup[gid] = [];
+      byGroup[gid].push(cond);
+    });
+
+    const ids = Object.keys(byGroup).sort((a, b) => Number(a) - Number(b));
+    if (!ids.length) {
+      return;
+    }
+
+    ids.forEach((gid) => {
+      const group = addOutcomeGroup(type, Number(gid));
+      byGroup[gid].forEach((cond) => addOutcomeCondition(type, group, cond));
+    });
+    refreshOutcomeGroupIndices(type);
+  }
+
 
   function refreshGroupIndices() {
     Array.from(groupsContainer.children).forEach((group, i) => {
@@ -708,10 +858,10 @@
 
     // Outcomes
     ['green', 'red'].forEach(type => {
-      const container = outcomeContainer(type);
+      const container = outcomeContainerByType(type);
       Array.from(container.children).forEach((group, gIdx) => {
-        const rows = group.querySelectorAll('.outcome-condition-block');
-        rows.forEach((cond, cIdx) => {
+        const conditions = group.querySelectorAll('.outcome-condition-block');
+        conditions.forEach((cond, cIdx) => {
           cond.querySelector('.outcome-stat-select').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-stat_key`;
           cond.querySelector('.outcome-stat-side').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-side`;
           cond.querySelector('.outcome-stat-operator').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-operator`;
@@ -731,7 +881,8 @@
     btn.addEventListener('click', () => {
       const type = btn.dataset.addOutcomeGroup;
       const group = addOutcomeGroup(type);
-      addOutcomeConditionToGroup(type, group);
+      addOutcomeCondition(type, group);
+      refreshOutcomeGroupIndices(type);
     });
   });
 
@@ -773,30 +924,8 @@
     }
   }
 
-  function loadOutcomeGroups(type, items, createDefault = true) {
-    const groups = {};
-    (items || []).forEach(c => {
-      const gid = c.group_id || 0;
-      if (!groups[gid]) groups[gid] = [];
-      groups[gid].push(c);
-    });
-    const groupIds = Object.keys(groups);
-    if (groupIds.length) {
-      groupIds.sort((a, b) => Number(a) - Number(b)).forEach(gid => {
-        const group = addOutcomeGroup(type, Number(gid));
-        groups[gid].forEach(c => addOutcomeConditionToGroup(type, group, c));
-      });
-      return;
-    }
-    if (!createDefault) {
-      return;
-    }
-    const group = addOutcomeGroup(type);
-    addOutcomeConditionToGroup(type, group);
-  }
-
-  loadOutcomeGroups('green', existingOutcomeGreen);
-  loadOutcomeGroups('red', existingOutcomeRed, false);
+  loadOutcomeGroupsForType('green', existingOutcomeGreen);
+  loadOutcomeGroupsForType('red', existingOutcomeRed);
 
   document.getElementById('rule-form').addEventListener('submit', () => {
     syncAllowedLeaguesFromRows();
@@ -881,7 +1010,8 @@
       });
     });
 
-    [['green', outcomeGreenContainer], ['red', outcomeRedContainer]].forEach(([type, container]) => {
+    ['green', 'red'].forEach((type) => {
+      const container = outcomeContainerByType(type);
       Array.from(container.children).forEach((group, gIdx) => {
         const rows = group.querySelectorAll('.outcome-condition-block');
         rows.forEach((row) => {
@@ -942,6 +1072,47 @@
       });
     }
   });
+
+  if (aiHintGenerateBtn) {
+    aiHintGenerateBtn.addEventListener('click', async () => {
+      const objective = (aiHintObjective ? aiHintObjective.value : '').trim();
+      if (!objective) {
+        if (aiHintResult) aiHintResult.innerHTML = '<div class="text-danger">Descreva seu objetivo antes de gerar.</div>';
+        return;
+      }
+      aiHintGenerateBtn.disabled = true;
+      aiHintApplyBtn.disabled = true;
+      if (aiHintResult) aiHintResult.innerHTML = '<div class="text-muted">Gerando sugestao...</div>';
+      try {
+        const response = await fetch('{{ url_for("rules.ai_hint") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ objective }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          const msg = (data && data.message) ? data.message : 'Falha ao gerar sugestao.';
+          if (aiHintResult) aiHintResult.innerHTML = `<div class="text-danger">${msg}</div>`;
+          return;
+        }
+        lastAiHint = data.hint || null;
+        renderAiHint(lastAiHint);
+        aiHintApplyBtn.disabled = !lastAiHint;
+      } catch (err) {
+        if (aiHintResult) aiHintResult.innerHTML = '<div class="text-danger">Erro de comunicacao ao gerar sugestao.</div>';
+      } finally {
+        aiHintGenerateBtn.disabled = false;
+      }
+    });
+  }
+
+  if (aiHintApplyBtn) {
+    aiHintApplyBtn.addEventListener('click', () => {
+      if (!lastAiHint) return;
+      applyAiHintSuggestion(lastAiHint);
+      if (aiHintResult) aiHintResult.innerHTML = '<div class="text-success">Sugestao aplicada ao formulario. Revise e salve.</div>';
+    });
+  }
 
   function renderTestResult(state) {
     const result = document.getElementById('test-rule-result');

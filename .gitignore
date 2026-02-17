@@ -16,3 +16,4 @@ data/exports/*.xlsx
 # Exports gerados automaticamente
 data/exports/
 data/browser_profile/
+data/ml/

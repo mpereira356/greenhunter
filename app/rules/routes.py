@@ -1,5 +1,8 @@
 ﻿import json
-from datetime import datetime
+import re
+import difflib
+import unicodedata
+from datetime import datetime, timedelta
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -21,6 +24,178 @@ from ..services.worker import parse_score
 from ..utils.time import now_sp
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
+AI_HINT_CACHE = {}
+
+
+def _normalize_hint_text(raw: str) -> str:
+    text = (raw or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^a-z0-9x\s]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    typo_map = {
+        "estanteio": "escanteio",
+        "estanteios": "escanteios",
+        "escantei": "escanteio",
+        "cantos": "escanteios",
+        "cartoes": "cartao",
+        "amarelos": "cartao",
+        "vermelhos": "cartao",
+        "primeirotempo": "primeiro tempo",
+        "segundotempo": "segundo tempo",
+        "placarcorreto": "placar correto",
+        "ambasmarcam": "ambas marcam",
+        "finalizacao": "finalizacoes",
+        "baliza": "chute no alvo",
+    }
+    for wrong, right in typo_map.items():
+        text = text.replace(wrong, right)
+    return text
+
+
+def _contains_any_fuzzy(text: str, keywords: list[str], min_ratio: float = 0.84) -> bool:
+    if not text:
+        return False
+    if any(k in text for k in keywords):
+        return True
+    tokens = text.split()
+    for token in tokens:
+        for key in keywords:
+            for kt in key.split():
+                if len(token) < 4 or len(kt) < 4:
+                    continue
+                if difflib.SequenceMatcher(None, token, kt).ratio() >= min_ratio:
+                    return True
+    return False
+
+
+def _hint_market_from_text(compact: str) -> str:
+    text = _normalize_hint_text(compact)
+    if _contains_any_fuzzy(text, ["escanteio", "escanteios", "corner", "cantos"]):
+        return "corners"
+    if _contains_any_fuzzy(text, ["cartao", "card", "amarelo", "vermelho"]):
+        return "cards"
+    if _contains_any_fuzzy(text, ["ambas marcam", "btts", "gg"]):
+        return "btts"
+    if _contains_any_fuzzy(text, ["placar correto", "placar exato", "correct score", "exato"]):
+        return "exact_score"
+    if _contains_any_fuzzy(text, ["2 tempo", "2o tempo", "segundo tempo"]):
+        return "goal_2h"
+    if _contains_any_fuzzy(text, ["under", "menos de"]):
+        return "under_goals"
+    if _contains_any_fuzzy(text, ["over", "mais de"]):
+        return "over_goals"
+    if _contains_any_fuzzy(text, ["ht", "1 tempo", "1o tempo", "primeiro tempo"]):
+        return "goal_ht"
+    if _contains_any_fuzzy(text, ["gol", "gols"]):
+        return "goals"
+    return "generic"
+
+
+def _hint_market_from_rule_name(name: str, result_minute: int | None) -> str:
+    compact = _normalize_hint_text(name or "")
+    market = _hint_market_from_text(compact)
+    if market == "goals" and isinstance(result_minute, int) and result_minute <= 45:
+        return "goal_ht"
+    return market
+
+
+def _hint_stat_total(stats_json: str | None, key: str) -> int | None:
+    if not stats_json:
+        return None
+    try:
+        stats = json.loads(stats_json)
+    except Exception:
+        return None
+    if not isinstance(stats, dict):
+        return None
+    bucket = stats.get(key)
+    if not isinstance(bucket, dict):
+        return None
+    value = bucket.get("total")
+    try:
+        if value in (None, "", "-"):
+            return None
+        return int(value)
+    except Exception:
+        return None
+
+
+def _percentile(values: list[int], pct: float) -> int | None:
+    nums = sorted(v for v in values if isinstance(v, (int, float)))
+    if not nums:
+        return None
+    idx = int((len(nums) - 1) * pct)
+    return int(round(nums[idx]))
+
+
+def _global_market_learning(market_key: str, limit: int = 2400) -> dict | None:
+    now = now_sp()
+    cached = AI_HINT_CACHE.get(market_key)
+    if cached and isinstance(cached, dict):
+        seen_at = cached.get("seen_at")
+        if isinstance(seen_at, datetime) and (now - seen_at) < timedelta(minutes=5):
+            return cached.get("profile")
+
+    rows = (
+        db.session.query(MatchAlert, Rule)
+        .join(Rule, Rule.id == MatchAlert.rule_id)
+        .filter(MatchAlert.status.in_(("green", "red")))
+        .order_by(MatchAlert.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    if not rows:
+        return None
+
+    market_rows = []
+    for alert, rule in rows:
+        mk = _hint_market_from_rule_name(rule.name if rule else "", alert.result_minute)
+        if market_key != "generic" and mk != market_key:
+            continue
+        market_rows.append((alert, rule))
+    if len(market_rows) < 30:
+        return None
+
+    greens = 0
+    reds = 0
+    green_minutes = []
+    green_on_target = []
+    green_dangerous = []
+    green_corners = []
+    for alert, _rule in market_rows:
+        is_green = alert.status == "green"
+        greens += 1 if is_green else 0
+        reds += 0 if is_green else 1
+        if not is_green:
+            continue
+        if isinstance(alert.alert_minute, int):
+            green_minutes.append(alert.alert_minute)
+        ot = _hint_stat_total(alert.initial_stats_json, "On Target")
+        dg = _hint_stat_total(alert.initial_stats_json, "Dangerous Attacks")
+        cr = _hint_stat_total(alert.initial_stats_json, "Corners")
+        if isinstance(ot, int):
+            green_on_target.append(ot)
+        if isinstance(dg, int):
+            green_dangerous.append(dg)
+        if isinstance(cr, int):
+            green_corners.append(cr)
+
+    total = greens + reds
+    if total == 0:
+        return None
+    profile = {
+        "samples": total,
+        "green": greens,
+        "red": reds,
+        "win_rate": round((greens / total) * 100, 2),
+        "minute_p50": _percentile(green_minutes, 0.50),
+        "on_target_p25": _percentile(green_on_target, 0.25),
+        "dangerous_p25": _percentile(green_dangerous, 0.25),
+        "corners_p25": _percentile(green_corners, 0.25),
+    }
+    AI_HINT_CACHE[market_key] = {"seen_at": now, "profile": profile}
+    return profile
 
 
 def _clean_league_name(value: str) -> str:
@@ -155,16 +330,15 @@ def _parse_outcome_conditions(form, prefix):
         return value
 
     outcome_type = prefix.split("-")[-1]
-
-    # New grouped format: outcome-<type>-group-<g>-cond-<i>-stat_key
-    grouped_keys = [k for k in form.keys() if k.startswith(f"{prefix}-group-") and k.endswith("-stat_key")]
+    grouped_pattern = re.compile(rf"^{re.escape(prefix)}-group-(\d+)-cond-(\d+)-stat_key$")
+    grouped_keys = [k for k in form.keys() if grouped_pattern.match(k)]
     if grouped_keys:
         for key in grouped_keys:
-            parts = key.split("-")
-            if len(parts) < 7:
+            match = grouped_pattern.match(key)
+            if not match:
                 continue
-            group_id = _coerce_int(parts[3], default=0)
-            index = _coerce_int(parts[5], default=0)
+            group_id = int(match.group(1))
+            index = int(match.group(2))
             stat_key = form.get(f"{prefix}-group-{group_id}-cond-{index}-stat_key", "").strip()
             side = form.get(f"{prefix}-group-{group_id}-cond-{index}-side", "").strip()
             if not side and stat_key.lower() in ("minute", "minutos", "minuto", "min"):
@@ -184,7 +358,6 @@ def _parse_outcome_conditions(form, prefix):
                 )
         return conditions
 
-    # Legacy flat format
     index = 0
     while True:
         stat_key = form.get(f"{prefix}-{index}-stat_key")
@@ -243,6 +416,503 @@ def _normalize_import_operator(value: str) -> str:
     return value
 
 
+def _build_ai_hint(objective_text: str) -> dict:
+    text = (objective_text or "").strip()
+    compact = _normalize_hint_text(text)
+    market_key = _hint_market_from_text(compact)
+    profile = _global_market_learning(market_key)
+
+    def learned(default_value: int, key: str, min_v: int, max_v: int) -> int:
+        if not profile:
+            return default_value
+        raw = profile.get(key)
+        if not isinstance(raw, int):
+            return default_value
+        return max(min_v, min(max_v, raw))
+
+    learning_note = None
+    if profile:
+        learning_note = (
+            f"Base global: {profile.get('samples')} entradas | "
+            f"WR {profile.get('win_rate')}% ({profile.get('green')}G/{profile.get('red')}R)."
+        )
+    nums = [int(n) for n in re.findall(r"\d+", compact)]
+    minute_hint = None
+    for n in nums:
+        if 5 <= n <= 45:
+            minute_hint = n
+            break
+    minute_cap = minute_hint or learned(20, "minute_p50", 12, 32)
+    goal_target = 1
+    if "2 gol" in compact or "2 gols" in compact:
+        goal_target = 2
+
+    wants_ht = ("ht" in compact) or ("1 tempo" in compact) or ("1o tempo" in compact) or ("primeiro tempo" in compact)
+    wants_ft = ("ft" in compact) or ("final" in compact) or ("full time" in compact) or ("jogo todo" in compact)
+    wants_corners = ("escanteio" in compact) or ("corner" in compact)
+    wants_cards = ("cartao" in compact) or ("card" in compact)
+    wants_btts = ("ambas marcam" in compact) or ("btts" in compact) or ("gg" in compact)
+    wants_second_half = ("2 tempo" in compact) or ("2o tempo" in compact) or ("segundo tempo" in compact)
+    wants_exact_score = ("placar correto" in compact) or ("exato" in compact) or ("correct score" in compact)
+    wants_over = ("over" in compact) or ("mais de" in compact)
+    wants_under = ("under" in compact) or ("menos de" in compact)
+    score_pairs = re.findall(r"(\d+)\s*x\s*(\d+)", compact)
+
+    if wants_second_half and score_pairs:
+        valid_pairs = []
+        for a, b in score_pairs[:4]:
+            try:
+                h = int(a)
+                aw = int(b)
+            except Exception:
+                continue
+            if 0 <= h <= 7 and 0 <= aw <= 7:
+                valid_pairs.append((h, aw))
+        if valid_pairs:
+            totals = sorted({h + aw for h, aw in valid_pairs})
+            min_home = min(h for h, _ in valid_pairs)
+            min_away = min(a for _, a in valid_pairs)
+            targets_txt = " ou ".join(f"{h}x{a}" for h, a in valid_pairs)
+            primary_total = totals[0]
+            ot_cut = learned(5, "on_target_p25", 3, 9)
+            da_cut = learned(45, "dangerous_p25", 30, 80)
+            return {
+                "title": f"Regra para buscar placar {targets_txt} no 2o tempo",
+                "rationale": (
+                    f"Para buscar {targets_txt} no 2o tempo, priorize jogos vivos apos 55 minutos. "
+                    f"Pelo historico, jogos com pelo menos {ot_cut} chutes no alvo totais e {da_cut} ataques perigosos "
+                    f"tem mais chance de chegar nesse perfil de placar."
+                ),
+                "suggestion": {
+                    "name": f"2T BUSCAR {targets_txt}",
+                    "message_template": (
+                        "🚨 {rule}\n"
+                        "{home_team} vs {away_team}\n"
+                        "Min: {minute} | Placar: {score}\n"
+                        "IA: {ai_commentary}\n"
+                        "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                        "ML: {ml_verdict} ({ml_score}/100)\n"
+                        "Link: {url}"
+                    ),
+                    "outcome_green_minute": 90,
+                    "outcome_red_minute": 90,
+                    "outcome_red_if_no_green": True,
+                    "conditions": [
+                        {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": ">=", "value": 55},
+                        {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": ot_cut},
+                        {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": da_cut},
+                    ],
+                    "outcome_green": [
+                        {"stat_key": "goals", "side": "total", "operator": "==", "value": primary_total},
+                        {"stat_key": "goals", "side": "home", "operator": ">=", "value": min_home},
+                        {"stat_key": "goals", "side": "away", "operator": ">=", "value": min_away},
+                        {"stat_key": "goals", "side": "total", "operator": ">=", "value": primary_total},
+                    ],
+                    "outcome_red": [],
+                    "allowed_leagues": [],
+                    "notes": [
+                        learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                        "Como a condicao final da regra nao aceita dois placares exatos juntos, use a estrutura do placar (total de gols + gol dos dois lados).",
+                        f"Se quiser ficar mais preciso, crie duas regras: uma para {valid_pairs[0][0]}x{valid_pairs[0][1]} e outra para {valid_pairs[-1][0]}x{valid_pairs[-1][1]}.",
+                        "Deixe rodar por pelo menos 50 resultados antes de ajustar os filtros.",
+                    ],
+                },
+            }
+
+    if wants_ht and ("gol" in compact):
+        return {
+            "title": f"Regra inicial para buscar {goal_target} gol(s) no HT",
+            "rationale": "Filtra jogos com pressao ofensiva cedo para buscar gol antes do intervalo.",
+            "suggestion": {
+                "name": f"CHUTES NO GOL ATE {minute_cap} MIN = BUSCAR {goal_target} GOL HT",
+                "message_template": (
+                    "🚨 {rule}\n"
+                    "{home_team} vs {away_team}\n"
+                    "Min: {minute} | Placar: {score}\n"
+                    "Conf regra: {rule_confidence} | Conf liga: {league_rule_confidence}\n"
+                    "H2H: {history_h2h}\n"
+                    "IA: {ai_commentary}\n"
+                    "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                    "ML: {ml_verdict} ({ml_score}/100) [{ml_samples} amostras]\n"
+                    "Link: {url}"
+                ),
+                "outcome_green_minute": 45,
+                "outcome_red_minute": 45,
+                "outcome_red_if_no_green": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": learned(4 if goal_target == 1 else 5, "on_target_p25", 3, 8)},
+                    {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": learned(28 if goal_target == 1 else 35, "dangerous_p25", 20, 60)},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": minute_cap},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "total", "operator": ">=", "value": goal_target},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Se vier muito RED, aumente o filtro de chutes no alvo em +1.",
+                    "Se vier poucos sinais, abra o minuto limite em +2/+3 e acompanhe o ML.",
+                ],
+            },
+        }
+
+    if wants_corners:
+        corner_target = learned(8, "corners_p25", 6, 12)
+        for n in nums:
+            if 5 <= n <= 16:
+                corner_target = n
+                break
+        second_half_corners = wants_second_half
+        corner_minute_cond = 46 if second_half_corners else 30
+        ot_needed = learned(2 if second_half_corners else 3, "on_target_p25", 1, 7)
+        da_needed = learned(28 if second_half_corners else 35, "dangerous_p25", 18, 70)
+        return {
+            "title": "Regra inicial para escanteios no 2o tempo" if second_half_corners else "Regra inicial para escanteios",
+            "rationale": (
+                f"Para buscar {corner_target} escanteios no 2o tempo, filtre jogos que chegam vivos na etapa final."
+                if second_half_corners
+                else "Usa volume ofensivo para filtrar jogos com tendencia a corners."
+            ),
+            "suggestion": {
+                "name": (
+                    f"2T VIVO = BUSCAR {corner_target} ESCANTEIOS NO 2T"
+                    if second_half_corners
+                    else f"PRESSAO ATE 30 MIN = BUSCAR {corner_target}+ ESCANTEIOS FT"
+                ),
+                "message_template": (
+                    "🚨 {rule}\n"
+                    "{home_team} vs {away_team}\n"
+                    "Min: {minute} | Placar: {score}\n"
+                    "Escanteios: {corners_home}x{corners_away}\n"
+                    "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                    "Link: {url}"
+                ),
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "second_half_only": second_half_corners,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": da_needed},
+                    {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": ot_needed},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": ">=" if second_half_corners else "<=", "value": corner_minute_cond},
+                ],
+                "outcome_green": [
+                    {"stat_key": "corners", "side": "total", "operator": ">=", "value": corner_target},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    (
+                        f"Se quiser focar ainda mais no 2o tempo, deixe o modo 'Somente 2o tempo' ligado e use minuto >= {corner_minute_cond}."
+                        if second_half_corners
+                        else "Mercados de escanteio variam por liga; monitore por campeonato."
+                    ),
+                    "Depois de 30 a 50 resultados, ajuste os filtros pelos greens e reds.",
+                ],
+            },
+        }
+
+    if wants_cards:
+        card_target = 4
+        for n in nums:
+            if 2 <= n <= 10:
+                card_target = n
+                break
+        return {
+            "title": "Regra inicial para cartoes",
+            "rationale": "Combina faltas e jogo truncado para buscar cartoes no FT.",
+            "suggestion": {
+                "name": f"JOGO FISICO = BUSCAR {card_target}+ CARTOES FT",
+                "message_template": (
+                    "🚨 {rule}\n"
+                    "{home_team} vs {away_team}\n"
+                    "Min: {minute} | Placar: {score}\n"
+                    "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                    "Link: {url}"
+                ),
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "second_half_only": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "attacks", "side": "total", "operator": ">=", "value": 55},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": 35},
+                ],
+                "outcome_green": [
+                    {"stat_key": "yellow-cards", "side": "total", "operator": ">=", "value": card_target},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Para cartoes, foque ligas de contato alto e arbitragens mais rigorosas.",
+                ],
+            },
+        }
+
+    if wants_btts:
+        return {
+            "title": "Regra inicial para ambas marcam",
+            "rationale": "Procura jogo aberto dos dois lados para elevar chance de gol para casa e visitante.",
+            "suggestion": {
+                "name": "JOGO ABERTO DOS 2 LADOS = BUSCAR BTTS",
+                "message_template": (
+                    "🚨 {rule}\n"
+                    "{home_team} vs {away_team}\n"
+                    "Min: {minute} | Placar: {score}\n"
+                    "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                    "Link: {url}"
+                ),
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "second_half_only": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "home", "operator": ">=", "value": 2},
+                    {"group_id": 0, "stat_key": "on-target", "side": "away", "operator": ">=", "value": 2},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": 60},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "home", "operator": ">=", "value": 1},
+                    {"stat_key": "goals", "side": "away", "operator": ">=", "value": 1},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Se vier muito 1x0, endureca a condicao do visitante (on-target away >= 3).",
+                ],
+            },
+        }
+
+    if wants_second_half and ("gol" in compact):
+        return {
+            "title": "Regra inicial para gol no 2o tempo",
+            "rationale": "Ativa em jogo vivo apos intervalo, buscando 1 gol no segundo tempo.",
+            "suggestion": {
+                "name": "2T VIVO = BUSCAR 1 GOL 2T",
+                "message_template": (
+                    "🚨 {rule}\n"
+                    "{home_team} vs {away_team}\n"
+                    "Min: {minute} | Placar: {score}\n"
+                    "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                    "Link: {url}"
+                ),
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": 4},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": ">=", "value": 55},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "total", "operator": ">=", "value": 1},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Use junto com modo 2o tempo quando quiser medir apenas dinamica da etapa final.",
+                ],
+            },
+        }
+
+    if wants_over and ("gol" in compact):
+        over_target = 2
+        for n in nums:
+            if 1 <= n <= 5:
+                over_target = n
+                break
+        red_minute = 90 if wants_ft else 45
+        return {
+            "title": f"Regra inicial para over {over_target}.5 gols",
+            "rationale": "Modela jogo com volume ofensivo para buscar linha de gols acima da media.",
+            "suggestion": {
+                "name": f"VOLUME OFENSIVO = OVER {over_target}.5 GOLS",
+                "message_template": "🚨 {rule}\n{home_team} vs {away_team}\nMin: {minute} | {score}\nIA: {ai_commentary}\nLink: {url}",
+                "outcome_green_minute": red_minute,
+                "outcome_red_minute": red_minute,
+                "outcome_red_if_no_green": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": 5},
+                    {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": 45},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": 35 if wants_ft else 25},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "total", "operator": ">=", "value": over_target + 1},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Valide por liga; algumas ligas inflacionam chutes sem conversao.",
+                ],
+            },
+        }
+
+    if wants_exact_score:
+        return {
+            "title": "Regra inicial para placar exato",
+            "rationale": "Placar exato e mercado mais restritivo; comece com contexto de dominancia clara.",
+            "suggestion": {
+                "name": "DOMINANCIA MANDANTE = BUSCAR 2x1",
+                "message_template": "🚨 {rule}\n{home_team} vs {away_team}\nMin: {minute} | {score}\nIA Entrada: {ai_verdict} ({ai_score}/100)\nLink: {url}",
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "home", "operator": ">=", "value": 4},
+                    {"group_id": 0, "stat_key": "on-target", "side": "away", "operator": "<=", "value": 2},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": 70},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "home", "operator": "==", "value": 2},
+                    {"stat_key": "goals", "side": "away", "operator": "==", "value": 1},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Use stake baixa em placar exato e ajuste com historico longo.",
+                ],
+            },
+        }
+
+    if wants_under and ("gol" in compact):
+        return {
+            "title": "Regra inicial para under gols",
+            "rationale": "Busca jogos de baixo ritmo para linhas de gols abaixo.",
+            "suggestion": {
+                "name": "RITMO BAIXO = UNDER 2.5 GOLS",
+                "message_template": "🚨 {rule}\n{home_team} vs {away_team}\nMin: {minute} | {score}\nIA: {ai_commentary}\nLink: {url}",
+                "outcome_green_minute": 90,
+                "outcome_red_minute": 90,
+                "outcome_red_if_no_green": True,
+                "conditions": [
+                    {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": "<=", "value": 3},
+                    {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": "<=", "value": 30},
+                    {"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": 35},
+                ],
+                "outcome_green": [
+                    {"stat_key": "goals", "side": "total", "operator": "<=", "value": 2},
+                ],
+                "outcome_red": [],
+                "allowed_leagues": [],
+                "notes": [
+                    learning_note or "Sem base global suficiente para calibrar esse mercado.",
+                    "Evite ligas historicamente over quando operar under.",
+                ],
+            },
+        }
+
+    minute_le = learned(25 if not wants_ft else 35, "minute_p50", 12, 70)
+    minute_ge = None
+    m_ate = re.search(r"(?:ate|até)\s*(\d{1,2})", compact)
+    m_depois = re.search(r"(?:depois|apos|ap[oó]s|a partir de)\s*(\d{1,2})", compact)
+    if m_ate:
+        minute_le = max(8, min(90, int(m_ate.group(1))))
+    if m_depois:
+        minute_ge = max(1, min(90, int(m_depois.group(1))))
+    if wants_second_half and minute_ge is None:
+        minute_ge = 46
+
+    base_conditions = []
+    if "chute" in compact or "baliza" in compact or "finaliza" in compact:
+        base_conditions.append(
+            {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": learned(3 if not wants_ft else 4, "on_target_p25", 2, 9)}
+        )
+    if "ataque" in compact:
+        base_conditions.append(
+            {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": learned(28 if not wants_ft else 38, "dangerous_p25", 18, 85)}
+        )
+    if "escanteio" in compact or "corner" in compact:
+        base_conditions.append(
+            {"group_id": 0, "stat_key": "corners", "side": "total", "operator": ">=", "value": learned(3, "corners_p25", 1, 8)}
+        )
+    if not base_conditions:
+        base_conditions = [
+            {"group_id": 0, "stat_key": "on-target", "side": "total", "operator": ">=", "value": learned(3 if not wants_ft else 4, "on_target_p25", 2, 8)},
+            {"group_id": 0, "stat_key": "dangerous-attacks", "side": "total", "operator": ">=", "value": learned(25 if not wants_ft else 35, "dangerous_p25", 18, 70)},
+        ]
+    if minute_ge is not None:
+        base_conditions.append({"group_id": 0, "stat_key": "Minute", "side": "total", "operator": ">=", "value": minute_ge})
+    else:
+        base_conditions.append({"group_id": 0, "stat_key": "Minute", "side": "total", "operator": "<=", "value": minute_le})
+
+    outcome_green = []
+    title = "Sugestao inteligente de regra"
+    if score_pairs:
+        parsed_pairs = []
+        for h_raw, a_raw in score_pairs[:4]:
+            try:
+                h, a = int(h_raw), int(a_raw)
+            except Exception:
+                continue
+            if 0 <= h <= 7 and 0 <= a <= 7:
+                parsed_pairs.append((h, a))
+        if parsed_pairs:
+            title = f"Sugestao para placares alvo ({' ou '.join([f'{h}x{a}' for h, a in parsed_pairs])})"
+            totals = sorted({h + a for h, a in parsed_pairs})
+            outcome_green = [
+                {"stat_key": "goals", "side": "total", "operator": ">=", "value": totals[0]},
+                {"stat_key": "goals", "side": "home", "operator": ">=", "value": min(h for h, _ in parsed_pairs)},
+                {"stat_key": "goals", "side": "away", "operator": ">=", "value": min(a for _, a in parsed_pairs)},
+            ]
+    if not outcome_green and wants_corners:
+        outcome_green = [{"stat_key": "corners", "side": "total", "operator": ">=", "value": learned(8, "corners_p25", 6, 12)}]
+        title = "Sugestao para mercado de escanteios"
+    if not outcome_green and wants_cards:
+        outcome_green = [{"stat_key": "yellow-cards", "side": "total", "operator": ">=", "value": 4}]
+        title = "Sugestao para mercado de cartoes"
+    if not outcome_green and wants_under and ("gol" in compact):
+        outcome_green = [{"stat_key": "goals", "side": "total", "operator": "<=", "value": 2}]
+        title = "Sugestao para under gols"
+    if not outcome_green and wants_over and ("gol" in compact):
+        outcome_green = [{"stat_key": "goals", "side": "total", "operator": ">=", "value": 3 if wants_ft else 2}]
+        title = "Sugestao para over gols"
+    if not outcome_green and wants_btts:
+        outcome_green = [
+            {"stat_key": "goals", "side": "home", "operator": ">=", "value": 1},
+            {"stat_key": "goals", "side": "away", "operator": ">=", "value": 1},
+        ]
+        title = "Sugestao para ambas marcam"
+    if not outcome_green:
+        outcome_green = [{"stat_key": "goals", "side": "total", "operator": ">=", "value": 1 if not wants_ft else 2}]
+
+    red_minute = 90 if (wants_ft or wants_second_half or minute_ge is not None) else 45
+    notes = [learning_note or "Sem base global suficiente para calibrar esse mercado."]
+    if score_pairs:
+        notes.append("Para placares como 2x1 e 1x2, o ideal e criar 2 regras separadas e comparar qual funciona melhor.")
+    notes.append("Use o teste da regra no ao vivo e ajuste thresholds a cada 30-50 resultados.")
+
+    return {
+        "title": title,
+        "rationale": f"Objetivo lido: '{text}'. A sugestao abaixo foi montada automaticamente com base no seu pedido.",
+        "suggestion": {
+            "name": f"Estrategia IA - {text[:36]}".strip(),
+            "message_template": (
+                "🚨 {rule}\n"
+                "{home_team} vs {away_team}\n"
+                "Min: {minute} | Placar: {score}\n"
+                "IA: {ai_commentary}\n"
+                "IA Entrada: {ai_verdict} ({ai_score}/100)\n"
+                "Link: {url}"
+            ),
+            "outcome_green_minute": red_minute,
+            "outcome_red_minute": red_minute,
+            "outcome_red_if_no_green": True,
+            "second_half_only": wants_second_half,
+            "conditions": base_conditions,
+            "outcome_green": outcome_green,
+            "outcome_red": [],
+            "allowed_leagues": [],
+            "notes": notes,
+        },
+    }
+
+
 def _serialize_rule(rule: Rule) -> dict:
     return {
         "name": rule.name,
@@ -259,7 +929,6 @@ def _serialize_rule(rule: Rule) -> dict:
         "outcome_green_minute": rule.outcome_green_minute,
         "outcome_red_minute": rule.outcome_red_minute,
         "outcome_red_if_no_green": rule.outcome_red_if_no_green,
-        "green_allow_score_swap": bool(getattr(rule, "green_allow_score_swap", False)),
         "score_home": rule.score_home,
         "score_away": rule.score_away,
         "allowed_leagues": _parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
@@ -353,7 +1022,6 @@ def _rule_signature(
     outcome_green_minute,
     outcome_red_minute,
     outcome_red_if_no_green,
-    green_allow_score_swap,
     score_home,
     score_away,
     allowed_leagues,
@@ -375,7 +1043,6 @@ def _rule_signature(
         _coerce_int(outcome_green_minute),
         _coerce_int(outcome_red_minute),
         _coerce_bool(outcome_red_if_no_green, False),
-        _coerce_bool(green_allow_score_swap, False),
         _coerce_int(score_home),
         _coerce_int(score_away),
         tuple(sorted(_clean_league_name(x).casefold() for x in (allowed_leagues or []) if _clean_league_name(x))),
@@ -400,7 +1067,6 @@ def _rule_model_signature(rule: Rule):
         outcome_green_minute=rule.outcome_green_minute,
         outcome_red_minute=rule.outcome_red_minute,
         outcome_red_if_no_green=rule.outcome_red_if_no_green,
-        green_allow_score_swap=bool(getattr(rule, "green_allow_score_swap", False)),
         score_home=rule.score_home,
         score_away=rule.score_away,
         allowed_leagues=_parse_allowed_leagues_json(getattr(rule, "allowed_leagues_json", None)),
@@ -423,7 +1089,6 @@ def _build_form_context(form):
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
         "outcome_red_minute": form.get("outcome_red_minute", "").strip(),
         "outcome_red_if_no_green": bool(form.get("outcome_red_if_no_green")),
-        "green_allow_score_swap": bool(form.get("green_allow_score_swap")),
     }
     conditions = [_condition_dict(c) for c in _parse_conditions(form)]
     outcome_green = [_condition_dict(c) for c in _parse_outcome_conditions(form, "outcome-green")]
@@ -618,9 +1283,9 @@ def import_rules():
         allowed_leagues = []
         if isinstance(allowed_leagues_raw, list):
             for x in allowed_leagues_raw:
-                name = _clean_league_name(x)
-                if name:
-                    allowed_leagues.append(name)
+                league_name = _clean_league_name(x)
+                if league_name:
+                    allowed_leagues.append(league_name)
 
         rule_data = {
             "time_limit_min": _coerce_int(item.get("time_limit_min"), 90),
@@ -636,17 +1301,18 @@ def import_rules():
             "outcome_green_minute": _coerce_int(item.get("outcome_green_minute")),
             "outcome_red_minute": _coerce_int(item.get("outcome_red_minute")),
             "outcome_red_if_no_green": _coerce_bool(item.get("outcome_red_if_no_green"), False),
-            "green_allow_score_swap": _coerce_bool(item.get("green_allow_score_swap"), False),
             "score_home": _coerce_int(item.get("score_home")),
             "score_away": _coerce_int(item.get("score_away")),
             "allowed_leagues_json": json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
         }
+        signature_data = dict(rule_data)
+        signature_data.pop("allowed_leagues_json", None)
         signature = _rule_signature(
             name=name,
             allowed_leagues=allowed_leagues,
             conditions=conditions,
             outcome_conditions=outcome_conditions,
-            **rule_data,
+            **signature_data,
         )
         if signature in existing_signatures:
             duplicated += 1
@@ -705,7 +1371,6 @@ def create_rule():
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
-        green_allow_score_swap = bool(request.form.get("green_allow_score_swap"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
@@ -772,7 +1437,6 @@ def create_rule():
             outcome_green_minute=outcome_green_minute,
             outcome_red_minute=outcome_red_minute,
             outcome_red_if_no_green=outcome_red_if_no_green,
-            green_allow_score_swap=green_allow_score_swap,
             score_home=score_home,
             score_away=score_away,
             allowed_leagues_json=json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None,
@@ -816,7 +1480,6 @@ def edit_rule(rule_id):
         outcome_green_minute_raw = request.form.get("outcome_green_minute", "").strip()
         outcome_red_minute_raw = request.form.get("outcome_red_minute", "").strip()
         outcome_red_if_no_green = bool(request.form.get("outcome_red_if_no_green"))
-        green_allow_score_swap = bool(request.form.get("green_allow_score_swap"))
         score_home_raw = request.form.get("score_home", "").strip()
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
@@ -852,7 +1515,6 @@ def edit_rule(rule_id):
         rule.outcome_green_minute = outcome_green_minute
         rule.outcome_red_minute = outcome_red_minute
         rule.outcome_red_if_no_green = outcome_red_if_no_green
-        rule.green_allow_score_swap = green_allow_score_swap
         rule.score_home = score_home
         rule.score_away = score_away
         rule.allowed_leagues_json = json.dumps(allowed_leagues, ensure_ascii=False) if allowed_leagues else None
@@ -928,6 +1590,17 @@ def toggle_rule(rule_id):
     rule.is_active = not rule.is_active
     db.session.commit()
     return redirect(url_for("rules.list_rules"))
+
+
+@rules_bp.route("/ai-hint", methods=["POST"])
+@login_required
+def ai_hint():
+    payload = request.get_json(silent=True) or {}
+    objective = str(payload.get("objective") or "").strip()
+    if len(objective) < 4:
+        return jsonify({"ok": False, "message": "Descreva o objetivo com mais detalhes."}), 400
+    hint = _build_ai_hint(objective)
+    return jsonify({"ok": True, "hint": hint})
 
 
 @rules_bp.route("/test", methods=["POST"])

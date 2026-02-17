@@ -147,7 +147,6 @@ def _ensure_rule_columns():
         "outcome_green_minute": "INTEGER",
         "outcome_red_minute": "INTEGER",
         "outcome_red_if_no_green": "BOOLEAN DEFAULT 0",
-        "green_allow_score_swap": "BOOLEAN DEFAULT 0",
         "notify_telegram": "BOOLEAN DEFAULT 1",
         "alert_on_penalty": "BOOLEAN DEFAULT 0",
         "score_home": "INTEGER",
@@ -216,6 +215,11 @@ def _ensure_alert_columns():
         "penalty_last_total": "INTEGER DEFAULT 0",
         "penalty_notified": "BOOLEAN DEFAULT 0",
         "penalty_baseline_set": "BOOLEAN DEFAULT 0",
+        "ml_pred_score": "INTEGER",
+        "ml_pred_verdict": "VARCHAR(40)",
+        "ml_pred_prob_green": "FLOAT",
+        "ml_model_samples": "INTEGER",
+        "ml_model_trained_at": "VARCHAR(32)",
     }
 
     with db.engine.connect() as conn:
