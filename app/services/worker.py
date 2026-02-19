@@ -3,6 +3,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
@@ -53,6 +54,7 @@ FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST
 NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
+ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
@@ -813,18 +815,69 @@ def run_alerts_worker(app):
                 print(f"[alerts] erro: {exc}")
             time.sleep(ALERTS_POLL_INTERVAL)
 
+def _game_key(game: dict) -> str:
+    return str(game.get("game_id") or game.get("url") or "")
+
+
+def _prefetch_game_stats(game: dict):
+    key = _game_key(game)
+    if not key:
+        return key, None, None
+    session = make_session()
+    try:
+        stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
+        if not stats_payload or is_youth_match(stats_payload):
+            return key, None, None
+        minute = stats_payload.get("minute")
+        if minute is None:
+            return key, None, None
+        return key, stats_payload, minute
+    except Exception as exc:
+        print(f"[worker] erro no prefetch game={game.get('game_id')}: {exc}")
+        return key, None, None
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+def _prefetch_live_stats(games: list[dict]) -> dict[str, dict]:
+    if not games:
+        return {}
+    max_workers = min(len(games), ANALYSIS_THREADS)
+    if max_workers <= 1:
+        prefetched = {}
+        for game in games:
+            key, stats_payload, minute = _prefetch_game_stats(game)
+            if key and stats_payload and minute is not None:
+                prefetched[key] = {"stats_payload": stats_payload, "minute": minute}
+        return prefetched
+
+    prefetched = {}
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="analysis") as executor:
+        futures = [executor.submit(_prefetch_game_stats, game) for game in games]
+        for future in as_completed(futures):
+            key, stats_payload, minute = future.result()
+            if key and stats_payload and minute is not None:
+                prefetched[key] = {"stats_payload": stats_payload, "minute": minute}
+    return prefetched
+
+
 def process_live_games(session):
     games, status_code = fetch_live_games(session)
     update_api_status(status_code == 200, status_code)
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
+    prefetched = _prefetch_live_stats(games)
     for game in games:
-        stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
-        if not stats_payload or is_youth_match(stats_payload): continue
-        
-        minute = stats_payload.get("minute")
-        if minute is None: continue
+        game_key = _game_key(game)
+        prefetched_item = prefetched.get(game_key) if game_key else None
+        if not prefetched_item:
+            continue
+        stats_payload = prefetched_item["stats_payload"]
+        minute = prefetched_item["minute"]
 
         game_id = game.get("game_id")
         if game_id and game_id not in GAME_FIRST_SEEN_AT:
@@ -1099,6 +1152,35 @@ def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
             return True
     return False
 
+def _close_pending_without_live_payload(alert, rule) -> bool:
+    if alert.status != "pending" or not rule:
+        return False
+    fallback_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
+    if not should_time_red(rule, alert, fallback_minute):
+        return False
+
+    fallback_score = alert.last_score or alert.initial_score or "0 x 0"
+    fallback_stats = {}
+    source_json = alert.ht_stats_json or alert.initial_stats_json
+    if source_json:
+        try:
+            parsed = json.loads(source_json)
+            if isinstance(parsed, dict):
+                fallback_stats = parsed
+        except Exception:
+            fallback_stats = {}
+
+    result_minute = fallback_minute if fallback_minute is not None else rule.outcome_red_minute
+    update_alert_status(
+        alert,
+        "red",
+        result_minute,
+        fallback_score,
+        fallback_stats,
+        "❌ RED - prazo do GREEN expirou (sem atualização ao vivo)",
+    )
+    return True
+
 def follow_alerts(session):
     active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
     stats_cache = {}
@@ -1118,7 +1200,9 @@ def follow_alerts(session):
             else:
                 stats_payload = fetch_match_stats(session, alert.url)
                 stats_cache[cache_key] = stats_payload
-        if not stats_payload: continue
+        if not stats_payload:
+            _close_pending_without_live_payload(alert, rule)
+            continue
 
         ensure_second_half_baseline(alert.game_id, stats_payload)
         remember_game_snapshot(alert.game_id, stats_payload)
@@ -1131,6 +1215,7 @@ def follow_alerts(session):
         current_score = stats_payload.get("score")
         stats = stats_payload.get("stats", {})
         if minute <= 0:
+            _close_pending_without_live_payload(alert, rule)
             continue
         prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
         if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
