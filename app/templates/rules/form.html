@@ -629,6 +629,14 @@
       updateLeagueCount();
     }
 
+    function getFilteredLeagues() {
+      const filter = (leagueSearch ? leagueSearch.value : '').toString().trim().toLowerCase();
+      const items = (availableLeagues || []).map(normalizeLeagueName).filter(Boolean);
+      return filter
+        ? items.filter(name => name.toLowerCase().includes(filter))
+        : items;
+    }
+
     function syncStatMode() {
       const v = statSelect ? statSelect.value : '';
       const isMinute = v === 'Minute';
@@ -661,13 +669,20 @@
     if (leagueSearch) leagueSearch.addEventListener('input', renderLeagueList);
     if (leagueSelectAllBtn) {
       leagueSelectAllBtn.addEventListener('click', () => {
-        setRowLeagues(Array.isArray(availableLeagues) ? availableLeagues : []);
+        const current = getRowLeagues();
+        const map = new Map(current.map(x => [x.toLowerCase(), x]));
+        getFilteredLeagues().forEach(name => {
+          map.set(name.toLowerCase(), name);
+        });
+        setRowLeagues(Array.from(map.values()));
         renderLeagueList();
       });
     }
     if (leagueSelectNoneBtn) {
       leagueSelectNoneBtn.addEventListener('click', () => {
-        setRowLeagues([]);
+        const filteredKeys = new Set(getFilteredLeagues().map(name => name.toLowerCase()));
+        const remaining = getRowLeagues().filter(name => !filteredKeys.has(name.toLowerCase()));
+        setRowLeagues(remaining);
         renderLeagueList();
       });
     }

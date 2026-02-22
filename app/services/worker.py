@@ -685,6 +685,19 @@ def should_time_red(rule, alert, minute: int | None) -> bool:
             return True
     return False
 
+def _stage_window_open_for_annulment(rule, time_text: str, minute: int | None) -> bool:
+    if minute is None:
+        return False
+    if not rule:
+        return True
+    if rule.second_half_only:
+        return True
+    green_stage = (rule.outcome_green_stage or "HT").upper()
+    red_stage = (rule.outcome_red_stage or "HT").upper()
+    if green_stage != "HT" and red_stage != "HT":
+        return True
+    return is_first_half_goal(time_text, minute) or is_half_time(time_text, minute)
+
 def apply_alert_delta(stats, baseline, minute: int | None, alert_minute: int | None):
     if not stats or not baseline:
         return stats
@@ -1233,9 +1246,14 @@ def follow_alerts(session):
             curr_home, curr_away = parse_score(current_score)
             prev_total = prev_home + prev_away
             curr_total = curr_home + curr_away
+            annulment_window_open = _stage_window_open_for_annulment(
+                rule,
+                stats_payload.get("time_text", ""),
+                minute,
+            )
             if prev_minute is not None and minute < prev_minute:
                 pass
-            elif curr_total < prev_total or curr_home < prev_home or curr_away < prev_away:
+            elif annulment_window_open and (curr_total < prev_total or curr_home < prev_home or curr_away < prev_away):
                 penalties_total = stats.get("Penalties", {}).get("total", 0) if isinstance(stats, dict) else 0
                 alert.status = "pending"
                 alert.result_minute = None
@@ -1283,6 +1301,18 @@ def follow_alerts(session):
                         if alert.result_minute is not None and latest_minute is not None and latest_minute <= alert.result_minute:
                             continue
                         green_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"]
+                        allow_green_eval = True
+                        if rule and not rule.second_half_only:
+                            green_stage = (rule.outcome_green_stage or "HT").upper()
+                            in_first_half_window = is_first_half_goal(
+                                latest_payload.get("time_text", ""),
+                                latest_minute or 0,
+                            ) or is_half_time(
+                                latest_payload.get("time_text", ""),
+                                latest_minute or 0,
+                            )
+                            if green_stage == "HT" and not in_first_half_window:
+                                allow_green_eval = False
                         base_stats = None
                         if alert.initial_stats_json:
                             try:
@@ -1292,7 +1322,7 @@ def follow_alerts(session):
                         latest_stats = latest_payload.get("stats", {}) or stats
                         eval_stats = apply_alert_delta(latest_stats, base_stats, latest_minute, alert.alert_minute) if base_stats else latest_stats
                         eval_stats = merge_score_delta_into_stats(eval_stats, alert.initial_score, latest_score)
-                        if green_conds and evaluate_outcome_conditions(green_conds, eval_stats):
+                        if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, eval_stats):
                             update_alert_status(
                                 alert,
                                 "green",

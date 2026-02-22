@@ -175,3 +175,14 @@ class AdminBroadcastView(db.Model):
     __table_args__ = (
         db.UniqueConstraint("broadcast_id", "user_id", name="uix_broadcast_user"),
     )
+
+
+class UndoAction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    action_type = db.Column(db.String(64), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime)

@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import MatchAlert, Rule
 from ..services.worker import get_api_status
+from ..services.undo import apply_undo
 from ..utils.time import now_sp
 from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
 
@@ -124,6 +125,15 @@ def dashboard():
 @main_bp.route("/api/status")
 def api_status():
     return jsonify(get_api_status())
+
+
+@main_bp.route("/undo/<token>", methods=["GET"])
+@login_required
+def undo_action(token):
+    next_url = request.args.get("next") or request.referrer or url_for("main.dashboard")
+    ok, message = apply_undo(token, current_user.id)
+    flash(message, "success" if ok else "warning")
+    return redirect(next_url)
 
 
 @main_bp.route("/live")

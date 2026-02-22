@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from markupsafe import Markup, escape
 from sqlalchemy import func
 
 from ..extensions import db
@@ -21,6 +22,7 @@ from ..services.scraper import (
     summarize_history,
 )
 from ..services.worker import parse_score
+from ..services.undo import create_undo_action, snapshot_rule
 from ..utils.time import now_sp
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
@@ -1577,9 +1579,19 @@ def delete_rule(rule_id):
         if not current_user.check_password(password):
             flash("Regra com muitos jogos no histórico. Informe sua senha para confirmar.", "warning")
             return redirect(url_for("rules.list_rules"))
+    rule_snapshot = snapshot_rule(rule)
+    undo_token = create_undo_action(
+        user_id=current_user.id,
+        action_type="delete_rule",
+        payload={"rule": rule_snapshot},
+    )
     db.session.delete(rule)
     db.session.commit()
-    flash("Regra removida.", "success")
+    undo_url = url_for("main.undo_action", token=undo_token, next=url_for("rules.list_rules"))
+    flash(
+        Markup(f"Regra removida. <a class='alert-link' href='{escape(undo_url)}'>Desfazer</a>"),
+        "success",
+    )
     return redirect(url_for("rules.list_rules"))
 
 

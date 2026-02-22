@@ -4,10 +4,12 @@ import os
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from markupsafe import Markup, escape
 
 from ..extensions import db
 from ..models import MatchAlert, Rule, User
 from ..services.telegram import send_document
+from ..services.undo import create_undo_action, snapshot_alert
 
 history_bp = Blueprint("history", __name__, url_prefix="/history")
 
@@ -86,10 +88,20 @@ def delete_alert(alert_id):
         return redirect(url_for("history.history"))
 
     alert = MatchAlert.query.get_or_404(alert_id)
+    undo_token = create_undo_action(
+        user_id=current_user.id,
+        action_type="delete_alert",
+        payload={"alerts": [snapshot_alert(alert)]},
+    )
     db.session.delete(alert)
     db.session.commit()
-    flash("Historico excluido com sucesso.", "success")
-    return redirect(url_for("history.history", **request.args.to_dict()))
+    target_url = url_for("history.history", **request.args.to_dict())
+    undo_url = url_for("main.undo_action", token=undo_token, next=target_url)
+    flash(
+        Markup(f"Historico excluido com sucesso. <a class='alert-link' href='{escape(undo_url)}'>Desfazer</a>"),
+        "success",
+    )
+    return redirect(target_url)
 
 
 @history_bp.route("/delete-selected", methods=["POST"])
@@ -111,10 +123,22 @@ def delete_selected_alerts():
         flash("Nenhum historico selecionado.", "warning")
         return redirect(url_for("history.history", **request.args.to_dict()))
 
+    selected_alerts = MatchAlert.query.filter(MatchAlert.id.in_(ids)).all()
+    snapshots = [snapshot_alert(alert) for alert in selected_alerts]
+    undo_token = create_undo_action(
+        user_id=current_user.id,
+        action_type="delete_selected_alerts",
+        payload={"alerts": snapshots},
+    )
     deleted = MatchAlert.query.filter(MatchAlert.id.in_(ids)).delete(synchronize_session=False)
     db.session.commit()
-    flash(f"{deleted} historico(s) excluido(s) com sucesso.", "success")
-    return redirect(url_for("history.history", **request.args.to_dict()))
+    target_url = url_for("history.history", **request.args.to_dict())
+    undo_url = url_for("main.undo_action", token=undo_token, next=target_url)
+    flash(
+        Markup(f"{deleted} historico(s) excluido(s) com sucesso. <a class='alert-link' href='{escape(undo_url)}'>Desfazer</a>"),
+        "success",
+    )
+    return redirect(target_url)
 
 
 @history_bp.route("/send-report", methods=["POST"])
