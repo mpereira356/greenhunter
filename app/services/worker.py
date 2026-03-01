@@ -301,6 +301,11 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
         "on_target_home": sv("On Target", "home"), "on_target_away": sv("On Target", "away"), "on_target_total": sv("On Target", "total"),
         "off_target_home": sv("Off Target", "home"), "off_target_away": sv("Off Target", "away"), "off_target_total": sv("Off Target", "total"),
         "dangerous_attacks_home": sv("Dangerous Attacks", "home"), "dangerous_attacks_away": sv("Dangerous Attacks", "away"), "dangerous_attacks_total": sv("Dangerous Attacks", "total"),
+        # Avoid blank placeholders in templates when history is unavailable.
+        "history_h2h": "Sem historico disponivel",
+        "history_home": "Sem historico do mandante",
+        "history_away": "Sem historico do visitante",
+        "history_confidence": "N/A",
     }
     if rule:
         market_ctx = infer_green_profile(rule)
@@ -1087,24 +1092,17 @@ def process_live_games(session):
                         alert.penalty_baseline_set = True
                         db.session.commit()
                     
-                    history_meta = {}
-                    try:
-                        history = fetch_match_history(session, game["url"])
-                        h2h_summary = summarize_history(history.get("h2h", []))
-                        home_summary = summarize_history(history.get("home", []))
-                        away_summary = summarize_history(history.get("away", []))
-                        h2h_items = history.get("h2h", [])
-                        conf_conds = [c for c in rule.outcome_conditions if c.outcome_type == "green"] or rule.conditions
-                        confidence = history_confidence(conf_conds, h2h_items)
-                        history_meta = {
-                            "history_h2h": format_history_summary("H2H", h2h_summary) if h2h_summary else "Sem historico de um contra o outro",
-                            "history_home": format_history_summary("Home", home_summary),
-                            "history_away": format_history_summary("Away", away_summary),
-                            "history_confidence": f"{confidence}%" if confidence is not None else "N/A",
-                        }
-                    except Exception:
-                        pass
-                    
+                    # Send entry alert immediately after rule hit to reduce latency.
+                    if rule.notify_telegram:
+                        meta = build_message_meta(rule, stats_payload, game, {}, stats_override=stats_for_rule)
+                        message = render_message(rule, meta)
+                        _send_message_safe(
+                            user.telegram_token,
+                            user.telegram_chat_id,
+                            message,
+                            context=f"new_alert_rule_{rule.id}_immediate",
+                        )
+
                     # Re-fetch latest stats for accurate initial alert message.
                     latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
                     if latest_payload:
@@ -1122,10 +1120,6 @@ def process_live_games(session):
                         alert.last_score_minute = stats_payload.get("minute")
                         alert.initial_stats_json = stats_to_json(stats_for_rule)
                         db.session.commit()
-                    meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
-                    message = render_message(rule, meta)
-                    if rule.notify_telegram:
-                        _send_message_safe(user.telegram_token, user.telegram_chat_id, message, context=f"new_alert_rule_{rule.id}")
                 except IntegrityError:
                     db.session.rollback()
                 except Exception as e:
