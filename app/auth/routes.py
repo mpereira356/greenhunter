@@ -4,6 +4,7 @@ from sqlalchemy import func
 
 from ..extensions import db
 from ..models import LoginAttempt, User
+from ..utils.db import commit_with_retry
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -26,7 +27,7 @@ def login():
                     success=True,
                 )
             )
-            db.session.commit()
+            commit_with_retry()
             return redirect(url_for("main.dashboard"))
         db.session.add(
             LoginAttempt(
@@ -36,7 +37,7 @@ def login():
                 success=False,
             )
         )
-        db.session.commit()
+        commit_with_retry()
         flash("Credenciais invalidas.", "danger")
     return render_template("auth/login.html")
 
@@ -62,7 +63,7 @@ def register():
         user = User(username=username_normalized, email=email)
         user.set_password(password)
         db.session.add(user)
-        db.session.commit()
+        commit_with_retry()
         flash("Cadastro criado. Faça login.", "success")
         return redirect(url_for("auth.login"))
     return render_template("auth/register.html")

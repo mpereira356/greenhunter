@@ -1,5 +1,8 @@
 import os
-from sqlalchemy import text
+import sqlite3
+
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
 from flask import Flask
 from flask_login import current_user
@@ -7,6 +10,19 @@ from flask_login import current_user
 from app.extensions import db, login_manager
 from app.models import AdminBroadcast, AdminBroadcastView, User
 from app.services.worker import start_worker
+from app.utils.db import commit_with_retry
+
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute(f"PRAGMA busy_timeout={int(os.environ.get('SQLITE_BUSY_TIMEOUT_MS', '30000'))}")
+    cursor.close()
 
 
 def create_app():
@@ -47,6 +63,13 @@ def create_app():
 
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    engine_options = {"pool_pre_ping": True}
+    if str(database_url).startswith("sqlite"):
+        engine_options["connect_args"] = {
+            "timeout": float(os.environ.get("SQLITE_CONNECT_TIMEOUT_SECONDS", "30")),
+            "check_same_thread": False,
+        }
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
 
     # =========================
     # Inicializações
@@ -118,7 +141,7 @@ def create_app():
             return {"active_broadcast": None}
 
         db.session.add(AdminBroadcastView(broadcast_id=broadcast.id, user_id=current_user.id))
-        db.session.commit()
+        commit_with_retry()
 
         return {"active_broadcast": broadcast}
 
