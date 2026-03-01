@@ -3,6 +3,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
@@ -837,6 +838,30 @@ def _game_key(game: dict) -> str:
     return str(game.get("game_id") or game.get("url") or "")
 
 
+def _normalize_text(value: str) -> str:
+    text = str(value or "").strip().casefold()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.split())
+
+
+def _league_allowed(league_name: str, allowed_items: list[str]) -> bool:
+    league_norm = _normalize_text(league_name)
+    if not league_norm:
+        return False
+    allowed_norm = [_normalize_text(item) for item in allowed_items if str(item).strip()]
+    if not allowed_norm:
+        return True
+    for item in allowed_norm:
+        if league_norm == item:
+            return True
+        if league_norm.startswith(item) or item.startswith(league_norm):
+            return True
+        if league_norm in item or item in league_norm:
+            return True
+    return False
+
+
 def _prefetch_game_stats(game: dict):
     key = _game_key(game)
     if not key:
@@ -951,9 +976,8 @@ def process_live_games(session):
                 except Exception:
                     allowed_items = []
                 if isinstance(allowed_items, list) and allowed_items:
-                    allowed = {str(x).strip().casefold() for x in allowed_items if str(x).strip()}
-                    league_name = str(stats_payload.get("league") or "").strip().casefold()
-                    if allowed and league_name not in allowed:
+                    league_name = str(stats_payload.get("league") or "")
+                    if not _league_allowed(league_name, allowed_items):
                         continue
 
             stats_for_rule = stats_payload["stats"]
