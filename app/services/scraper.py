@@ -168,9 +168,6 @@ def _build_browser_driver():
     forced_display = (os.environ.get("BETSAPI_DISPLAY") or "").strip()
     if forced_display:
         os.environ["DISPLAY"] = forced_display
-    elif not os.environ.get("DISPLAY"):
-        # Common default for local GUI sessions.
-        os.environ["DISPLAY"] = ":0"
     has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     headless = headless_env or not has_display
     profile_dir = None
@@ -192,6 +189,16 @@ def _build_browser_driver():
 
     options = Options()
     chrome_binary = (os.environ.get("BETSAPI_CHROME_BINARY") or os.environ.get("CHROME_BIN") or "").strip()
+    if not chrome_binary and os.name == "nt":
+        for candidate in (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        ):
+            if os.path.exists(candidate):
+                chrome_binary = candidate
+                break
     if chrome_binary:
         options.binary_location = chrome_binary
     options.add_argument("--disable-blink-features=AutomationControlled")
@@ -202,7 +209,6 @@ def _build_browser_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-features=VizDisplayCompositor")
-    options.add_argument("--remote-debugging-port=9222")
     options.add_argument(f"--user-data-dir={profile_dir}")
 
     print(
@@ -231,7 +237,11 @@ def _ensure_browser_driver():
     global _BROWSER_DRIVER
     if _BROWSER_DRIVER is not None:
         return _BROWSER_DRIVER
-    _BROWSER_DRIVER = _build_browser_driver()
+    try:
+        _BROWSER_DRIVER = _build_browser_driver()
+    except Exception as exc:
+        print(f"[scraper] nao foi possivel iniciar navegador de fallback: {exc}")
+        _BROWSER_DRIVER = None
     return _BROWSER_DRIVER
 
 
@@ -255,7 +265,11 @@ def _browser_fetch(url: str):
 
     with _CF_LOCK:
         for attempt in (1, 2):
-            driver = _ensure_browser_driver()
+            try:
+                driver = _ensure_browser_driver()
+            except Exception as exc:
+                print(f"[scraper] erro ao inicializar browser fallback: {exc}")
+                return None, None, None
             if driver is None:
                 return None, None, None
             try:
@@ -346,7 +360,11 @@ def get_with_fallback(session, url):
 
     if _browser_fallback_enabled():
         for candidate in blocked_urls or candidates:
-            browser_resp, cookies, user_agent = _browser_fetch(candidate)
+            try:
+                browser_resp, cookies, user_agent = _browser_fetch(candidate)
+            except Exception as exc:
+                print(f"[scraper] browser fallback falhou para {candidate}: {exc}")
+                continue
             if not browser_resp:
                 continue
             _apply_cookies_to_session(session, cookies)
@@ -551,63 +569,71 @@ def is_first_half_extra_time(time_text: str) -> bool:
 
 def fetch_live_games(session):
     last_status = None
+    merged_games = {}
+
     for base in BASE_URLS:
         try:
             resp = get_with_fallback(session, base)
         except requests.RequestException:
-            last_status = None
             continue
         last_status = resp.status_code
         if resp.status_code != 200:
             continue
+
         soup = BeautifulSoup(resp.text, "html.parser")
-        break
-    else:
-        return [], last_status
-    trs = soup.find_all("tr", id=lambda x: x and x.startswith("r_"))
-    games = []
-    for tr in trs:
-        sport_td = tr.find("td", class_="sport_n")
-        league_td = tr.find("td", class_="league_n")
-        time_span = tr.find("span", class_="race-time")
+        trs = soup.find_all("tr", id=lambda x: x and x.startswith("r_"))
+        for tr in trs:
+            sport_td = tr.find("td", class_="sport_n")
+            league_td = tr.find("td", class_="league_n")
+            time_span = tr.find("span", class_="race-time")
 
-        sport_a = sport_td.find("a") if sport_td else None
-        league_a = league_td.find("a") if league_td else None
-        league_name = league_a.text.strip() if league_a else ""
-        time_text = time_span.get_text(strip=True) if time_span else ""
+            sport_a = sport_td.find("a") if sport_td else None
+            league_a = league_td.find("a") if league_td else None
+            league_name = league_a.text.strip() if league_a else ""
+            time_text = time_span.get_text(strip=True) if time_span else ""
 
-        if not (sport_a and sport_a.get("href") == "/c/soccer"):
-            continue
-        if "esoccer" in league_name.lower():
-            continue
-        if not time_text:
-            continue
-        time_norm = time_text.strip().lower()
-        is_halftime = "ht" in time_norm or "half time" in time_norm or "interval" in time_norm
-        if not time_text[0].isdigit() and not is_halftime:
-            continue
+            if not (sport_a and sport_a.get("href") == "/c/soccer"):
+                continue
+            if "esoccer" in league_name.lower():
+                continue
+            if not time_text:
+                continue
+            time_norm = time_text.strip().lower()
+            is_halftime = "ht" in time_norm or "half time" in time_norm or "interval" in time_norm
+            if not time_text[0].isdigit() and not is_halftime:
+                continue
 
-        game_link_tag = tr.find("a", href=re.compile(r"^/r/\d+"))
-        if not game_link_tag:
-            continue
-        game_href = game_link_tag["href"]
-        match_id = re.search(r"/r/(\d+)", game_href)
-        if not match_id:
-            continue
-        game_id = match_id.group(1)
-        minute_value = parse_minutes(time_text)
-        if minute_value is None and is_halftime:
-            minute_value = 45
-        games.append(
-            {
+            game_link_tag = tr.find("a", href=re.compile(r"^/r/\d+"))
+            if not game_link_tag:
+                continue
+            game_href = game_link_tag["href"]
+            match_id = re.search(r"/r/(\d+)", game_href)
+            if not match_id:
+                continue
+            game_id = match_id.group(1)
+            minute_value = parse_minutes(time_text)
+            if minute_value is None and is_halftime:
+                minute_value = 45
+
+            candidate = {
                 "game_id": game_id,
                 "url": base + game_href,
                 "minute": minute_value,
                 "time_text": time_text,
                 "league": league_name,
             }
-        )
-    return games, resp.status_code
+            current = merged_games.get(game_id)
+            if not current:
+                merged_games[game_id] = candidate
+                continue
+            curr_min = current.get("minute")
+            cand_min = candidate.get("minute")
+            if isinstance(cand_min, int) and (not isinstance(curr_min, int) or cand_min >= curr_min):
+                merged_games[game_id] = candidate
+
+    if not merged_games:
+        return [], last_status
+    return list(merged_games.values()), last_status
 
 
 def fetch_match_stats(session, url):

@@ -852,13 +852,31 @@ def _league_allowed(league_name: str, allowed_items: list[str]) -> bool:
     allowed_norm = [_normalize_text(item) for item in allowed_items if str(item).strip()]
     if not allowed_norm:
         return True
+
+    def _variants(text: str) -> set[str]:
+        variants = {text}
+        # Many feeds prefix country before " - ".
+        # Match both full name and the competition-only tail.
+        if " - " in text:
+            parts = [p.strip() for p in text.split(" - ") if p.strip()]
+            if len(parts) >= 2:
+                variants.add(" - ".join(parts[1:]))
+                variants.update(parts[1:])
+        return {v for v in variants if v}
+
+    league_variants = _variants(league_norm)
+    allowed_variants = set()
     for item in allowed_norm:
-        if league_norm == item:
-            return True
-        if league_norm.startswith(item) or item.startswith(league_norm):
-            return True
-        if league_norm in item or item in league_norm:
-            return True
+        allowed_variants.update(_variants(item))
+
+    for lv in league_variants:
+        for av in allowed_variants:
+            if lv == av:
+                return True
+            if lv.startswith(av) or av.startswith(lv):
+                return True
+            if lv in av or av in lv:
+                return True
     return False
 
 
@@ -913,6 +931,30 @@ def process_live_games(session):
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
+    rule_ids = [rule.id for rule in active_rules]
+    game_ids = [str(game.get("game_id")) for game in games if game.get("game_id") is not None]
+    existing_pairs = set()
+    if rule_ids and game_ids:
+        rows = (
+            db.session.query(MatchAlert.game_id, MatchAlert.rule_id)
+            .filter(MatchAlert.game_id.in_(game_ids), MatchAlert.rule_id.in_(rule_ids))
+            .all()
+        )
+        existing_pairs = {(str(gid), rid) for gid, rid in rows}
+
+    # Parse allowed leagues once per cycle instead of per game/rule.
+    rule_allowed_items = {}
+    for rule in active_rules:
+        allowed_json = getattr(rule, "allowed_leagues_json", None)
+        if not allowed_json:
+            rule_allowed_items[rule.id] = None
+            continue
+        try:
+            items = json.loads(allowed_json)
+        except Exception:
+            items = []
+        rule_allowed_items[rule.id] = items if isinstance(items, list) and items else None
+
     prefetched = _prefetch_live_stats(games)
     for game in games:
         game_key = _game_key(game)
@@ -966,19 +1008,15 @@ def process_live_games(session):
         
         for rule in active_rules:
             user = rule.user
-            existing = MatchAlert.query.filter_by(game_id=game["game_id"], rule_id=rule.id).first()
-            if existing: continue
+            pair_key = (str(game["game_id"]), rule.id)
+            if pair_key in existing_pairs:
+                continue
             # Optional league filter: if configured, only emit alerts for matching leagues.
-            allowed_json = getattr(rule, "allowed_leagues_json", None)
-            if allowed_json:
-                try:
-                    allowed_items = json.loads(allowed_json)
-                except Exception:
-                    allowed_items = []
-                if isinstance(allowed_items, list) and allowed_items:
-                    league_name = str(stats_payload.get("league") or "")
-                    if not _league_allowed(league_name, allowed_items):
-                        continue
+            allowed_items = rule_allowed_items.get(rule.id)
+            if allowed_items:
+                league_name = str(stats_payload.get("league") or "")
+                if not _league_allowed(league_name, allowed_items):
+                    continue
 
             stats_for_rule = stats_payload["stats"]
             h_score, a_score = parse_score(stats_payload.get("score", ""))
@@ -1104,17 +1142,15 @@ def process_live_games(session):
                 )
                 db.session.add(alert)
                 try:
-                    db.session.commit()
                     rule.last_alert_at = now_sp()
                     rule.last_alert_desc = f"{alert.home_team} vs {alert.away_team}"
-                    db.session.commit()
-
                     if rule.alert_on_penalty:
                         penalties_total = stats_payload.get("stats", {}).get("Penalties", {}).get("total", 0)
                         alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
                         alert.penalty_notified = False
                         alert.penalty_baseline_set = True
-                        db.session.commit()
+                    db.session.commit()
+                    existing_pairs.add(pair_key)
                     
                     # Send entry alert immediately after rule hit to reduce latency.
                     if rule.notify_telegram:
@@ -1365,6 +1401,12 @@ def follow_alerts(session):
         if rule and not rule.second_half_only:
             green_stage = (rule.outcome_green_stage or "HT").upper()
             red_stage = (rule.outcome_red_stage or "HT").upper()
+            # Guard against misconfigured stage/minute combos:
+            # if minute cap is after HT, evaluate on FT window.
+            if green_stage == "HT" and (rule.outcome_green_minute or 0) > 45:
+                green_stage = "FT"
+            if red_stage == "HT" and (rule.outcome_red_minute or 0) > 45:
+                red_stage = "FT"
             in_first_half_window = is_first_half_goal(stats_payload.get("time_text", ""), minute) or is_half_time(stats_payload.get("time_text", ""), minute)
             if green_stage == "HT" and not in_first_half_window:
                 allow_green_eval = False
