@@ -11,57 +11,104 @@
     >
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-    <style>
-      /* Ajustes inline para ícones e elementos específicos */
-      .nav-icon { font-style: normal; font-weight: 800; }
-    </style>
   </head>
   <body>
     {% if current_user.is_authenticated %}
+    {% set endpoint = request.endpoint or '' %}
+    {% if endpoint == 'main.dashboard' %}
+      {% set endpoint_title = 'Dashboard' %}
+    {% elif endpoint == 'main.live' %}
+      {% set endpoint_title = 'Ao Vivo' %}
+    {% elif endpoint == 'admin.dashboard' %}
+      {% set endpoint_title = 'Admin' %}
+    {% elif endpoint in ['rules.list_rules','rules.create_rule','rules.edit_rule'] %}
+      {% set endpoint_title = 'Minhas Regras' %}
+    {% elif endpoint == 'history.history' %}
+      {% set endpoint_title = 'Historico' %}
+    {% elif endpoint == 'settings.settings' %}
+      {% set endpoint_title = 'Configuracoes' %}
+    {% else %}
+      {% set endpoint_title = 'GreenHunter' %}
+    {% endif %}
+
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <div class="brand-icon" style="background: transparent; border-radius: 0;">
-            <img src="{{ url_for('static', filename='img/greenhunter.png') }}"
-                 alt="GreenHunter"
-                 style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          <div class="brand-icon brand-icon-image">
+            <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="GreenHunter" style="max-width: 100%; max-height: 100%; object-fit: contain;">
           </div>
           <div class="brand-text">
             <div class="brand-title">GreenHunter</div>
             <div class="brand-sub">Bet Intelligence</div>
           </div>
         </div>
+
         <nav class="sidebar-nav">
+          <span class="nav-section">Menu</span>
+
           <a class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
-            <span class="nav-icon">📊</span> <span>Dashboard</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            </span>
+            <span>Dashboard</span>
           </a>
+
           <a class="nav-link {% if request.endpoint == 'main.live' %}active{% endif %}" href="{{ url_for('main.live') }}">
-            <span class="nav-icon">⚽</span> <span>Ao Vivo</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>
+            </span>
+            <span>Ao Vivo</span>
           </a>
+
           {% if current_user.is_admin_user %}
           <a class="nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}" href="{{ url_for('admin.dashboard') }}">
-            <span class="nav-icon">🛡️</span> <span>Admin</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </span>
+            <span>Admin</span>
           </a>
           {% endif %}
+
           <a class="nav-link {% if request.endpoint in ['rules.list_rules','rules.create_rule','rules.edit_rule'] %}active{% endif %}" href="{{ url_for('rules.list_rules') }}">
-            <span class="nav-icon">⚙️</span> <span>Minhas Regras</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+            </span>
+            <span>Minhas Regras</span>
           </a>
+
           <a class="nav-link {% if request.endpoint == 'history.history' %}active{% endif %}" href="{{ url_for('history.history') }}">
-            <span class="nav-icon">📜</span> <span>Histórico</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </span>
+            <span>Historico</span>
           </a>
+
+          <span class="nav-section">Sistema</span>
+
           <a class="nav-link {% if request.endpoint == 'settings.settings' %}active{% endif %}" href="{{ url_for('settings.settings') }}">
-            <span class="nav-icon">🔧</span> <span>Configurações</span>
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 1 21 12a10 10 0 0 1-2 5.92M4.93 4.93A10 10 0 0 0 3 12a10 10 0 0 0 2 5.92"/></svg>
+            </span>
+            <span>Configuracoes</span>
           </a>
+
           <div class="sidebar-footer">
+            <div class="api-badge">
+              <span class="api-dot"></span>
+              API <span class="api-label" id="api-status-side">Verificando</span>
+            </div>
             <a class="nav-link" href="{{ url_for('auth.logout') }}">
-              <span class="nav-icon">🚪</span> <span>Sair</span>
+              <span class="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </span>
+              <span>Sair</span>
             </a>
           </div>
         </nav>
       </aside>
-      
+
       <div class="main-area">
         <header class="topbar">
           <div class="topbar-left d-flex align-items-center gap-2">
@@ -70,27 +117,28 @@
               <span class="menu-toggle-bar"></span>
               <span class="menu-toggle-bar"></span>
             </button>
-            <div class="status-block d-flex align-items-center gap-2">
-              <span class="text-muted small fw-bold">API STATUS:</span>
-              <span class="status-pill status-wait" id="api-status">Verificando</span>
+            <div class="topbar-title-wrap">
+              <div class="topbar-title">{% block page_title %}{{ endpoint_title }}{% endblock %}</div>
             </div>
           </div>
+
           <div class="topbar-right d-flex align-items-center gap-3">
-            <button class="btn btn-sm btn-outline-secondary" type="button" id="theme-toggle">🌙 Modo Escuro</button>
+            <span class="status-pill status-wait" id="api-status">Verificando</span>
+            <button class="btn btn-sm btn-outline-secondary btn-theme-toggle" type="button" id="theme-toggle">Modo Claro</button>
             <div class="user-chip d-flex align-items-center gap-2">
-              <div class="user-avatar" style="width: 35px; height: 35px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+              <div class="user-avatar">
                 {{ (current_user.username[:1] if current_user.username else 'U')|upper }}
               </div>
               <div class="user-name fw-bold small">{{ current_user.username }}</div>
             </div>
           </div>
         </header>
-        
+
         <main class="content">
     {% else %}
     <main class="{% block main_class %}auth-shell{% endblock %}">
     {% endif %}
-    
+
       {% with messages = get_flashed_messages(with_categories=True) %}
         {% if messages %}
           {% for category, message in messages %}
@@ -111,8 +159,8 @@
       {% if current_user.is_authenticated and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified) %}
         <div class="alert alert-warning shadow-sm border-0" style="border-left: 4px solid var(--warning) !important;">
           <div class="d-flex align-items-center gap-2">
-            <span>⚠️</span>
-            <span>Configure seu Telegram em <a href="{{ url_for('settings.settings') }}" class="fw-bold text-decoration-underline">Configurações</a> para receber alertas.</span>
+            <span>!</span>
+            <span>Configure seu Telegram em <a href="{{ url_for('settings.settings') }}" class="fw-bold text-decoration-underline">Configuracoes</a> para receber alertas.</span>
           </div>
         </div>
       {% endif %}
@@ -134,47 +182,52 @@
       const themeToggle = document.getElementById("theme-toggle");
       const mobileMenuToggle = document.getElementById("mobile-menu-toggle");
       const sidebarBackdrop = document.getElementById("sidebar-backdrop");
-      
+
       function setTheme(mode) {
         if (mode === "dark") {
           bodyEl.classList.add("theme-dark");
-          if (themeToggle) themeToggle.innerHTML = "☀️ Modo Claro";
+          if (themeToggle) themeToggle.textContent = "Modo Claro";
         } else {
           bodyEl.classList.remove("theme-dark");
-          if (themeToggle) themeToggle.innerHTML = "🌙 Modo Escuro";
+          if (themeToggle) themeToggle.textContent = "Modo Escuro";
         }
         localStorage.setItem("theme", mode);
       }
-      
-      const savedTheme = localStorage.getItem("theme") || "light";
+
+      const savedTheme = localStorage.getItem("theme") || "dark";
       setTheme(savedTheme);
-      
+
       if (themeToggle) {
         themeToggle.addEventListener("click", () => {
           const isDark = bodyEl.classList.contains("theme-dark");
           setTheme(isDark ? "light" : "dark");
         });
       }
-      
+
       async function refreshApiStatus() {
         try {
           const resp = await fetch("{{ url_for('main.api_status') }}");
           const data = await resp.json();
           const badge = document.getElementById("api-status");
+          const badgeSide = document.getElementById("api-status-side");
           if (!badge) return;
           if (data.ok === true) {
             badge.className = "status-pill status-on";
             badge.textContent = "ONLINE";
+            if (badgeSide) badgeSide.textContent = "Online";
           } else {
             badge.className = "status-pill status-off";
             badge.textContent = "OFFLINE";
+            if (badgeSide) badgeSide.textContent = "Offline";
           }
         } catch (err) {
           const badge = document.getElementById("api-status");
+          const badgeSide = document.getElementById("api-status-side");
           if (badge) {
             badge.className = "status-pill status-off";
             badge.textContent = "OFFLINE";
           }
+          if (badgeSide) badgeSide.textContent = "Offline";
         }
       }
       refreshApiStatus();

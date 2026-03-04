@@ -1,216 +1,254 @@
 {% extends "base.html" %}
 {% block title %}Historico{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div>
-    <div class="page-title">Historico</div>
-    <div class="page-subtitle">Acompanhe alertas, greens e reds por periodo.</div>
-  </div>
-  <div class="page-actions">
-    <form method="post" action="{{ url_for('history.send_report') }}">
-      <button class="btn btn-outline-secondary" type="submit">Enviar relatorio</button>
-    </form>
-  </div>
-</div>
+{% set resolved = green_count + red_count %}
+{% set green_pct = ((green_count * 100) // resolved) if resolved > 0 else 0 %}
 
-<div class="stat-grid mb-3">
-  <div class="stat-card">
-    <div class="stat-label">Total</div>
-    <div class="stat-value">{{ total_count }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Greens</div>
-    <div class="stat-value text-success">{{ green_count }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Reds</div>
-    <div class="stat-value text-danger">{{ red_count }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Win rate</div>
-    <div class="stat-value">{{ win_rate }}%</div>
-  </div>
-</div>
-
-{% if green_count + red_count > 0 %}
-  {% set green_pct = (green_count * 100) // (green_count + red_count) %}
-  <div class="progress mb-3" style="height: 10px;">
-    <div class="progress-bar bg-success" style="width: {{ green_pct }}%"></div>
-    <div class="progress-bar bg-danger" style="width: {{ 100 - green_pct }}%"></div>
-  </div>
-{% endif %}
-
-<div class="row g-3">
-  <div class="col-lg-3">
-    <div class="filter-card">
-      <div class="fw-semibold mb-2">Filtros</div>
-      <form method="get" class="d-grid gap-2">
-        {% if is_admin %}
-        <div>
-          <label class="form-label">Usuario</label>
-          <select class="form-select" name="user_id">
-            <option value="">Todos</option>
-            {% for u in users %}
-              <option value="{{ u.id }}" {% if request.args.get('user_id')|int == u.id %}selected{% endif %}>{{ u.username }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        {% endif %}
-        <div>
-          <label class="form-label">Regra</label>
-          <select class="form-select" name="rule_id">
-            <option value="">Todas</option>
-            {% for rule in rules %}
-              <option value="{{ rule.id }}" {% if request.args.get('rule_id')|int == rule.id %}selected{% endif %}>{{ rule.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="form-label">Status</label>
-          <select class="form-select" name="status">
-            <option value="">Todos</option>
-            {% for s in ["pending","green","red"] %}
-              <option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="form-label">De</label>
-          <input class="form-control" type="date" name="from" value="{{ request.args.get('from','') }}">
-        </div>
-        <div>
-          <label class="form-label">Ate</label>
-          <input class="form-control" type="date" name="to" value="{{ request.args.get('to','') }}">
-        </div>
-        <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+<section class="history-page">
+  <div class="history-page-header">
+    <div>
+      <h1 class="history-title">Historico de Alertas</h1>
+      <p class="history-subtitle">Acompanhe alertas, greens e reds por periodo.</p>
+    </div>
+    <div class="history-header-actions">
+      <form method="post" action="{{ url_for('history.send_report') }}">
+        <button class="history-btn history-btn-ghost" type="submit">Enviar relatorio</button>
       </form>
-      <div class="mt-3">
-        <form method="post" action="{{ url_for('history.send_report') }}">
-          <button class="btn btn-outline-success w-100" type="submit">Enviar relatorio</button>
-        </form>
-      </div>
     </div>
   </div>
-  <div class="col-lg-9">
-    {% if is_admin %}
-    <form
-      method="post"
-      action="{{ url_for('history.delete_selected_alerts', **query_args) }}"
-      onsubmit="return confirm('Excluir definitivamente os historicos selecionados?');"
-      id="bulk-delete-form"
-      class="mb-2 d-flex justify-content-end"
-    >
-      <button class="btn btn-sm btn-danger" type="submit">Excluir selecionados</button>
-    </form>
-    {% endif %}
-    <div class="table-card">
-      <div class="table-responsive">
-        <table class="table table-clean align-middle mb-0">
-          <thead>
-            <tr>
-              {% if is_admin %}
-              <th style="width: 1%;">
-                <input type="checkbox" id="select-all-alerts" title="Selecionar todos">
-              </th>
-              {% endif %}
-              <th>Regra</th>
-              {% if is_admin %}
-              <th>Usuario</th>
-              {% endif %}
-              <th>Jogo</th>
-              <th>Status</th>
-              <th>Min alerta</th>
-              <th>HT</th>
-              <th>FT</th>
-              <th>Data</th>
-              {% if is_admin %}
-              <th class="text-end">Acoes</th>
-              {% endif %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for alert in pagination.items %}
-            <tr>
-              {% if is_admin %}
-              <td>
-                <input
-                  type="checkbox"
-                  name="selected_alert_ids"
-                  value="{{ alert.id }}"
-                  class="bulk-alert-checkbox"
-                  form="bulk-delete-form"
-                >
-              </td>
-              {% endif %}
-              <td>{{ alert.rule.name }}</td>
-              {% if is_admin %}
-              <td>{{ alert.user.username }}</td>
-              {% endif %}
-              <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
-              <td>
-                {% if alert.status == "green" %}
-                  <span class="badge-status badge-on">Green</span>
-                {% elif alert.status == "red" %}
-                  <span class="badge-status badge-off">Red</span>
-                {% else %}
-                  <span class="badge-status badge-wait">Pendente</span>
-                {% endif %}
-              </td>
-              <td>{{ alert.alert_minute }}</td>
-              <td>{{ alert.ht_score or '-' }}</td>
-              <td>{{ alert.ft_score or '-' }}</td>
-              <td>{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-              {% if is_admin %}
-              <td class="text-end">
-                <form
-                  method="post"
-                  action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"
-                  onsubmit="return confirm('Excluir este historico de forma definitiva?');"
-                  class="d-inline"
-                >
-                  <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
-                </form>
-              </td>
-              {% endif %}
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+
+  <div class="history-stats-row">
+    <article class="history-stat-card">
+      <span class="history-stat-label">Total de Alertas</span>
+      <strong class="history-stat-value">{{ total_count }}</strong>
+    </article>
+    <article class="history-stat-card history-stat-card-green">
+      <span class="history-stat-label">Greens</span>
+      <strong class="history-stat-value history-stat-value-green">{{ green_count }}</strong>
+    </article>
+    <article class="history-stat-card history-stat-card-red">
+      <span class="history-stat-label">Reds</span>
+      <strong class="history-stat-value history-stat-value-red">{{ red_count }}</strong>
+    </article>
+    <article class="history-stat-card history-stat-card-winrate">
+      <span class="history-stat-label">Win Rate</span>
+      <strong class="history-stat-value history-stat-value-gradient">{{ win_rate }}%</strong>
+      <div class="history-winrate-track" role="presentation">
+        <span class="history-winrate-fill" style="width: {{ green_pct }}%;"></span>
       </div>
+    </article>
+  </div>
+
+  <div class="history-filters-card">
+    <form method="get" class="history-filters-form">
+      {% if is_admin %}
+      <div class="history-filter-group">
+        <label class="history-filter-label" for="user_id">Usuario</label>
+        <select class="history-filter-control" id="user_id" name="user_id">
+          <option value="">Todos</option>
+          {% for u in users %}
+            <option value="{{ u.id }}" {% if request.args.get('user_id')|int == u.id %}selected{% endif %}>{{ u.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="history-filter-group">
+        <label class="history-filter-label" for="rule_id">Regra</label>
+        <select class="history-filter-control" id="rule_id" name="rule_id">
+          <option value="">Todas</option>
+          {% for rule in rules %}
+            <option value="{{ rule.id }}" {% if request.args.get('rule_id')|int == rule.id %}selected{% endif %}>{{ rule.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="history-filter-group">
+        <label class="history-filter-label" for="status">Status</label>
+        <select class="history-filter-control" id="status" name="status">
+          <option value="">Todos</option>
+          {% for s in ["pending", "green", "red"] %}
+            <option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="history-filter-group">
+        <label class="history-filter-label" for="from">De</label>
+        <input class="history-filter-control" id="from" type="date" name="from" value="{{ request.args.get('from','') }}">
+      </div>
+
+      <div class="history-filter-group">
+        <label class="history-filter-label" for="to">Ate</label>
+        <input class="history-filter-control" id="to" type="date" name="to" value="{{ request.args.get('to','') }}">
+      </div>
+
+      <div class="history-filter-actions">
+        {% if is_admin %}
+        <button class="history-btn history-btn-danger" type="submit" form="bulk-delete-form" id="bulk-delete-btn" disabled>
+          Excluir selecionados
+        </button>
+        {% endif %}
+        <button class="history-btn history-btn-primary" type="submit">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  {% if is_admin %}
+  <form
+    method="post"
+    action="{{ url_for('history.delete_selected_alerts', **query_args) }}"
+    onsubmit="return confirm('Excluir definitivamente os historicos selecionados?');"
+    id="bulk-delete-form"
+  ></form>
+  {% endif %}
+
+  <div class="history-table-card">
+    <div class="history-color-bar" style="background: linear-gradient(90deg, var(--history-green) {{ green_pct }}%, var(--history-red) {{ green_pct }}%);"></div>
+
+    <div class="history-table-head">
+      <h2>Resultados</h2>
+      <span>Pagina {{ pagination.page }} de {{ pagination.pages }} - {{ total_count }} registros</span>
     </div>
 
-    <nav class="mt-3">
-      <ul class="pagination mb-0">
+    <div class="table-responsive">
+      <table class="table history-table align-middle mb-0">
+        <thead>
+          <tr>
+            {% if is_admin %}
+            <th>
+              <input type="checkbox" id="select-all-alerts" title="Selecionar todos">
+            </th>
+            {% endif %}
+            <th>Regra</th>
+            {% if is_admin %}
+            <th>Usuario</th>
+            {% endif %}
+            <th>Jogo</th>
+            <th>Status</th>
+            <th>Min alerta</th>
+            <th>HT</th>
+            <th>FT</th>
+            <th>Data</th>
+            {% if is_admin %}
+            <th class="text-end">Acoes</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for alert in pagination.items %}
+          <tr>
+            {% if is_admin %}
+            <td>
+              <input
+                type="checkbox"
+                name="selected_alert_ids"
+                value="{{ alert.id }}"
+                class="bulk-alert-checkbox"
+                form="bulk-delete-form"
+              >
+            </td>
+            {% endif %}
+
+            <td>
+              <span class="history-rule-chip" title="{{ alert.rule.name }}">{{ alert.rule.name }}</span>
+            </td>
+
+            {% if is_admin %}
+            <td><span class="history-user-chip">{{ alert.user.username }}</span></td>
+            {% endif %}
+
+            <td>
+              <div class="history-match-name">{{ alert.home_team }} x {{ alert.away_team }}</div>
+            </td>
+
+            <td>
+              {% if alert.status == "green" %}
+                <span class="history-badge history-badge-green">Green</span>
+              {% elif alert.status == "red" %}
+                <span class="history-badge history-badge-red">Red</span>
+              {% else %}
+                <span class="history-badge history-badge-pending">Pendente</span>
+              {% endif %}
+            </td>
+
+            <td><span class="history-mono">{{ alert.alert_minute }}'</span></td>
+            <td><span class="history-mono">{{ alert.ht_score or '-' }}</span></td>
+            <td><span class="history-mono">{{ alert.ft_score or '-' }}</span></td>
+            <td><span class="history-date">{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</span></td>
+
+            {% if is_admin %}
+            <td class="text-end">
+              <form
+                method="post"
+                action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"
+                onsubmit="return confirm('Excluir este historico de forma definitiva?');"
+                class="d-inline"
+              >
+                <button class="history-btn history-btn-inline-danger" type="submit">Excluir</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="{% if is_admin %}10{% else %}8{% endif %}" class="history-empty">Nenhum historico encontrado para os filtros atuais.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="history-pagination-wrap">
+      <div class="history-pagination-info">Mostrando pagina {{ pagination.page }} de {{ pagination.pages }}</div>
+      <div class="history-pagination-buttons">
         {% if pagination.has_prev %}
-          <li class="page-item"><a class="page-link" href="{{ url_for('history.history', page=pagination.prev_num, **query_args) }}">Anterior</a></li>
+          <a class="history-pag-btn" href="{{ url_for('history.history', page=pagination.prev_num, **query_args) }}">Anterior</a>
         {% else %}
-          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+          <span class="history-pag-btn history-pag-btn-disabled">Anterior</span>
         {% endif %}
-        <li class="page-item disabled"><span class="page-link">Pagina {{ pagination.page }} de {{ pagination.pages }}</span></li>
+
+        <span class="history-pag-btn history-pag-btn-active">{{ pagination.page }}</span>
+
         {% if pagination.has_next %}
-          <li class="page-item"><a class="page-link" href="{{ url_for('history.history', page=pagination.next_num, **query_args) }}">Proxima</a></li>
+          <a class="history-pag-btn" href="{{ url_for('history.history', page=pagination.next_num, **query_args) }}">Proxima</a>
         {% else %}
-          <li class="page-item disabled"><span class="page-link">Proxima</span></li>
+          <span class="history-pag-btn history-pag-btn-disabled">Proxima</span>
         {% endif %}
-      </ul>
-    </nav>
+      </div>
+    </div>
   </div>
-</div>
+</section>
+
 {% if is_admin %}
 <script>
   (function () {
     const selectAll = document.getElementById('select-all-alerts');
-    if (!selectAll) return;
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    if (!selectAll || !bulkDeleteBtn) return;
+
     const items = Array.from(document.querySelectorAll('.bulk-alert-checkbox'));
+
+    function syncState() {
+      const selected = items.filter((cb) => cb.checked).length;
+      bulkDeleteBtn.disabled = selected === 0;
+      if (items.length > 0) {
+        selectAll.checked = selected === items.length;
+      }
+    }
+
     selectAll.addEventListener('change', function () {
-      items.forEach(cb => { cb.checked = selectAll.checked; });
-    });
-    items.forEach(cb => {
-      cb.addEventListener('change', function () {
-        const allChecked = items.length > 0 && items.every(x => x.checked);
-        selectAll.checked = allChecked;
+      items.forEach((cb) => {
+        cb.checked = selectAll.checked;
       });
+      syncState();
     });
+
+    items.forEach((cb) => {
+      cb.addEventListener('change', syncState);
+    });
+
+    syncState();
   })();
 </script>
 {% endif %}
