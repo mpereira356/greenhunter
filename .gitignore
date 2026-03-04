@@ -1,4 +1,7 @@
 data/app.db
+data/app.db-wal
+data/app.db-shm
+data/app.db-journal
 # Ambiente virtual
 venv/
 
