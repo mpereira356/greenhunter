@@ -6,6 +6,8 @@ import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from statistics import mean
+from types import SimpleNamespace
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +15,7 @@ from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
 
 from app.extensions import db
 from app.models import LiveGameState, MatchAlert, Rule, User
-from app.services.evaluator import compare, evaluate_rule, history_confidence, render_message, stats_to_json
+from app.services.evaluator import _build_ai_assessment, compare, evaluate_rule, history_confidence, render_message, stats_to_json
 from app.services.exporter import export_alert
 from app.services.ml_engine import infer_green_profile, maybe_retrain_model, predict_alert_ml
 from app.services.scraper import (
@@ -56,10 +58,20 @@ NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
+IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
+IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
+IA_SHADOW_PROFILE_REFRESH_SECONDS = int(os.environ.get("IA_SHADOW_PROFILE_REFRESH_SECONDS", "600"))
+IA_SHADOW_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_MIN_SAMPLES", "120"))
+IA_SHADOW_COOLDOWN_SECONDS = int(os.environ.get("IA_SHADOW_COOLDOWN_SECONDS", "900"))
+IA_SHADOW_LOG_PATH = os.environ.get("IA_SHADOW_LOG_PATH", "data/exports/ia_shadow_events.jsonl")
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
 )
+IA_SHADOW_LAST_SENT = {}
+IA_SHADOW_PROFILE_CACHE = None
+IA_SHADOW_PROFILE_UPDATED_AT = None
+IA_SHADOW_LOCK = threading.Lock()
 
 def get_api_status() -> dict:
     return {
@@ -111,6 +123,269 @@ def _send_message_safe(token: str, chat_id: str, text: str, context: str = "") -
     except Exception as exc:
         print(f"[telegram] excecao ao enviar ({context}): {exc}")
         return False
+
+
+def _stats_total_from_json(stats_json: str | None, key: str) -> int:
+    if not stats_json:
+        return 0
+    try:
+        payload = json.loads(stats_json)
+    except Exception:
+        return 0
+    if not isinstance(payload, dict):
+        return 0
+    bucket = payload.get(key)
+    if not isinstance(bucket, dict):
+        return 0
+    try:
+        return int(bucket.get("total", 0) or 0)
+    except Exception:
+        return 0
+
+
+def _stats_total_live(stats: dict | None, key: str) -> int:
+    if not isinstance(stats, dict):
+        return 0
+    bucket = stats.get(key)
+    if not isinstance(bucket, dict):
+        return 0
+    try:
+        return int(bucket.get("total", 0) or 0)
+    except Exception:
+        return 0
+
+
+def _ia_shadow_assessment_for_phase(phase: str, minute: int, score: str | None, stats: dict | None) -> dict:
+    home, away = parse_score(score or "0 x 0")
+    fake_name = "REGRA IA 1T HT" if phase == "1H" else "REGRA IA 2T"
+    fake_rule = SimpleNamespace(name=fake_name, message_template="")
+    meta = {
+        "minute": minute,
+        "goals_home": home,
+        "goals_away": away,
+        "goals_total": home + away,
+        "on_target_total": _stats_total_live(stats, "On Target"),
+        "dangerous_attacks_total": _stats_total_live(stats, "Dangerous Attacks"),
+        "corners_total": _stats_total_live(stats, "Corners"),
+        "rule_confidence": None,
+        "league_rule_confidence": None,
+        "history_confidence": None,
+    }
+    return _build_ai_assessment(fake_rule, meta)
+
+
+def _phase_from_alert(alert) -> str:
+    minute = alert.alert_minute or 0
+    if alert.rule and alert.rule.second_half_only:
+        return "2H"
+    return "1H" if minute <= 47 else "2H"
+
+
+def _build_phase_profile(phase: str, rows: list[dict]) -> dict | None:
+    if len(rows) < IA_SHADOW_MIN_SAMPLES:
+        return None
+    greens = [r for r in rows if r.get("status") == "green"]
+    reds = [r for r in rows if r.get("status") == "red"]
+    if len(greens) < max(20, IA_SHADOW_MIN_SAMPLES // 4):
+        return None
+
+    def _vals(items, key):
+        out = [r.get(key, 0) for r in items]
+        return [int(v) for v in out if isinstance(v, (int, float))]
+
+    def _threshold(key, default):
+        gv = _vals(greens, key)
+        rv = _vals(reds, key)
+        if not gv:
+            return default
+        g_avg = mean(gv)
+        r_avg = mean(rv) if rv else (g_avg * 0.8)
+        if g_avg <= r_avg:
+            return default
+        return int(round((g_avg + r_avg) / 2.0))
+
+    min_minute_default = 16 if phase == "1H" else 50
+    max_minute_default = 45 if phase == "1H" else 88
+    minute_values = _vals(greens, "minute")
+    if minute_values:
+        minute_values = sorted(minute_values)
+        lo_idx = max(0, int(len(minute_values) * 0.2) - 1)
+        hi_idx = min(len(minute_values) - 1, int(len(minute_values) * 0.85))
+        min_minute = minute_values[lo_idx]
+        max_minute = minute_values[hi_idx]
+    else:
+        min_minute = min_minute_default
+        max_minute = max_minute_default
+    if phase == "1H":
+        min_minute = max(8, min(min_minute, 42))
+        max_minute = max(min_minute + 1, min(47, max_minute))
+    else:
+        min_minute = max(46, min(min_minute, 80))
+        max_minute = max(min_minute + 1, min(92, max_minute))
+
+    return {
+        "phase": phase,
+        "samples": len(rows),
+        "green_rate": round((len(greens) / len(rows)) * 100.0, 2),
+        "min_minute": int(min_minute),
+        "max_minute": int(max_minute),
+        "min_ai_score": _threshold("ai_score", 64 if phase == "1H" else 66),
+        "min_on_target_total": max(2, _threshold("on_target_total", 4 if phase == "1H" else 5)),
+        "min_dangerous_total": max(12, _threshold("dangerous_total", 34 if phase == "1H" else 48)),
+        "min_corners_total": max(0, _threshold("corners_total", 3 if phase == "1H" else 4)),
+    }
+
+
+def _compute_ai_shadow_profiles() -> dict:
+    alerts = (
+        MatchAlert.query.filter(MatchAlert.status.in_(("green", "red")))
+        .order_by(MatchAlert.created_at.desc())
+        .limit(5000)
+        .all()
+    )
+    grouped = {"1H": [], "2H": []}
+    for alert in alerts:
+        minute = alert.alert_minute or 0
+        phase = _phase_from_alert(alert)
+        try:
+            base_stats = json.loads(alert.initial_stats_json) if alert.initial_stats_json else {}
+        except Exception:
+            base_stats = {}
+        ai_assessment = _ia_shadow_assessment_for_phase(
+            phase=phase,
+            minute=minute,
+            score=alert.initial_score,
+            stats=base_stats,
+        )
+        grouped[phase].append(
+            {
+                "status": alert.status,
+                "minute": minute,
+                "ai_score": int(ai_assessment.get("score") or 0),
+                "on_target_total": _stats_total_from_json(alert.initial_stats_json, "On Target"),
+                "dangerous_total": _stats_total_from_json(alert.initial_stats_json, "Dangerous Attacks"),
+                "corners_total": _stats_total_from_json(alert.initial_stats_json, "Corners"),
+            }
+        )
+
+    profiles = {}
+    for phase in ("1H", "2H"):
+        profile = _build_phase_profile(phase, grouped.get(phase, []))
+        if profile:
+            profiles[phase] = profile
+    return profiles
+
+
+def _get_ai_shadow_profiles(force: bool = False) -> dict:
+    global IA_SHADOW_PROFILE_CACHE, IA_SHADOW_PROFILE_UPDATED_AT
+    with IA_SHADOW_LOCK:
+        now = now_sp()
+        if not force and IA_SHADOW_PROFILE_CACHE and IA_SHADOW_PROFILE_UPDATED_AT:
+            if (now - IA_SHADOW_PROFILE_UPDATED_AT).total_seconds() < IA_SHADOW_PROFILE_REFRESH_SECONDS:
+                return IA_SHADOW_PROFILE_CACHE
+        IA_SHADOW_PROFILE_CACHE = _compute_ai_shadow_profiles()
+        IA_SHADOW_PROFILE_UPDATED_AT = now
+        return IA_SHADOW_PROFILE_CACHE or {}
+
+
+def _ia_shadow_recipients() -> list[User]:
+    admins = User.query.filter_by(telegram_verified=True, is_admin=True).all()
+    if admins:
+        return [u for u in admins if u.telegram_token and u.telegram_chat_id]
+    all_verified = User.query.filter_by(telegram_verified=True).all()
+    return [u for u in all_verified if u.telegram_token and u.telegram_chat_id]
+
+
+def _ia_shadow_log_event(event: dict):
+    if not IA_SHADOW_LOG_PATH:
+        return
+    try:
+        folder = os.path.dirname(IA_SHADOW_LOG_PATH)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+        with open(IA_SHADOW_LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        print(f"[ia-shadow] falha ao gravar log: {exc}")
+
+
+def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict):
+    if not IA_SHADOW_ENABLED:
+        return
+    minute = stats_payload.get("minute")
+    if not isinstance(minute, int):
+        return
+    phase = "1H" if minute <= 47 else "2H"
+    profile = (profiles or {}).get(phase)
+    if not profile:
+        return
+
+    game_id = str(game.get("game_id") or "")
+    if not game_id:
+        return
+    dedupe_key = f"{game_id}:{phase}"
+    last_sent = IA_SHADOW_LAST_SENT.get(dedupe_key)
+    if last_sent and (now_sp() - last_sent).total_seconds() < IA_SHADOW_COOLDOWN_SECONDS:
+        return
+
+    score_text = stats_payload.get("score") or "0 x 0"
+    stats = stats_payload.get("stats", {})
+    assessment = _ia_shadow_assessment_for_phase(phase, minute, score_text, stats)
+    ai_score = int(assessment.get("score") or 0)
+    on_target_total = _stats_total_live(stats, "On Target")
+    dangerous_total = _stats_total_live(stats, "Dangerous Attacks")
+    corners_total = _stats_total_live(stats, "Corners")
+
+    if minute < profile["min_minute"] or minute > profile["max_minute"]:
+        return
+    if ai_score < profile["min_ai_score"]:
+        return
+    if on_target_total < profile["min_on_target_total"]:
+        return
+    if dangerous_total < profile["min_dangerous_total"]:
+        return
+    if corners_total < profile["min_corners_total"]:
+        return
+
+    msg = (
+        f"REGRA IA ({phase})\n"
+        f"Jogo: {stats_payload.get('home_team')} vs {stats_payload.get('away_team')}\n"
+        f"Liga: {stats_payload.get('league')}\n"
+        f"Tempo: {minute}' | Placar: {score_text}\n"
+        f"AI Score: {ai_score}/100\n"
+        f"On Target: {on_target_total} | Dangerous: {dangerous_total} | Corners: {corners_total}\n"
+        f"Perfil {phase}: score>={profile['min_ai_score']} | OT>={profile['min_on_target_total']} | DA>={profile['min_dangerous_total']} | C>={profile['min_corners_total']} | min {profile['min_minute']}-{profile['max_minute']}\n"
+        f"Link: {game.get('url')}\n"
+        f"Modo: sombra (sem aposta automatica)"
+    )
+
+    if IA_SHADOW_NOTIFY:
+        for user in _ia_shadow_recipients():
+            _send_message_safe(
+                user.telegram_token,
+                user.telegram_chat_id,
+                msg,
+                context=f"ia_shadow_{phase}",
+            )
+    IA_SHADOW_LAST_SENT[dedupe_key] = now_sp()
+    _ia_shadow_log_event(
+        {
+            "at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+            "phase": phase,
+            "game_id": game_id,
+            "league": stats_payload.get("league"),
+            "home_team": stats_payload.get("home_team"),
+            "away_team": stats_payload.get("away_team"),
+            "minute": minute,
+            "score": score_text,
+            "ai_score": ai_score,
+            "on_target_total": on_target_total,
+            "dangerous_total": dangerous_total,
+            "corners_total": corners_total,
+            "profile": profile,
+            "url": game.get("url"),
+        }
+    )
 
 
 def _commit_allow_missing_alert(alert_id=None, context: str = "") -> bool:
@@ -1054,6 +1329,7 @@ def process_live_games(session):
             items = []
         rule_allowed_items[rule.id] = items if isinstance(items, list) and items else None
 
+    ia_profiles = _get_ai_shadow_profiles() if IA_SHADOW_ENABLED else {}
     prefetched = _prefetch_live_stats(games)
     games = _prioritize_games(games, prefetched, active_rules)
     for game in games:
@@ -1063,6 +1339,7 @@ def process_live_games(session):
             continue
         stats_payload = prefetched_item["stats_payload"]
         minute = prefetched_item["minute"]
+        _maybe_emit_ia_shadow_signal(game, stats_payload, ia_profiles)
 
         game_id = game.get("game_id")
         if game_id and game_id not in GAME_FIRST_SEEN_AT:
