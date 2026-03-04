@@ -1,10 +1,12 @@
 ﻿import os
 import re
+import shutil
 import threading
 import time
 import unicodedata
 from urllib.parse import urlparse
 import tempfile
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -24,6 +26,7 @@ _CF_LAST_SOLVED_AT = 0.0
 _CF_ALERT_LAST_SENT_AT = 0.0
 _BROWSER_DRIVER = None
 _BROWSER_PROFILE_DIR = None
+_PROFILE_LAST_CLEANUP_AT = 0.0
 
 
 def make_session():
@@ -187,6 +190,8 @@ def _build_browser_driver():
     else:
         os.makedirs(profile_dir, exist_ok=True)
 
+    _cleanup_browser_profile(profile_dir)
+
     options = Options()
     chrome_binary = (os.environ.get("BETSAPI_CHROME_BINARY") or os.environ.get("CHROME_BIN") or "").strip()
     if not chrome_binary and os.name == "nt":
@@ -231,6 +236,78 @@ def _build_browser_driver():
         return webdriver.Chrome(service=service, options=options)
 
     return webdriver.Chrome(options=options)
+
+
+def _dir_size_bytes(path: str) -> int:
+    total = 0
+    for root, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                continue
+    return total
+
+
+def _cleanup_browser_profile(profile_dir: str):
+    global _PROFILE_LAST_CLEANUP_AT
+    if not profile_dir or not os.path.isdir(profile_dir):
+        return
+
+    now_ts = time.time()
+    interval = int(os.environ.get("BROWSER_PROFILE_CLEANUP_INTERVAL_SECONDS", "1800"))
+    if interval > 0 and (now_ts - _PROFILE_LAST_CLEANUP_AT) < interval:
+        return
+    _PROFILE_LAST_CLEANUP_AT = now_ts
+
+    max_mb = int(os.environ.get("BROWSER_PROFILE_MAX_MB", "350"))
+    if max_mb <= 0:
+        return
+    max_bytes = max_mb * 1024 * 1024
+    current_size = _dir_size_bytes(profile_dir)
+    if current_size <= max_bytes:
+        return
+
+    removable_rel_paths = [
+        os.path.join("Default", "Cache"),
+        os.path.join("Default", "Code Cache"),
+        os.path.join("Default", "GPUCache"),
+        os.path.join("Default", "WebStorage"),
+        os.path.join("Default", "Service Worker", "CacheStorage"),
+        os.path.join("Default", "History"),
+        os.path.join("Default", "History-journal"),
+        os.path.join("Default", "Favicons"),
+        os.path.join("Default", "Favicons-journal"),
+        "GrShaderCache",
+        "DawnCache",
+        "ShaderCache",
+        "component_crx_cache",
+        "optimization_guide_model_store",
+        "segmentation_platform",
+        "BrowserMetrics",
+    ]
+    removed = 0
+    for rel in removable_rel_paths:
+        target = os.path.join(profile_dir, rel)
+        if not os.path.exists(target):
+            continue
+        try:
+            if os.path.isdir(target):
+                removed += _dir_size_bytes(target)
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                removed += os.path.getsize(target)
+                os.remove(target)
+        except OSError:
+            continue
+
+    after_size = _dir_size_bytes(profile_dir)
+    if removed > 0:
+        print(
+            f"[scraper] limpeza browser_profile: "
+            f"{round(removed / (1024*1024), 1)} MB removidos "
+            f"(atual={round(after_size / (1024*1024), 1)} MB, limite={max_mb} MB)"
+        )
 
 
 def _ensure_browser_driver():
@@ -416,6 +493,8 @@ def _split_team_text(text: str):
     away = match.group(2).strip()
     home = home.split(" - ")[0].strip()
     away = away.split(" - ")[0].strip()
+    home = _clean_team_name(home)
+    away = _clean_team_name(away)
     return home, away
 
 
@@ -441,16 +520,29 @@ def _teams_from_url(url: str):
     slug_match = re.search(r"/r/\d+/(.+)$", path)
     if not slug_match:
         return "", ""
-    slug = slug_match.group(1).strip("/")
+    slug = unquote(slug_match.group(1).strip("/"))
     if not slug:
         return "", ""
     slug = slug.replace("_", "-")
     parts = re.split(r"-(?:vs|v)-", slug, flags=re.IGNORECASE)
     if len(parts) != 2:
         return "", ""
-    home = parts[0].replace("-", " ").strip()
-    away = parts[1].replace("-", " ").strip()
+    home = _clean_team_name(parts[0].replace("-", " ").strip())
+    away = _clean_team_name(parts[1].replace("-", " ").strip())
     return home, away
+
+
+def _clean_team_name(name: str) -> str:
+    if not name:
+        return ""
+    text = unquote(str(name)).strip()
+    # Normalize common women's markers to a readable suffix/token.
+    text = re.sub(r"[\(\[\{]\s*w\s*[\)\]\}]", "(Women)", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bwomen\b", "(Women)", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(\s*Women\s*\)", "(Women)", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"(?:\s*\(Women\)){2,}", " (Women)", text, flags=re.IGNORECASE)
+    return text.strip()
 
 
 def normalize_stat_key(name: str) -> str:
@@ -659,8 +751,8 @@ def fetch_match_stats(session, url):
     if rows:
         first = rows[0].find_all("td")
         if len(first) == 3:
-            home_team = first[0].get_text(strip=True)
-            away_team = first[2].get_text(strip=True)
+            home_team = _clean_team_name(first[0].get_text(strip=True))
+            away_team = _clean_team_name(first[2].get_text(strip=True))
 
     title_home, title_away = _teams_from_title(soup)
     url_home, url_away = _teams_from_url(url)
@@ -681,6 +773,9 @@ def fetch_match_stats(session, url):
                 home_team, away_team = title_home, title_away
             else:
                 home_team, away_team = url_home, url_away
+
+    home_team = _clean_team_name(home_team)
+    away_team = _clean_team_name(away_team)
 
     stats = {}
     raw_stats = {}
