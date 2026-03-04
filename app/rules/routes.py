@@ -1,4 +1,5 @@
 ﻿import json
+import os
 import re
 import difflib
 import unicodedata
@@ -27,6 +28,39 @@ from ..utils.time import now_sp
 
 rules_bp = Blueprint("rules", __name__, url_prefix="/rules")
 AI_HINT_CACHE = {}
+IA_SHADOW_CONTROL_RULE_NAME = os.environ.get("IA_SHADOW_CONTROL_RULE_NAME", "REGRA IA SOMBRA (Sistema)")
+
+
+def _ensure_ia_shadow_control_rule(user_id: int):
+    existing = (
+        Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
+        .order_by(Rule.id.asc())
+        .first()
+    )
+    if existing:
+        return existing
+    rule = Rule(
+        user_id=user_id,
+        name=IA_SHADOW_CONTROL_RULE_NAME,
+        time_limit_min=90,
+        message_template=None,
+        is_active=True,
+        second_half_only=True,
+        follow_ht=False,
+        follow_ft=False,
+        notify_telegram=False,
+    )
+    db.session.add(rule)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return (
+            Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
+            .order_by(Rule.id.asc())
+            .first()
+        )
+    return rule
 
 
 def _normalize_hint_text(raw: str) -> str:
@@ -1124,6 +1158,7 @@ def _build_rule_context(rule):
 @rules_bp.route("/")
 @login_required
 def list_rules():
+    _ensure_ia_shadow_control_rule(current_user.id)
     stage_filter = (request.args.get("stage") or "all").strip().lower()
     if stage_filter not in ("all", "ht", "ft"):
         stage_filter = "all"

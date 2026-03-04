@@ -64,6 +64,9 @@ IA_SHADOW_PROFILE_REFRESH_SECONDS = int(os.environ.get("IA_SHADOW_PROFILE_REFRES
 IA_SHADOW_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_MIN_SAMPLES", "120"))
 IA_SHADOW_COOLDOWN_SECONDS = int(os.environ.get("IA_SHADOW_COOLDOWN_SECONDS", "900"))
 IA_SHADOW_LOG_PATH = os.environ.get("IA_SHADOW_LOG_PATH", "data/exports/ia_shadow_events.jsonl")
+IA_SHADOW_2H_MIN_GREEN_RATE = float(os.environ.get("IA_SHADOW_2H_MIN_GREEN_RATE", "55"))
+IA_SHADOW_2H_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_2H_MIN_SAMPLES", "120"))
+IA_SHADOW_CONTROL_RULE_NAME = os.environ.get("IA_SHADOW_CONTROL_RULE_NAME", "REGRA IA SOMBRA (Sistema)")
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
@@ -288,6 +291,18 @@ def _get_ai_shadow_profiles(force: bool = False) -> dict:
         return IA_SHADOW_PROFILE_CACHE or {}
 
 
+def _is_ia_shadow_enabled_for_user(user_id: int) -> bool:
+    rule = (
+        Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
+        .order_by(Rule.id.asc())
+        .first()
+    )
+    if not rule:
+        # Backward-compatible default: if control rule does not exist yet, keep IA shadow on.
+        return True
+    return bool(rule.is_active)
+
+
 def _ia_shadow_recipients() -> list[User]:
     admins = User.query.filter_by(telegram_verified=True, is_admin=True).all()
     if admins:
@@ -319,6 +334,13 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
     profile = (profiles or {}).get(phase)
     if not profile:
         return
+    if phase == "2H":
+        sample_count = int(profile.get("samples") or 0)
+        green_rate = float(profile.get("green_rate") or 0.0)
+        if sample_count < IA_SHADOW_2H_MIN_SAMPLES:
+            return
+        if green_rate < IA_SHADOW_2H_MIN_GREEN_RATE:
+            return
 
     game_id = str(game.get("game_id") or "")
     if not game_id:
@@ -361,6 +383,8 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
 
     if IA_SHADOW_NOTIFY:
         for user in _ia_shadow_recipients():
+            if not _is_ia_shadow_enabled_for_user(user.id):
+                continue
             _send_message_safe(
                 user.telegram_token,
                 user.telegram_chat_id,
@@ -1120,12 +1144,29 @@ def _normalize_text(value: str) -> str:
     return " ".join(text.split())
 
 
+def _is_women_league(league_name: str) -> bool:
+    text = _normalize_text(league_name)
+    if not text:
+        return False
+    return bool(
+        re.search(
+            r"\b(women|woman|feminino|feminina|femenil|femenina|feminil)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _league_allowed(league_name: str, allowed_items: list[str]) -> bool:
     league_norm = _normalize_text(league_name)
     if not league_norm:
         return False
     allowed_norm = [_normalize_text(item) for item in allowed_items if str(item).strip()]
     if not allowed_norm:
+        return True
+    if "others" in allowed_norm and not _is_women_league(league_name):
+        # "Others" is treated as dynamic wildcard for non-women competitions.
+        # This keeps new leagues enabled without needing to manually re-mark them.
         return True
 
     def _variants(text: str) -> set[str]:
