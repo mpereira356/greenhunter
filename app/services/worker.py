@@ -880,6 +880,105 @@ def _league_allowed(league_name: str, allowed_items: list[str]) -> bool:
     return False
 
 
+def _rule_trigger_distance(rule, stats: dict, minute: int | None) -> float:
+    conditions = list(rule.conditions or [])
+    if not conditions:
+        return 9999.0
+
+    grouped = {}
+    for cond in conditions:
+        gid = getattr(cond, "group_id", 0)
+        grouped.setdefault(gid if gid is not None else 0, []).append(cond)
+
+    best = 9999.0
+    for conds in grouped.values():
+        ot_needed = None
+        min_floor = None
+        min_cap = None
+        impossible = False
+        for cond in conds:
+            key = normalize_stat_key(getattr(cond, "stat_key", ""))
+            side = getattr(cond, "side", "total")
+            op = getattr(cond, "operator", "")
+            val = getattr(cond, "value", None)
+            if not isinstance(val, (int, float)):
+                continue
+
+            if key == "On Target" and side == "total":
+                if op in (">=", ">"):
+                    target = int(val) if op == ">=" else int(val) + 1
+                    if ot_needed is None or target > ot_needed:
+                        ot_needed = target
+                elif op in ("<=", "<", "=="):
+                    # These constraints are not "near trigger" friendly for ranking.
+                    continue
+
+            if key == "Minute" and side == "total":
+                if op in (">=", ">"):
+                    floor = int(val) if op == ">=" else int(val) + 1
+                    if min_floor is None or floor > min_floor:
+                        min_floor = floor
+                elif op in ("<=", "<"):
+                    cap = int(val) if op == "<=" else int(val) - 1
+                    if min_cap is None or cap < min_cap:
+                        min_cap = cap
+                elif op == "==":
+                    floor = int(val)
+                    cap = int(val)
+                    min_floor = floor if min_floor is None else max(min_floor, floor)
+                    min_cap = cap if min_cap is None else min(min_cap, cap)
+
+        if ot_needed is None:
+            continue
+
+        curr_ot = 0
+        if isinstance(stats, dict):
+            curr_ot = int((stats.get("On Target", {}) or {}).get("total") or 0)
+        curr_min = minute if isinstance(minute, int) else 0
+
+        if min_cap is not None and curr_min > min_cap:
+            impossible = True
+
+        d_ot = max(0, ot_needed - curr_ot)
+        d_floor = max(0, (min_floor or 0) - curr_min)
+        d_cap = 0 if min_cap is None else max(0, curr_min - min_cap)
+
+        # Lower score = closer to trigger. Penalize expired windows heavily.
+        score = (d_ot * 6) + d_floor + (d_cap * 20)
+        if impossible:
+            score += 10000
+        if score < best:
+            best = float(score)
+
+    return best
+
+
+def _prioritize_games(games: list[dict], prefetched: dict[str, dict], active_rules: list) -> list[dict]:
+    if not games or not prefetched or not active_rules:
+        return games
+
+    def rank(game: dict):
+        key = _game_key(game)
+        item = prefetched.get(key) if key else None
+        if not item:
+            return (99999.0, 99999)
+        payload = item.get("stats_payload") or {}
+        stats = payload.get("stats", {}) or {}
+        minute = item.get("minute")
+
+        best = 99999.0
+        for rule in active_rules:
+            dist = _rule_trigger_distance(rule, stats, minute)
+            if dist < best:
+                best = dist
+
+        # Tie-breaker: later minutes first (usually closer to decision windows).
+        minute_rank = -(minute if isinstance(minute, int) else 0)
+        return (best, minute_rank)
+
+    return sorted(games, key=rank)
+
+
 def _prefetch_game_stats(game: dict):
     key = _game_key(game)
     if not key:
@@ -956,6 +1055,7 @@ def process_live_games(session):
         rule_allowed_items[rule.id] = items if isinstance(items, list) and items else None
 
     prefetched = _prefetch_live_stats(games)
+    games = _prioritize_games(games, prefetched, active_rules)
     for game in games:
         game_key = _game_key(game)
         prefetched_item = prefetched.get(game_key) if game_key else None
