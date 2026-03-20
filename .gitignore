@@ -1,6 +1,7 @@
 data/app.db
 # Ambiente virtual
 venv/
+.venv/
 
 # Python cache
 __pycache__/
@@ -16,4 +17,10 @@ data/exports/*.xlsx
 # Exports gerados automaticamente
 data/exports/
 data/browser_profile/
+data/selenium_cache/
 data/ml/
+data/cookies_copy.db
+data/*.db-shm
+data/*.db-wal
+chrome/
+chromedriver/

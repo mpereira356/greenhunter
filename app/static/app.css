@@ -2310,6 +2310,39 @@ h1, h2, h3, h4, h5,
   object-fit: contain;
 }
 
+.sidebar-brand-logo-with-text {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 0.9rem 0.8rem;
+}
+
+.sidebar-brand-logo-with-text .brand-logo-hero {
+  width: 42px;
+  height: 42px;
+  max-height: none;
+  object-fit: contain;
+  flex: 0 0 42px;
+}
+
+.sidebar-brand-logo-with-text .brand-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-brand-logo-with-text .brand-title {
+  font-size: 0.96rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.sidebar-brand-logo-with-text .brand-sub {
+  font-size: 0.54rem;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
 .sidebar-nav {
   padding: 0.65rem 0.6rem 0.8rem;
 }

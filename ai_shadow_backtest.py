@@ -4,6 +4,7 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from statistics import mean
 
 
 def parse_args():
@@ -236,7 +237,138 @@ def build_ai_score(row):
     return int(out.get("score", 0) or 0)
 
 
-def passes_shadow_rule(row, args):
+def phase_from_row(row):
+    minute = row["alert_minute"] or 0
+    return "2H" if minute > 47 else "1H"
+
+
+def build_phase_profile(phase, rows, min_samples, rule_id=None):
+    if len(rows) < min_samples:
+        return None
+    greens = [r for r in rows if r.get("status") == "green"]
+    reds = [r for r in rows if r.get("status") == "red"]
+    if len(greens) < max(6, min_samples // 4):
+        return None
+
+    def vals(items, key):
+        out = [r.get(key, 0) for r in items]
+        return [int(v) for v in out if isinstance(v, (int, float))]
+
+    def threshold(key, default):
+        gv = vals(greens, key)
+        rv = vals(reds, key)
+        if not gv:
+            return default
+        g_avg = mean(gv)
+        r_avg = mean(rv) if rv else (g_avg * 0.8)
+        if g_avg <= r_avg:
+            return default
+        return int(round((g_avg + r_avg) / 2.0))
+
+    minute_values = sorted(vals(greens, "minute"))
+    if minute_values:
+        lo_idx = max(0, int(len(minute_values) * 0.2) - 1)
+        hi_idx = min(len(minute_values) - 1, int(len(minute_values) * 0.85))
+        min_minute = minute_values[lo_idx]
+        max_minute = minute_values[hi_idx]
+    else:
+        min_minute = 16 if phase == "1H" else 50
+        max_minute = 45 if phase == "1H" else 88
+    if phase == "1H":
+        min_minute = max(8, min(min_minute, 42))
+        max_minute = max(min_minute + 1, min(47, max_minute))
+    else:
+        min_minute = max(46, min(min_minute, 80))
+        max_minute = max(min_minute + 1, min(92, max_minute))
+
+    return {
+        "phase": phase,
+        "rule_id": rule_id,
+        "samples": len(rows),
+        "greens": len(greens),
+        "reds": len(reds),
+        "green_rate": round((len(greens) / len(rows)) * 100.0, 2),
+        "min_minute": int(min_minute),
+        "max_minute": int(max_minute),
+        "min_ai_score": threshold("ai_score", 64 if phase == "1H" else 66),
+        "min_on_target_total": max(2, threshold("on_target_total", 4 if phase == "1H" else 5)),
+        "min_dangerous_total": max(12, threshold("dangerous_total", 34 if phase == "1H" else 48)),
+        "min_corners_total": max(0, threshold("corners_total", 3 if phase == "1H" else 4)),
+    }
+
+
+def min_green_rate_for_phase(phase):
+    return 52.0 if phase == "1H" else 55.0
+
+
+def profile_has_enough_samples(profile, phase, is_rule_specific):
+    if not profile:
+        return False
+    minimum = 24 if is_rule_specific else 120
+    if phase == "2H":
+        minimum = max(minimum, 120)
+    return int(profile.get("samples") or 0) >= minimum
+
+
+def profile_is_actionable(profile, phase, is_rule_specific):
+    return profile_has_enough_samples(profile, phase, is_rule_specific) and float(profile.get("green_rate") or 0.0) >= min_green_rate_for_phase(phase)
+
+
+def build_adaptive_profiles(rows):
+    grouped = {"1H": [], "2H": []}
+    grouped_by_rule = {}
+    for row in rows:
+        phase = phase_from_row(row)
+        enriched = dict(row)
+        enriched["minute"] = int(row["alert_minute"] or 0)
+        enriched["on_target_total"] = read_stat_total(row["initial_stats_json"], "On Target")
+        enriched["dangerous_total"] = read_stat_total(row["initial_stats_json"], "Dangerous Attacks")
+        enriched["corners_total"] = read_stat_total(row["initial_stats_json"], "Corners")
+        grouped[phase].append(enriched)
+        grouped_by_rule.setdefault(str(row["rule_id"]), {"1H": [], "2H": []})[phase].append(enriched)
+
+    profiles = {"phases": {}, "rules": {}}
+    for phase in ("1H", "2H"):
+        profile = build_phase_profile(phase, grouped.get(phase, []), 120)
+        if profile:
+            profiles["phases"][phase] = profile
+    for rule_id, by_phase in grouped_by_rule.items():
+        for phase in ("1H", "2H"):
+            profile = build_phase_profile(phase, by_phase.get(phase, []), 24, rule_id=int(rule_id))
+            if profile:
+                profiles["rules"].setdefault(rule_id, {})[phase] = profile
+    return profiles
+
+
+def select_profile(profiles, rule_id, phase):
+    rule_profile = ((profiles.get("rules") or {}).get(str(rule_id)) or {}).get(phase)
+    if profile_is_actionable(rule_profile, phase, True):
+        return rule_profile, "rule"
+    if profile_has_enough_samples(rule_profile, phase, True):
+        return None, "rule_blocked"
+    phase_profile = (profiles.get("phases") or {}).get(phase)
+    if profile_is_actionable(phase_profile, phase, False):
+        return phase_profile, "phase"
+    return None, None
+
+
+def passes_profile(profile, row):
+    if not profile:
+        return True
+    minute = int(row["alert_minute"] or 0)
+    on_target_total = read_stat_total(row["initial_stats_json"], "On Target")
+    dangerous_total = read_stat_total(row["initial_stats_json"], "Dangerous Attacks")
+    corners_total = read_stat_total(row["initial_stats_json"], "Corners")
+    return (
+        int(profile.get("min_minute") or 0) <= minute <= int(profile.get("max_minute") or 999)
+        and int(row["ai_score"] or 0) >= int(profile.get("min_ai_score") or 0)
+        and on_target_total >= int(profile.get("min_on_target_total") or 0)
+        and dangerous_total >= int(profile.get("min_dangerous_total") or 0)
+        and corners_total >= int(profile.get("min_corners_total") or 0)
+    )
+
+
+def passes_shadow_rule(row, args, profiles):
     minute = row["alert_minute"] or 0
     ai_score = row["ai_score"] or 0
     ml_score = row["ml_pred_score"]
@@ -257,6 +389,12 @@ def passes_shadow_rule(row, args):
     if on_target_total < args.min_on_target_total:
         return False
     if dangerous_total < args.min_dangerous_total:
+        return False
+    phase = phase_from_row(row)
+    profile, source = select_profile(profiles, row["rule_id"], phase)
+    if source == "rule_blocked":
+        return False
+    if not passes_profile(profile, row):
         return False
     return True
 
@@ -350,11 +488,12 @@ def main():
     baseline_reds = baseline_total - baseline_greens
     print_summary("BASELINE (historico filtrado)", baseline_total, baseline_greens, baseline_reds)
 
-    selected = [r for r in filtered if passes_shadow_rule(r, args)]
+    adaptive_profiles = build_adaptive_profiles(filtered)
+    selected = [r for r in filtered if passes_shadow_rule(r, args, adaptive_profiles)]
     selected_total = len(selected)
     selected_greens = sum(1 for r in selected if r["status"] == "green")
     selected_reds = selected_total - selected_greens
-    print_summary("REGRA IA SOMBRA (thresholds atuais)", selected_total, selected_greens, selected_reds)
+    print_summary("REGRA IA SOMBRA ADAPTATIVA", selected_total, selected_greens, selected_reds)
 
     base_wr = safe_pct(baseline_greens, baseline_greens + baseline_reds)
     rule_wr = safe_pct(selected_greens, selected_greens + selected_reds)
@@ -415,6 +554,8 @@ def main():
     print(f"min_on_target_total={args.min_on_target_total}")
     print(f"min_dangerous_total={args.min_dangerous_total}")
     print(f"ml_colunas_no_banco={'sim' if (has_ml_score and has_ml_prob) else 'nao'}")
+    print(f"perfis_fase={len(adaptive_profiles.get('phases', {}))}")
+    print(f"perfis_regra={sum(len(v) for v in adaptive_profiles.get('rules', {}).values())}")
 
 
 if __name__ == "__main__":
