@@ -158,15 +158,29 @@ def live():
             has_prev=page > 1,
             has_next=False,
         )
+
+    def minute_label_from(source_game, stats_payload):
+        minute = None
+        if stats_payload:
+            minute = stats_payload.get("minute")
+        if minute is None:
+            minute = source_game.get("minute")
+        if isinstance(minute, int):
+            return f"{minute}'"
+        time_text = source_game.get("time_text")
+        return time_text or "-"
+
     for game in games:
         stats_payload = fetch_match_stats(session, game["url"])
-        if not stats_payload:
-            continue
+        league = (stats_payload or {}).get("league") or game.get("league") or ""
+        home_team = (stats_payload or {}).get("home_team") or game.get("home_team") or ""
+        away_team = (stats_payload or {}).get("away_team") or game.get("away_team") or ""
+        score = (stats_payload or {}).get("score") or game.get("score") or "0 x 0"
         hay = " ".join(
             [
-                stats_payload.get("league", ""),
-                stats_payload.get("home_team", ""),
-                stats_payload.get("away_team", ""),
+                league,
+                home_team,
+                away_team,
             ]
         ).lower()
         if query and query not in hay:
@@ -177,8 +191,8 @@ def live():
         if len(matches) >= per_page:
             has_next = True
             break
-        stats = stats_payload.get("stats", {})
-        raw_stats = stats_payload.get("raw_stats", {})
+        stats = (stats_payload or {}).get("stats", {})
+        raw_stats = (stats_payload or {}).get("raw_stats", {})
         raw_dangerous = raw_stats.get("Dangerous Attacks", ("-", "-"))
         raw_on_target = raw_stats.get("On Target", ("-", "-"))
         raw_corners = raw_stats.get("Corners", ("-", "-"))
@@ -194,11 +208,11 @@ def live():
             )
         matches.append(
             {
-                "league": stats_payload.get("league"),
-                "home_team": stats_payload.get("home_team"),
-                "away_team": stats_payload.get("away_team"),
-                "minute": stats_payload.get("minute"),
-                "score": stats_payload.get("score"),
+                "league": league,
+                "home_team": home_team,
+                "away_team": away_team,
+                "minute": minute_label_from(game, stats_payload),
+                "score": score,
                 "url": game["url"],
                 "on_target_home": stats.get("On Target", {}).get("home", raw_on_target[0] or "-"),
                 "on_target_away": stats.get("On Target", {}).get("away", raw_on_target[1] or "-"),

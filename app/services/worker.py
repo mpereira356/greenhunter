@@ -58,12 +58,15 @@ NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
+USE_SERIAL_PREFETCH = os.environ.get("BETSAPI_CF_MODE", "manual").strip().lower() not in ("off", "0", "false", "no")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_PROFILE_REFRESH_SECONDS = int(os.environ.get("IA_SHADOW_PROFILE_REFRESH_SECONDS", "600"))
 IA_SHADOW_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_MIN_SAMPLES", "120"))
+IA_SHADOW_RULE_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_RULE_MIN_SAMPLES", "24"))
 IA_SHADOW_COOLDOWN_SECONDS = int(os.environ.get("IA_SHADOW_COOLDOWN_SECONDS", "900"))
 IA_SHADOW_LOG_PATH = os.environ.get("IA_SHADOW_LOG_PATH", "data/exports/ia_shadow_events.jsonl")
+IA_SHADOW_1H_MIN_GREEN_RATE = float(os.environ.get("IA_SHADOW_1H_MIN_GREEN_RATE", "52"))
 IA_SHADOW_2H_MIN_GREEN_RATE = float(os.environ.get("IA_SHADOW_2H_MIN_GREEN_RATE", "55"))
 IA_SHADOW_2H_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_2H_MIN_SAMPLES", "120"))
 IA_SHADOW_CONTROL_RULE_NAME = os.environ.get("IA_SHADOW_CONTROL_RULE_NAME", "REGRA IA SOMBRA (Sistema)")
@@ -184,12 +187,12 @@ def _phase_from_alert(alert) -> str:
     return "1H" if minute <= 47 else "2H"
 
 
-def _build_phase_profile(phase: str, rows: list[dict]) -> dict | None:
-    if len(rows) < IA_SHADOW_MIN_SAMPLES:
+def _build_phase_profile(phase: str, rows: list[dict], min_samples: int, rule_id: int | None = None) -> dict | None:
+    if len(rows) < min_samples:
         return None
     greens = [r for r in rows if r.get("status") == "green"]
     reds = [r for r in rows if r.get("status") == "red"]
-    if len(greens) < max(20, IA_SHADOW_MIN_SAMPLES // 4):
+    if len(greens) < max(6, min_samples // 4):
         return None
 
     def _vals(items, key):
@@ -228,7 +231,10 @@ def _build_phase_profile(phase: str, rows: list[dict]) -> dict | None:
 
     return {
         "phase": phase,
+        "rule_id": rule_id,
         "samples": len(rows),
+        "greens": len(greens),
+        "reds": len(reds),
         "green_rate": round((len(greens) / len(rows)) * 100.0, 2),
         "min_minute": int(min_minute),
         "max_minute": int(max_minute),
@@ -236,6 +242,78 @@ def _build_phase_profile(phase: str, rows: list[dict]) -> dict | None:
         "min_on_target_total": max(2, _threshold("on_target_total", 4 if phase == "1H" else 5)),
         "min_dangerous_total": max(12, _threshold("dangerous_total", 34 if phase == "1H" else 48)),
         "min_corners_total": max(0, _threshold("corners_total", 3 if phase == "1H" else 4)),
+    }
+
+
+def _min_green_rate_for_phase(phase: str) -> float:
+    return IA_SHADOW_1H_MIN_GREEN_RATE if phase == "1H" else IA_SHADOW_2H_MIN_GREEN_RATE
+
+
+def _profile_has_enough_samples(profile: dict | None, phase: str, is_rule_specific: bool) -> bool:
+    if not profile:
+        return False
+    minimum = IA_SHADOW_RULE_MIN_SAMPLES if is_rule_specific else IA_SHADOW_MIN_SAMPLES
+    if phase == "2H":
+        minimum = max(minimum, IA_SHADOW_2H_MIN_SAMPLES)
+    return int(profile.get("samples") or 0) >= minimum
+
+
+def _profile_is_actionable(profile: dict | None, phase: str, is_rule_specific: bool) -> bool:
+    if not _profile_has_enough_samples(profile, phase, is_rule_specific):
+        return False
+    return float(profile.get("green_rate") or 0.0) >= _min_green_rate_for_phase(phase)
+
+
+def _select_ia_shadow_profile(profiles: dict | None, rule_id: int | None, phase: str) -> tuple[dict | None, str | None]:
+    profiles = profiles or {}
+    if rule_id is not None:
+        rule_profiles = (profiles.get("rules") or {}).get(str(rule_id), {})
+        rule_profile = rule_profiles.get(phase)
+        if _profile_is_actionable(rule_profile, phase, is_rule_specific=True):
+            return rule_profile, "rule"
+        if _profile_has_enough_samples(rule_profile, phase, is_rule_specific=True):
+            return None, "rule_blocked"
+
+    phase_profile = (profiles.get("phases") or {}).get(phase)
+    if _profile_is_actionable(phase_profile, phase, is_rule_specific=False):
+        return phase_profile, "phase"
+    return None, None
+
+
+def _profile_accepts_snapshot(profile: dict | None, minute: int, ai_score: int, on_target_total: int, dangerous_total: int, corners_total: int) -> bool:
+    if not profile:
+        return True
+    if minute < int(profile.get("min_minute") or 0) or minute > int(profile.get("max_minute") or 999):
+        return False
+    if ai_score < int(profile.get("min_ai_score") or 0):
+        return False
+    if on_target_total < int(profile.get("min_on_target_total") or 0):
+        return False
+    if dangerous_total < int(profile.get("min_dangerous_total") or 0):
+        return False
+    if corners_total < int(profile.get("min_corners_total") or 0):
+        return False
+    return True
+
+
+def _resolve_ia_shadow_gate(rule_id: int | None, phase: str, minute: int, score_text: str | None, stats: dict | None, profiles: dict | None) -> dict:
+    assessment = _ia_shadow_assessment_for_phase(phase, minute, score_text, stats)
+    ai_score = int(assessment.get("score") or 0)
+    on_target_total = _stats_total_live(stats, "On Target")
+    dangerous_total = _stats_total_live(stats, "Dangerous Attacks")
+    corners_total = _stats_total_live(stats, "Corners")
+    profile, source = _select_ia_shadow_profile(profiles, rule_id, phase)
+    accepted = _profile_accepts_snapshot(profile, minute, ai_score, on_target_total, dangerous_total, corners_total)
+    if source == "rule_blocked":
+        accepted = False
+    return {
+        "accepted": accepted,
+        "profile": profile,
+        "profile_source": source,
+        "ai_score": ai_score,
+        "on_target_total": on_target_total,
+        "dangerous_total": dangerous_total,
+        "corners_total": corners_total,
     }
 
 
@@ -247,6 +325,7 @@ def _compute_ai_shadow_profiles() -> dict:
         .all()
     )
     grouped = {"1H": [], "2H": []}
+    grouped_by_rule = {}
     for alert in alerts:
         minute = alert.alert_minute or 0
         phase = _phase_from_alert(alert)
@@ -260,22 +339,32 @@ def _compute_ai_shadow_profiles() -> dict:
             score=alert.initial_score,
             stats=base_stats,
         )
-        grouped[phase].append(
-            {
-                "status": alert.status,
-                "minute": minute,
-                "ai_score": int(ai_assessment.get("score") or 0),
-                "on_target_total": _stats_total_from_json(alert.initial_stats_json, "On Target"),
-                "dangerous_total": _stats_total_from_json(alert.initial_stats_json, "Dangerous Attacks"),
-                "corners_total": _stats_total_from_json(alert.initial_stats_json, "Corners"),
-            }
-        )
+        row = {
+            "status": alert.status,
+            "minute": minute,
+            "ai_score": int(ai_assessment.get("score") or 0),
+            "on_target_total": _stats_total_from_json(alert.initial_stats_json, "On Target"),
+            "dangerous_total": _stats_total_from_json(alert.initial_stats_json, "Dangerous Attacks"),
+            "corners_total": _stats_total_from_json(alert.initial_stats_json, "Corners"),
+        }
+        grouped[phase].append(row)
+        grouped_by_rule.setdefault(str(alert.rule_id), {"1H": [], "2H": []})[phase].append(row)
 
-    profiles = {}
+    profiles = {"phases": {}, "rules": {}}
     for phase in ("1H", "2H"):
-        profile = _build_phase_profile(phase, grouped.get(phase, []))
+        profile = _build_phase_profile(phase, grouped.get(phase, []), IA_SHADOW_MIN_SAMPLES)
         if profile:
-            profiles[phase] = profile
+            profiles["phases"][phase] = profile
+    for rule_id, phase_rows in grouped_by_rule.items():
+        for phase in ("1H", "2H"):
+            profile = _build_phase_profile(
+                phase,
+                phase_rows.get(phase, []),
+                IA_SHADOW_RULE_MIN_SAMPLES,
+                rule_id=int(rule_id),
+            )
+            if profile:
+                profiles["rules"].setdefault(rule_id, {})[phase] = profile
     return profiles
 
 
@@ -331,16 +420,9 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
     if not isinstance(minute, int):
         return
     phase = "1H" if minute <= 47 else "2H"
-    profile = (profiles or {}).get(phase)
+    profile, profile_source = _select_ia_shadow_profile(profiles, None, phase)
     if not profile:
         return
-    if phase == "2H":
-        sample_count = int(profile.get("samples") or 0)
-        green_rate = float(profile.get("green_rate") or 0.0)
-        if sample_count < IA_SHADOW_2H_MIN_SAMPLES:
-            return
-        if green_rate < IA_SHADOW_2H_MIN_GREEN_RATE:
-            return
 
     game_id = str(game.get("game_id") or "")
     if not game_id:
@@ -352,22 +434,13 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
 
     score_text = stats_payload.get("score") or "0 x 0"
     stats = stats_payload.get("stats", {})
-    assessment = _ia_shadow_assessment_for_phase(phase, minute, score_text, stats)
-    ai_score = int(assessment.get("score") or 0)
-    on_target_total = _stats_total_live(stats, "On Target")
-    dangerous_total = _stats_total_live(stats, "Dangerous Attacks")
-    corners_total = _stats_total_live(stats, "Corners")
-
-    if minute < profile["min_minute"] or minute > profile["max_minute"]:
+    gate = _resolve_ia_shadow_gate(None, phase, minute, score_text, stats, profiles)
+    if not gate["accepted"]:
         return
-    if ai_score < profile["min_ai_score"]:
-        return
-    if on_target_total < profile["min_on_target_total"]:
-        return
-    if dangerous_total < profile["min_dangerous_total"]:
-        return
-    if corners_total < profile["min_corners_total"]:
-        return
+    ai_score = gate["ai_score"]
+    on_target_total = gate["on_target_total"]
+    dangerous_total = gate["dangerous_total"]
+    corners_total = gate["corners_total"]
 
     msg = (
         f"REGRA IA ({phase})\n"
@@ -376,7 +449,7 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
         f"Tempo: {minute}' | Placar: {score_text}\n"
         f"AI Score: {ai_score}/100\n"
         f"On Target: {on_target_total} | Dangerous: {dangerous_total} | Corners: {corners_total}\n"
-        f"Perfil {phase}: score>={profile['min_ai_score']} | OT>={profile['min_on_target_total']} | DA>={profile['min_dangerous_total']} | C>={profile['min_corners_total']} | min {profile['min_minute']}-{profile['max_minute']}\n"
+        f"Perfil {phase} [{profile_source or 'phase'}]: score>={profile['min_ai_score']} | OT>={profile['min_on_target_total']} | DA>={profile['min_dangerous_total']} | C>={profile['min_corners_total']} | min {profile['min_minute']}-{profile['max_minute']}\n"
         f"Link: {game.get('url')}\n"
         f"Modo: sombra (sem aposta automatica)"
     )
@@ -407,6 +480,7 @@ def _maybe_emit_ia_shadow_signal(game: dict, stats_payload: dict, profiles: dict
             "dangerous_total": dangerous_total,
             "corners_total": corners_total,
             "profile": profile,
+            "profile_source": profile_source,
             "url": game.get("url"),
         }
     )
@@ -1295,6 +1369,54 @@ def _prioritize_games(games: list[dict], prefetched: dict[str, dict], active_rul
     return sorted(games, key=rank)
 
 
+def _rule_minute_window(rule) -> tuple[int | None, int | None]:
+    min_minute = None
+    max_minute = None
+    for cond in (rule.conditions or []):
+        if normalize_stat_key(getattr(cond, "stat_key", "")) != "Minute":
+            continue
+        value = getattr(cond, "value", None)
+        try:
+            value = int(value)
+        except Exception:
+            continue
+        op = getattr(cond, "operator", "")
+        if op in (">=", ">"):
+            lower = value if op == ">=" else value + 1
+            min_minute = lower if min_minute is None else max(min_minute, lower)
+        elif op in ("<=", "<"):
+            upper = value if op == "<=" else value - 1
+            max_minute = upper if max_minute is None else min(max_minute, upper)
+        elif op == "==":
+            min_minute = value
+            max_minute = value
+    return min_minute, max_minute
+
+
+def _game_maybe_relevant_for_rule(game: dict, rule) -> bool:
+    minute = game.get("minute")
+    if not isinstance(minute, int):
+        return True
+    if getattr(rule, "second_half_only", False) and minute < 46:
+        return False
+    min_minute, max_minute = _rule_minute_window(rule)
+    if min_minute is not None and minute < max(0, min_minute - 2):
+        return False
+    if max_minute is not None and minute > (max_minute + 2):
+        return False
+    return True
+
+
+def _filter_candidate_games(games: list[dict], active_rules: list) -> list[dict]:
+    if not games or not active_rules:
+        return games
+    filtered = []
+    for game in games:
+        if any(_game_maybe_relevant_for_rule(game, rule) for rule in active_rules):
+            filtered.append(game)
+    return filtered or games
+
+
 def _prefetch_game_stats(game: dict):
     key = _game_key(game)
     if not key:
@@ -1302,6 +1424,8 @@ def _prefetch_game_stats(game: dict):
     session = make_session()
     try:
         stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
+        if not stats_payload:
+            stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload or is_youth_match(stats_payload):
             return key, None, None
         minute = stats_payload.get("minute")
@@ -1321,7 +1445,7 @@ def _prefetch_game_stats(game: dict):
 def _prefetch_live_stats(games: list[dict]) -> dict[str, dict]:
     if not games:
         return {}
-    max_workers = min(len(games), ANALYSIS_THREADS)
+    max_workers = 1 if USE_SERIAL_PREFETCH else min(len(games), ANALYSIS_THREADS)
     if max_workers <= 1:
         prefetched = {}
         for game in games:
@@ -1346,6 +1470,7 @@ def process_live_games(session):
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
+    games = _filter_candidate_games(games, active_rules)
     rule_ids = [rule.id for rule in active_rules]
     game_ids = [str(game.get("game_id")) for game in games if game.get("game_id") is not None]
     existing_pairs = set()
@@ -1528,6 +1653,17 @@ def process_live_games(session):
                 effective_minute = stats_payload.get("minute") if stats_payload else minute
                 if effective_minute is None:
                     effective_minute = minute
+                phase = "2H" if rule.second_half_only or int(effective_minute or 0) > 47 else "1H"
+                shadow_gate = _resolve_ia_shadow_gate(
+                    rule.id,
+                    phase,
+                    int(effective_minute or 0),
+                    stats_payload.get("score") if stats_payload else "",
+                    stats_for_rule,
+                    ia_profiles,
+                )
+                if not shadow_gate["accepted"]:
+                    continue
                 market_ctx = infer_green_profile(rule)
                 ml_prediction = predict_alert_ml(
                     rule_id=rule.id,
@@ -1572,7 +1708,27 @@ def process_live_games(session):
                     
                     # Send entry alert immediately after rule hit to reduce latency.
                     if rule.notify_telegram:
-                        meta = build_message_meta(rule, stats_payload, game, {}, stats_override=stats_for_rule)
+                        history_meta = {}
+                        try:
+                            history_data = fetch_match_history(session, game.get("url"))
+                            h2h_items = (history_data or {}).get("h2h", [])
+                            home_items = (history_data or {}).get("home", [])
+                            away_items = (history_data or {}).get("away", [])
+                            h2h_summary = summarize_history(h2h_items)
+                            home_summary = summarize_history(home_items)
+                            away_summary = summarize_history(away_items)
+                            conf_pct = history_confidence(rule.conditions or [], h2h_items)
+                            if h2h_summary:
+                                history_meta["history_h2h"] = format_history_summary("H2H:", h2h_summary)
+                            if home_summary:
+                                history_meta["history_home"] = format_history_summary("Mandante:", home_summary)
+                            if away_summary:
+                                history_meta["history_away"] = format_history_summary("Visitante:", away_summary)
+                            if conf_pct is not None:
+                                history_meta["history_confidence"] = f"{conf_pct}%"
+                        except Exception as exc:
+                            print(f"[worker] falha ao coletar historico do jogo {game.get('game_id')}: {exc}")
+                        meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
                         message = render_message(rule, meta)
                         _send_message_safe(
                             user.telegram_token,

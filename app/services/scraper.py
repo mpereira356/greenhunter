@@ -4,6 +4,11 @@ import shutil
 import threading
 import time
 import unicodedata
+import json
+import base64
+import sqlite3
+import ctypes
+import subprocess
 from urllib.parse import urlparse
 import tempfile
 from urllib.parse import unquote
@@ -27,6 +32,11 @@ _CF_ALERT_LAST_SENT_AT = 0.0
 _BROWSER_DRIVER = None
 _BROWSER_PROFILE_DIR = None
 _PROFILE_LAST_CLEANUP_AT = 0.0
+_SELENIUM_CACHE_LAST_CLEANUP_AT = 0.0
+_PROFILE_COOKIES_LOADED = False
+_PROFILE_COOKIES_LAST_ERROR_AT = 0.0
+_BROWSER_LAST_LAUNCHED_AT = 0.0
+_BROWSER_TARGET_ID = None
 
 
 def make_session():
@@ -62,7 +72,158 @@ def make_session():
     proxy = os.environ.get("PROXY_URL")
     if proxy:
         session.proxies.update({"http": proxy, "https": proxy})
+    _apply_manual_betsapi_cookies(session)
     return session
+
+
+def _cookie_domains():
+    return (".betsapi.com", "betsapi.com", "pt.betsapi.com")
+
+
+def _set_session_cookie(session, name: str, value: str, domain: str = ".betsapi.com"):
+    if not name or not value:
+        return
+    session.cookies.set(name, value, domain=domain, path="/")
+
+
+def _apply_manual_betsapi_cookies(session):
+    cookie_string = (os.environ.get("BETSAPI_COOKIE_STRING") or "").strip()
+    if cookie_string:
+        for part in cookie_string.split(";"):
+            if "=" not in part:
+                continue
+            name, value = part.split("=", 1)
+            for domain in _cookie_domains():
+                _set_session_cookie(session, name.strip(), value.strip(), domain=domain)
+
+    cf_clearance = (os.environ.get("BETSAPI_CF_CLEARANCE") or "").strip()
+    if cf_clearance:
+        for domain in _cookie_domains():
+            _set_session_cookie(session, "cf_clearance", cf_clearance, domain=domain)
+
+    _load_chrome_profile_cookies(session)
+
+
+class _DATA_BLOB(ctypes.Structure):
+    _fields_ = [("cbData", ctypes.c_uint), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+
+def _dpapi_unprotect(encrypted_bytes: bytes) -> bytes:
+    if not encrypted_bytes or os.name != "nt":
+        return b""
+    blob_in = _DATA_BLOB(
+        len(encrypted_bytes),
+        ctypes.cast(ctypes.create_string_buffer(encrypted_bytes), ctypes.POINTER(ctypes.c_char)),
+    )
+    blob_out = _DATA_BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
+    ):
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _chrome_master_key(profile_root: str) -> bytes:
+    local_state = os.path.join(profile_root, "Local State")
+    if not os.path.exists(local_state):
+        return b""
+    with open(local_state, "r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    encrypted_key = payload.get("os_crypt", {}).get("encrypted_key")
+    if not encrypted_key:
+        return b""
+    raw = base64.b64decode(encrypted_key)
+    if raw.startswith(b"DPAPI"):
+        raw = raw[5:]
+    return _dpapi_unprotect(raw)
+
+
+def _decrypt_chrome_cookie(encrypted_value: bytes, master_key: bytes) -> str:
+    if not encrypted_value:
+        return ""
+    if encrypted_value.startswith(b"v10") or encrypted_value.startswith(b"v11"):
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        except Exception:
+            return ""
+        nonce = encrypted_value[3:15]
+        ciphertext = encrypted_value[15:]
+        if not nonce or not ciphertext or not master_key:
+            return ""
+        try:
+            decrypted = AESGCM(master_key).decrypt(nonce, ciphertext, None)
+        except Exception:
+            return ""
+        try:
+            return decrypted.decode("utf-8")
+        except UnicodeDecodeError:
+            return ""
+    try:
+        decrypted = _dpapi_unprotect(encrypted_value)
+        return decrypted.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""
+    except Exception:
+        return ""
+
+
+def _load_chrome_profile_cookies(session):
+    global _PROFILE_COOKIES_LOADED, _PROFILE_COOKIES_LAST_ERROR_AT
+    if _PROFILE_COOKIES_LOADED or os.name != "nt":
+        return
+    if _browser_debug_running():
+        return
+    if _PROFILE_COOKIES_LAST_ERROR_AT and (time.time() - _PROFILE_COOKIES_LAST_ERROR_AT) < 300:
+        return
+    profile_root = os.path.abspath(os.environ.get("BETSAPI_BROWSER_PROFILE_DIR", "data/browser_profile"))
+    cookies_path = os.path.join(profile_root, "Default", "Network", "Cookies")
+    if not os.path.exists(cookies_path):
+        return
+
+    tmp_copy = os.path.join(os.path.abspath("data"), "cookies_profile_copy.db")
+    try:
+        shutil.copy2(cookies_path, tmp_copy)
+        master_key = _chrome_master_key(profile_root)
+        con = sqlite3.connect(tmp_copy)
+        cur = con.cursor()
+        rows = cur.execute(
+            """
+            SELECT host_key, name, value, encrypted_value
+            FROM cookies
+            WHERE host_key LIKE '%betsapi%' OR name = 'cf_clearance'
+            """
+        ).fetchall()
+        con.close()
+    except PermissionError:
+        _PROFILE_COOKIES_LAST_ERROR_AT = time.time()
+        return
+    except Exception as exc:
+        _PROFILE_COOKIES_LAST_ERROR_AT = time.time()
+        print(f"[scraper] nao foi possivel carregar cookies do perfil do Chrome: {exc}")
+        return
+    finally:
+        try:
+            if os.path.exists(tmp_copy):
+                os.remove(tmp_copy)
+        except OSError:
+            pass
+
+    loaded = 0
+    for host_key, name, value, encrypted_value in rows:
+        try:
+            cookie_value = value or _decrypt_chrome_cookie(encrypted_value, master_key)
+        except Exception:
+            continue
+        if not cookie_value:
+            continue
+        _set_session_cookie(session, name, cookie_value, domain=host_key or ".betsapi.com")
+        loaded += 1
+    if loaded:
+        _PROFILE_COOKIES_LOADED = True
+        print(f"[scraper] cookies carregados do perfil Chrome: {loaded}")
 
 
 def _cf_mode() -> str:
@@ -161,6 +322,17 @@ def _build_browser_driver():
         print(f"[scraper] falha ao carregar selenium: {exc}")
         return None
 
+    # Selenium Manager may default to a sandboxed home/cache location that is not writable.
+    selenium_cache_dir = os.path.abspath(os.environ.get("BETSAPI_SELENIUM_CACHE_DIR", "data/selenium_cache"))
+    try:
+        os.makedirs(selenium_cache_dir, exist_ok=True)
+    except OSError as exc:
+        print(f"[scraper] falha ao preparar cache do selenium em {selenium_cache_dir}: {exc}")
+    else:
+        _cleanup_selenium_cache(selenium_cache_dir)
+        os.environ.setdefault("SE_CACHE_PATH", selenium_cache_dir)
+        os.environ.setdefault("SE_DOWNLOAD_PATH", selenium_cache_dir)
+
     # Use a stable profile dir by default, but fall back to a temp dir in headless
     # or when explicitly requested to avoid profile locks on VPS.
     global _BROWSER_PROFILE_DIR
@@ -171,7 +343,7 @@ def _build_browser_driver():
     forced_display = (os.environ.get("BETSAPI_DISPLAY") or "").strip()
     if forced_display:
         os.environ["DISPLAY"] = forced_display
-    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    has_display = os.name == "nt" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     headless = headless_env or not has_display
     profile_dir = None
     lock_detected = False
@@ -212,8 +384,15 @@ def _build_browser_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--remote-debugging-port=0")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-features=VizDisplayCompositor")
+    if os.name == "nt":
+        options.add_argument("--disable-features=RendererCodeIntegrity")
     options.add_argument(f"--user-data-dir={profile_dir}")
 
     print(
@@ -226,6 +405,11 @@ def _build_browser_driver():
     )
 
     if headless:
+        runtime_root = os.path.abspath(os.environ.get("BETSAPI_BROWSER_RUNTIME_DIR", "data/browser_runtime"))
+        os.makedirs(runtime_root, exist_ok=True)
+        options.add_argument(f"--data-path={os.path.join(runtime_root, 'data')}")
+        options.add_argument(f"--disk-cache-dir={os.path.join(runtime_root, 'cache')}")
+        options.add_argument(f"--crash-dumps-dir={os.path.join(runtime_root, 'crash')}")
         options.add_argument("--headless=new")
         options.add_argument("--window-size=1280,720")
 
@@ -249,25 +433,80 @@ def _dir_size_bytes(path: str) -> int:
     return total
 
 
-def _cleanup_browser_profile(profile_dir: str):
-    global _PROFILE_LAST_CLEANUP_AT
-    if not profile_dir or not os.path.isdir(profile_dir):
+def _remove_path(target: str) -> int:
+    if not target or not os.path.exists(target):
+        return 0
+    removed = 0
+    try:
+        if os.path.isdir(target):
+            removed = _dir_size_bytes(target)
+            shutil.rmtree(target, ignore_errors=True)
+        else:
+            removed = os.path.getsize(target)
+            os.remove(target)
+    except OSError:
+        return 0
+    return removed
+
+
+def _cleanup_large_dir(
+    path: str,
+    *,
+    max_mb: int,
+    interval_seconds: int,
+    removable_rel_paths: list[str],
+    label: str,
+    last_cleanup_attr: str,
+    max_age_hours: int = 72,
+):
+    if not path or not os.path.isdir(path):
         return
 
     now_ts = time.time()
-    interval = int(os.environ.get("BROWSER_PROFILE_CLEANUP_INTERVAL_SECONDS", "1800"))
-    if interval > 0 and (now_ts - _PROFILE_LAST_CLEANUP_AT) < interval:
+    last_cleanup_at = globals().get(last_cleanup_attr, 0.0) or 0.0
+    if interval_seconds > 0 and (now_ts - last_cleanup_at) < interval_seconds:
         return
-    _PROFILE_LAST_CLEANUP_AT = now_ts
+    globals()[last_cleanup_attr] = now_ts
 
+    max_bytes = max_mb * 1024 * 1024 if max_mb > 0 else 0
+    current_size = _dir_size_bytes(path)
+    if max_bytes and current_size <= max_bytes:
+        return
+
+    removed = 0
+    for rel in removable_rel_paths:
+        removed += _remove_path(os.path.join(path, rel))
+
+    after_size = _dir_size_bytes(path)
+    if max_age_hours > 0 and (max_bytes == 0 or after_size > max_bytes):
+        cutoff_ts = now_ts - (max_age_hours * 3600)
+        stale_items = []
+        for entry in os.scandir(path):
+            if entry.name in {".", ".."}:
+                continue
+            try:
+                mtime = entry.stat().st_mtime
+            except OSError:
+                continue
+            if mtime <= cutoff_ts:
+                stale_items.append((mtime, entry.path))
+        for _, target in sorted(stale_items):
+            removed += _remove_path(target)
+            after_size = _dir_size_bytes(path)
+            if max_bytes and after_size <= max_bytes:
+                break
+
+    if removed > 0:
+        print(
+            f"[scraper] limpeza {label}: "
+            f"{round(removed / (1024*1024), 1)} MB removidos "
+            f"(atual={round(after_size / (1024*1024), 1)} MB, limite={max_mb} MB)"
+        )
+
+
+def _cleanup_browser_profile(profile_dir: str):
     max_mb = int(os.environ.get("BROWSER_PROFILE_MAX_MB", "350"))
-    if max_mb <= 0:
-        return
-    max_bytes = max_mb * 1024 * 1024
-    current_size = _dir_size_bytes(profile_dir)
-    if current_size <= max_bytes:
-        return
-
+    interval = int(os.environ.get("BROWSER_PROFILE_CLEANUP_INTERVAL_SECONDS", "1800"))
     removable_rel_paths = [
         os.path.join("Default", "Cache"),
         os.path.join("Default", "Code Cache"),
@@ -286,109 +525,239 @@ def _cleanup_browser_profile(profile_dir: str):
         "segmentation_platform",
         "BrowserMetrics",
     ]
-    removed = 0
-    for rel in removable_rel_paths:
-        target = os.path.join(profile_dir, rel)
-        if not os.path.exists(target):
-            continue
-        try:
-            if os.path.isdir(target):
-                removed += _dir_size_bytes(target)
-                shutil.rmtree(target, ignore_errors=True)
-            else:
-                removed += os.path.getsize(target)
-                os.remove(target)
-        except OSError:
-            continue
-
-    after_size = _dir_size_bytes(profile_dir)
-    if removed > 0:
-        print(
-            f"[scraper] limpeza browser_profile: "
-            f"{round(removed / (1024*1024), 1)} MB removidos "
-            f"(atual={round(after_size / (1024*1024), 1)} MB, limite={max_mb} MB)"
-        )
+    _cleanup_large_dir(
+        profile_dir,
+        max_mb=max_mb,
+        interval_seconds=interval,
+        removable_rel_paths=removable_rel_paths,
+        label="browser_profile",
+        last_cleanup_attr="_PROFILE_LAST_CLEANUP_AT",
+        max_age_hours=int(os.environ.get("BROWSER_PROFILE_MAX_AGE_HOURS", "72")),
+    )
 
 
-def _ensure_browser_driver():
-    global _BROWSER_DRIVER
-    if _BROWSER_DRIVER is not None:
-        return _BROWSER_DRIVER
+def _cleanup_selenium_cache(cache_dir: str):
+    max_mb = int(os.environ.get("BETSAPI_SELENIUM_CACHE_MAX_MB", "250"))
+    interval = int(os.environ.get("BETSAPI_SELENIUM_CACHE_CLEANUP_INTERVAL_SECONDS", "1800"))
+    removable_rel_paths = [
+        "se-metadata.json",
+        "chrome",
+        "chromedriver",
+    ]
+    _cleanup_large_dir(
+        cache_dir,
+        max_mb=max_mb,
+        interval_seconds=interval,
+        removable_rel_paths=removable_rel_paths,
+        label="selenium_cache",
+        last_cleanup_attr="_SELENIUM_CACHE_LAST_CLEANUP_AT",
+        max_age_hours=int(os.environ.get("BETSAPI_SELENIUM_CACHE_MAX_AGE_HOURS", "72")),
+    )
+
+
+def _browser_debug_port() -> int:
+    raw = (os.environ.get("BETSAPI_BROWSER_DEBUG_PORT") or "9222").strip()
     try:
-        _BROWSER_DRIVER = _build_browser_driver()
-    except Exception as exc:
-        print(f"[scraper] nao foi possivel iniciar navegador de fallback: {exc}")
-        _BROWSER_DRIVER = None
-    return _BROWSER_DRIVER
+        return int(raw)
+    except ValueError:
+        return 9222
 
 
-def _browser_snapshot(driver):
-    cookies = driver.get_cookies() or []
+def _browser_debug_base() -> str:
+    return f"http://127.0.0.1:{_browser_debug_port()}"
+
+
+def _browser_chrome_binary() -> str:
+    chrome_binary = (os.environ.get("BETSAPI_CHROME_BINARY") or os.environ.get("CHROME_BIN") or "").strip()
+    if not chrome_binary and os.name == "nt":
+        for candidate in (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        ):
+            if os.path.exists(candidate):
+                chrome_binary = candidate
+                break
+    return chrome_binary
+
+
+def _browser_profile_dir() -> str:
+    profile_dir = os.path.abspath(os.environ.get("BETSAPI_BROWSER_PROFILE_DIR", "data/browser_profile"))
+    os.makedirs(profile_dir, exist_ok=True)
+    _cleanup_browser_profile(profile_dir)
+    return profile_dir
+
+
+def _browser_debug_running() -> bool:
     try:
-        user_agent = driver.execute_script("return navigator.userAgent")
+        urllib = __import__("urllib.request", fromlist=["request"])
+        urllib.urlopen(f"{_browser_debug_base()}/json/version", timeout=2).read()
+        return True
     except Exception:
-        user_agent = None
-    return cookies, user_agent
+        return False
+
+
+def _launch_debug_browser(start_url: str):
+    global _BROWSER_LAST_LAUNCHED_AT
+    chrome_binary = _browser_chrome_binary()
+    if not chrome_binary:
+        raise RuntimeError("Chrome/Edge nao encontrado para o fallback do BetsAPI")
+    profile_dir = _browser_profile_dir()
+    args = [
+        chrome_binary,
+        f"--remote-debugging-port={_browser_debug_port()}",
+        "--remote-allow-origins=*",
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        start_url,
+    ]
+    kwargs = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "stdin": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(args, **kwargs)
+    _BROWSER_LAST_LAUNCHED_AT = time.time()
+
+
+def _cdp_connect(ws_url: str):
+    import websocket
+    return websocket.create_connection(ws_url, timeout=10, origin=_browser_debug_base())
+
+
+def _cdp_recv_result(ws, command_id: int, timeout_seconds: float = 15.0):
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        msg = json.loads(ws.recv())
+        if msg.get("id") == command_id:
+            if "error" in msg:
+                raise RuntimeError(msg["error"])
+            return msg.get("result", {})
+    raise TimeoutError(f"timeout aguardando resposta do CDP para id={command_id}")
+
+
+def _cdp_get_page_target(url: str):
+    urllib = __import__("urllib.request", fromlist=["request"])
+    global _BROWSER_TARGET_ID
+    try:
+        targets = json.load(urllib.urlopen(f"{_browser_debug_base()}/json/list", timeout=10))
+    except Exception:
+        targets = []
+
+    if _BROWSER_TARGET_ID:
+        for target in targets:
+            if target.get("id") == _BROWSER_TARGET_ID and target.get("type") == "page":
+                return target
+
+    for target in targets:
+        if target.get("type") != "page":
+            continue
+        target_url = (target.get("url") or "").lower()
+        target_title = (target.get("title") or "").lower()
+        if "betsapi.com" in target_url or "betsapi" in target_title:
+            _BROWSER_TARGET_ID = target.get("id")
+            return target
+
+    req = urllib.Request(f"{_browser_debug_base()}/json/new?about:blank", method="PUT")
+    target = json.load(urllib.urlopen(req, timeout=10))
+    _BROWSER_TARGET_ID = target.get("id")
+    return target
 
 
 def _browser_fetch(url: str):
     wait_seconds = int(os.environ.get("BETSAPI_CF_WAIT_SECONDS", "180"))
-    try:
-        from selenium.common.exceptions import TimeoutException
-        from selenium.webdriver.support.ui import WebDriverWait
-    except Exception as exc:
-        print(f"[scraper] falha no webdriver: {exc}")
-        return None, None, None
+    urllib = __import__("urllib.request", fromlist=["request"])
 
     with _CF_LOCK:
-        for attempt in (1, 2):
-            try:
-                driver = _ensure_browser_driver()
-            except Exception as exc:
-                print(f"[scraper] erro ao inicializar browser fallback: {exc}")
-                return None, None, None
-            if driver is None:
-                return None, None, None
-            try:
-                driver.get(url)
-                WebDriverWait(driver, 25).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-                if _is_cloudflare_content(driver.title or "") or _is_cloudflare_content(driver.page_source or ""):
-                    print("[scraper] Cloudflare detectado. Resolva manualmente no navegador...")
-                    _send_cf_telegram_alert(url)
-                    try:
-                        WebDriverWait(driver, wait_seconds).until(
-                            lambda d: not (
-                                _is_cloudflare_content(d.title or "")
-                                or _is_cloudflare_content(d.page_source or "")
-                            )
-                        )
-                    except TimeoutException:
-                        print("[scraper] timeout ao aguardar liberacao do challenge.")
-                        return None, None, None
-
-                html = driver.page_source or ""
-                cookies, user_agent = _browser_snapshot(driver)
-                # Some valid pages may still contain "cloudflare" references in scripts/CDN links.
-                # If clearance cookie exists and title is no longer challenge, accept the page.
-                title_blocked = _is_cloudflare_content(driver.title or "")
-                html_blocked = _is_cloudflare_content(html)
-                if title_blocked or (html_blocked and not _has_cf_clearance_cookie(cookies)):
+        if not _browser_debug_running():
+            recently_launched = _BROWSER_LAST_LAUNCHED_AT and (time.time() - _BROWSER_LAST_LAUNCHED_AT) < 20
+            if recently_launched:
+                time.sleep(2)
+            if not _browser_debug_running():
+                try:
+                    _launch_debug_browser(url)
+                except Exception as exc:
+                    print(f"[scraper] nao foi possivel iniciar navegador de fallback: {exc}")
                     return None, None, None
-                print("[scraper] Challenge liberado. Sessao persistente ativa.")
-                return _SimpleResponse(driver.current_url or url, 200, html), cookies, user_agent
-            except Exception as exc:
-                # Browser closed/invalid session: try recreate once
-                if attempt == 1:
-                    try:
-                        driver.quit()
-                    except Exception:
-                        pass
-                    globals()["_BROWSER_DRIVER"] = None
-                    continue
-                print(f"[scraper] erro no navegador de desafio: {exc}")
+            for _ in range(30):
+                if _browser_debug_running():
+                    break
+                time.sleep(1)
+            else:
+                print("[scraper] depuracao remota do Chrome nao respondeu a tempo.")
                 return None, None, None
+
+        try:
+            target = _cdp_get_page_target(url)
+            ws = _cdp_connect(target["webSocketDebuggerUrl"])
+        except Exception as exc:
+            print(f"[scraper] falha ao conectar no DevTools do Chrome: {exc}")
+            return None, None, None
+
+        try:
+            ws.send(json.dumps({"id": 1, "method": "Page.enable"}))
+            _cdp_recv_result(ws, 1)
+            ws.send(json.dumps({"id": 2, "method": "Runtime.enable"}))
+            _cdp_recv_result(ws, 2)
+            ws.send(json.dumps({"id": 3, "method": "Network.enable"}))
+            _cdp_recv_result(ws, 3)
+            ws.send(json.dumps({"id": 4, "method": "Page.navigate", "params": {"url": url}}))
+            _cdp_recv_result(ws, 4)
+
+            ready_deadline = time.time() + 25
+            while time.time() < ready_deadline:
+                ws.send(json.dumps({"id": 10, "method": "Runtime.evaluate", "params": {"expression": "document.readyState", "returnByValue": True}}))
+                state = _cdp_recv_result(ws, 10).get("result", {}).get("value")
+                ws.send(json.dumps({"id": 18, "method": "Runtime.evaluate", "params": {"expression": "location.href", "returnByValue": True}}))
+                current_url = _cdp_recv_result(ws, 18).get("result", {}).get("value") or ""
+                ws.send(json.dumps({"id": 19, "method": "Runtime.evaluate", "params": {"expression": "document.documentElement.outerHTML", "returnByValue": True}}))
+                current_html = _cdp_recv_result(ws, 19).get("result", {}).get("value") or ""
+                if state == "complete" and current_url.startswith(("https://betsapi.com", "https://pt.betsapi.com")) and len(current_html) > 1000:
+                    break
+                time.sleep(0.5)
+
+            ws.send(json.dumps({"id": 11, "method": "Runtime.evaluate", "params": {"expression": "document.title", "returnByValue": True}}))
+            title = _cdp_recv_result(ws, 11).get("result", {}).get("value") or ""
+            ws.send(json.dumps({"id": 12, "method": "Runtime.evaluate", "params": {"expression": "document.documentElement.outerHTML", "returnByValue": True}}))
+            html = _cdp_recv_result(ws, 12).get("result", {}).get("value") or ""
+            ws.send(json.dumps({"id": 13, "method": "Runtime.evaluate", "params": {"expression": "navigator.userAgent", "returnByValue": True}}))
+            user_agent = _cdp_recv_result(ws, 13).get("result", {}).get("value")
+            ws.send(json.dumps({"id": 14, "method": "Network.getCookies", "params": {"urls": ["https://betsapi.com/", "https://pt.betsapi.com/"]}}))
+            cookies = _cdp_recv_result(ws, 14).get("cookies", [])
+
+            if _is_cloudflare_content(title) or (_is_cloudflare_content(html) and not _has_cf_clearance_cookie(cookies)):
+                print("[scraper] Cloudflare detectado. Resolva manualmente no navegador...")
+                _send_cf_telegram_alert(url)
+                deadline = time.time() + wait_seconds
+                while time.time() < deadline:
+                    time.sleep(2)
+                    ws.send(json.dumps({"id": 15, "method": "Runtime.evaluate", "params": {"expression": "document.documentElement.outerHTML", "returnByValue": True}}))
+                    html = _cdp_recv_result(ws, 15).get("result", {}).get("value") or ""
+                    ws.send(json.dumps({"id": 16, "method": "Runtime.evaluate", "params": {"expression": "document.title", "returnByValue": True}}))
+                    title = _cdp_recv_result(ws, 16).get("result", {}).get("value") or ""
+                    ws.send(json.dumps({"id": 17, "method": "Network.getCookies", "params": {"urls": ["https://betsapi.com/", "https://pt.betsapi.com/"]}}))
+                    cookies = _cdp_recv_result(ws, 17).get("cookies", [])
+                    if not (_is_cloudflare_content(title) or (_is_cloudflare_content(html) and not _has_cf_clearance_cookie(cookies))):
+                        break
+                else:
+                    print("[scraper] timeout ao aguardar liberacao do challenge.")
+                    return None, None, None
+
+            print("[scraper] Challenge liberado. Sessao persistente ativa.")
+            return _SimpleResponse(url, 200, html), cookies, user_agent
+        except Exception as exc:
+            print(f"[scraper] erro no navegador de desafio: {exc}")
+            return None, None, None
+        finally:
+            try:
+                ws.close()
+            except Exception:
+                pass
 
 
 def _browser_fallback_enabled() -> bool:
@@ -510,6 +879,38 @@ def _teams_from_title(soup):
     return "", ""
 
 
+def _match_time_from_text(text: str) -> str:
+    if not text:
+        return ""
+    compact = " ".join(text.split())
+    match = re.search(r"(\d+\s*(?:\+\s*\d+)?\s*')", compact)
+    if match:
+        return match.group(1).replace(" ", "")
+    upper = compact.upper()
+    if " HT " in f" {upper} ":
+        return "HT"
+    if " FT " in f" {upper} ":
+        return "FT"
+    return ""
+
+
+def _extract_match_time_text(soup) -> str:
+    if not soup:
+        return ""
+    time_tag = soup.find("span", class_="race-time")
+    if time_tag:
+        text = time_tag.get_text(strip=True)
+        if text:
+            return text
+    for tag in (soup.find("h1"), soup.title):
+        if not tag:
+            continue
+        text = _match_time_from_text(tag.get_text(" ", strip=True))
+        if text:
+            return text
+    return ""
+
+
 def _teams_from_url(url: str):
     if not url:
         return "", ""
@@ -517,7 +918,7 @@ def _teams_from_url(url: str):
         path = urlparse(url).path or ""
     except Exception:
         path = ""
-    slug_match = re.search(r"/r/\d+/(.+)$", path)
+    slug_match = re.search(r"(?:/[a-z]+)?/r/\d+/(.+)$", path)
     if not slug_match:
         return "", ""
     slug = unquote(slug_match.group(1).strip("/"))
@@ -530,6 +931,26 @@ def _teams_from_url(url: str):
     home = _clean_team_name(parts[0].replace("-", " ").strip())
     away = _clean_team_name(parts[1].replace("-", " ").strip())
     return home, away
+
+
+def _extract_row_teams(tr, fallback_url: str):
+    if tr:
+        for anchor in tr.find_all("a", href=True):
+            text = anchor.get_text(" ", strip=True)
+            home, away = _split_team_text(text)
+            if home and away:
+                return home, away
+    return _teams_from_url(fallback_url)
+
+
+def _extract_row_score(tr):
+    if not tr:
+        return "0 x 0"
+    for text in tr.stripped_strings:
+        match = re.fullmatch(r"(\d+)\s*[-:x]\s*(\d+)", text)
+        if match:
+            return f"{match.group(1)} x {match.group(2)}"
+    return "0 x 0"
 
 
 def _clean_team_name(name: str) -> str:
@@ -695,7 +1116,7 @@ def fetch_live_games(session):
             if not time_text[0].isdigit() and not is_halftime:
                 continue
 
-            game_link_tag = tr.find("a", href=re.compile(r"^/r/\d+"))
+            game_link_tag = tr.find("a", href=re.compile(r"^(?:/[a-z]+)?/r/\d+"))
             if not game_link_tag:
                 continue
             game_href = game_link_tag["href"]
@@ -703,16 +1124,22 @@ def fetch_live_games(session):
             if not match_id:
                 continue
             game_id = match_id.group(1)
+            game_url = base + game_href
             minute_value = parse_minutes(time_text)
             if minute_value is None and is_halftime:
                 minute_value = 45
+            home_team, away_team = _extract_row_teams(tr, game_url)
+            score = _extract_row_score(tr)
 
             candidate = {
                 "game_id": game_id,
-                "url": base + game_href,
+                "url": game_url,
                 "minute": minute_value,
                 "time_text": time_text,
                 "league": league_name,
+                "home_team": home_team,
+                "away_team": away_team,
+                "score": score,
             }
             current = merged_games.get(game_id)
             if not current:
@@ -737,8 +1164,7 @@ def fetch_match_stats(session, url):
     league_tag = soup.select_one("ol.breadcrumb li:nth-of-type(2) a")
     league = league_tag.text.strip() if league_tag else ""
 
-    time_tag = soup.find("span", class_="race-time")
-    time_text = time_tag.get_text(strip=True) if time_tag else ""
+    time_text = _extract_match_time_text(soup)
 
     tables = soup.find_all("table", class_="table table-sm")
     stat_tables = tables if tables else soup.find_all("table")
