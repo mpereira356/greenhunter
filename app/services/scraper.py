@@ -902,6 +902,21 @@ def _extract_match_time_text(soup) -> str:
         text = time_tag.get_text(strip=True)
         if text:
             return text
+    badge_selectors = (
+        "td[id$='T'] span.badge",
+        "span.badge.bg-danger-lt",
+        "span.badge.bg-warning-lt",
+        "span.badge.bg-success-lt",
+        "span.badge.bg-secondary-lt",
+    )
+    for selector in badge_selectors:
+        time_tag = soup.select_one(selector)
+        if not time_tag:
+            continue
+        text = time_tag.get_text(" ", strip=True)
+        text = _match_time_from_text(text)
+        if text:
+            return text
     for tag in (soup.find("h1"), soup.title):
         if not tag:
             continue
@@ -1099,11 +1114,19 @@ def fetch_live_games(session):
             sport_td = tr.find("td", class_="sport_n")
             league_td = tr.find("td", class_="league_n")
             time_span = tr.find("span", class_="race-time")
+            time_td = None
+            tr_id = tr.get("id") or ""
+            if tr_id:
+                time_td = tr.find("td", id=f"{tr_id}T")
 
             sport_a = sport_td.find("a") if sport_td else None
             league_a = league_td.find("a") if league_td else None
             league_name = league_a.text.strip() if league_a else ""
-            time_text = time_span.get_text(strip=True) if time_span else ""
+            time_text = ""
+            if time_span:
+                time_text = time_span.get_text(strip=True)
+            elif time_td:
+                time_text = _match_time_from_text(time_td.get_text(" ", strip=True))
 
             if not (sport_a and sport_a.get("href") == "/c/soccer"):
                 continue
