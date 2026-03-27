@@ -984,6 +984,7 @@ def _clean_team_name(name: str) -> str:
 def normalize_stat_key(name: str) -> str:
     raw = _to_ascii(name).strip().lower()
     raw = raw.replace("-", " ").replace("_", " ")
+    raw = raw.replace("%", " ")
     raw = " ".join(raw.split())
     if raw in ("on target", "shots on target", "shot on target"):
         return "On Target"
@@ -1005,6 +1006,10 @@ def normalize_stat_key(name: str) -> str:
         return "On Target"
     if "off target" in raw:
         return "Off Target"
+    if raw in ("ao lado", "fora", "fora do alvo"):
+        return "Off Target"
+    if ("fora" in raw or "lado" in raw) and ("chute" in raw or "shot" in raw):
+        return "Off Target"
     if "fora" in raw:
         if "chute" in raw or "shot" in raw:
             return "Off Target"
@@ -1012,7 +1017,11 @@ def normalize_stat_key(name: str) -> str:
         return "Dangerous Attacks"
     if "ataques perigosos" in raw or "ataque perigoso" in raw:
         return "Dangerous Attacks"
+    if raw in ("cantos", "escanteios", "escanteio"):
+        return "Corners"
     if "corners" in raw and "half" in raw:
+        return "Corners (Half)"
+    if ("cantos" in raw or "escanteio" in raw) and ("tempo" in raw or "half" in raw):
         return "Corners (Half)"
     if raw == "corners" or "corner" in raw:
         return "Corners"
@@ -1021,6 +1030,8 @@ def normalize_stat_key(name: str) -> str:
     if raw in ("ataques", "ataque"):
         return "Attacks"
     if "possession" in raw:
+        return "Possession"
+    if "posse" in raw:
         return "Possession"
     if raw in ("golos", "goals", "goal"):
         return "Goals"
@@ -1031,6 +1042,8 @@ def normalize_stat_key(name: str) -> str:
     if "red card" in raw or "vermelho" in raw:
         return "Red Card"
     if "penalt" in raw:
+        return "Penalties"
+    if "penaliz" in raw:
         return "Penalties"
     if "ball safe" in raw or "bola segura" in raw:
         return "Ball Safe"
