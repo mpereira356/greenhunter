@@ -61,6 +61,7 @@ ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
 USE_SERIAL_PREFETCH = os.environ.get("BETSAPI_CF_MODE", "manual").strip().lower() not in ("off", "0", "false", "no")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
+IA_SHADOW_ENFORCE_MAIN_RULES = os.environ.get("IA_SHADOW_ENFORCE_MAIN_RULES", "0").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_PROFILE_REFRESH_SECONDS = int(os.environ.get("IA_SHADOW_PROFILE_REFRESH_SECONDS", "600"))
 IA_SHADOW_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_MIN_SAMPLES", "120"))
 IA_SHADOW_RULE_MIN_SAMPLES = int(os.environ.get("IA_SHADOW_RULE_MIN_SAMPLES", "24"))
@@ -1662,7 +1663,8 @@ def process_live_games(session):
                     stats_for_rule,
                     ia_profiles,
                 )
-                if not shadow_gate["accepted"]:
+                # Shadow mode should observe the live flow by default, not suppress it.
+                if IA_SHADOW_ENFORCE_MAIN_RULES and not shadow_gate["accepted"]:
                     continue
                 market_ctx = infer_green_profile(rule)
                 ml_prediction = predict_alert_ml(
