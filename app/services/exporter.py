@@ -42,6 +42,21 @@ def _flatten_stats(prefix: str, stats_json: str | None) -> dict:
     return flat
 
 
+def _flatten_json(prefix: str, payload_json: str | None) -> dict:
+    if not payload_json:
+        return {}
+    try:
+        payload = json.loads(payload_json)
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    flat = {}
+    for key, value in payload.items():
+        flat[f"{prefix}{key}"] = value
+    return flat
+
+
 def export_alert(alert, rule_name: str, base_dir: str):
     _ensure_dir(base_dir)
     rule = alert.rule
@@ -92,6 +107,16 @@ def export_alert(alert, rule_name: str, base_dir: str):
         "league": alert.league,
         "home_team": alert.home_team,
         "away_team": alert.away_team,
+        "ai_score": alert.ai_score,
+        "ai_verdict": alert.ai_verdict,
+        "ai_commentary": alert.ai_commentary,
+        "market_key": alert.market_key,
+        "market_label": alert.market_label,
+        "outcome_signature": alert.outcome_signature,
+        "target_side": alert.target_side,
+        "target_operator": alert.target_operator,
+        "target_value": alert.target_value,
+        "target_text": alert.target_text,
         "alert_minute": alert.alert_minute,
         "result_minute": alert.result_minute,
         "result_time_hhmm": alert.result_time_hhmm,
@@ -103,10 +128,19 @@ def export_alert(alert, rule_name: str, base_dir: str):
         "initial_stats_json": alert.initial_stats_json,
         "ht_stats_json": alert.ht_stats_json,
         "ft_stats_json": alert.ft_stats_json,
+        "initial_events_json": alert.initial_events_json,
+        "result_events_json": alert.result_events_json,
+        "ft_events_json": alert.ft_events_json,
+        "initial_event_metrics_json": alert.initial_event_metrics_json,
+        "result_event_metrics_json": alert.result_event_metrics_json,
+        "ft_event_metrics_json": alert.ft_event_metrics_json,
     }
     row.update(_flatten_stats("alert_", alert.initial_stats_json))
     row.update(_flatten_stats("ht_", alert.ht_stats_json))
     row.update(_flatten_stats("ft_", alert.ft_stats_json))
+    row.update(_flatten_json("initial_event_", alert.initial_event_metrics_json))
+    row.update(_flatten_json("result_event_", alert.result_event_metrics_json))
+    row.update(_flatten_json("ft_event_", alert.ft_event_metrics_json))
     general_path = os.path.join(base_dir, "historico_geral.xlsx")
     rule_path = os.path.join(base_dir, f"regra_{alert.rule_id}.xlsx")
     _upsert_excel(general_path, row, "alert_id")

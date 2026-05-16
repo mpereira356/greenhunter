@@ -962,10 +962,38 @@ def _extract_row_score(tr):
     if not tr:
         return "0 x 0"
     for text in tr.stripped_strings:
-        match = re.fullmatch(r"(\d+)\s*[-:x]\s*(\d+)", text)
-        if match:
-            return f"{match.group(1)} x {match.group(2)}"
+        score = _extract_score_from_text(text)
+        if score:
+            return score
     return "0 x 0"
+
+
+def _extract_score_from_text(text: str) -> str | None:
+    if not text:
+        return None
+    compact = " ".join(str(text).split())
+    match = re.search(r"(\d+)\s*[-:x]\s*(\d+)", compact)
+    if not match:
+        return None
+    return f"{int(match.group(1))} x {int(match.group(2))}"
+
+
+def _extract_match_score(soup, rows) -> str | None:
+    if rows:
+        first = rows[0].find_all("td")
+        if len(first) == 3:
+            header_score = _extract_score_from_text(first[1].get_text(" ", strip=True))
+            if header_score:
+                return header_score
+    if not soup:
+        return None
+    for tag in (soup.find("h1"), soup.title):
+        if not tag:
+            continue
+        title_score = _extract_score_from_text(tag.get_text(" ", strip=True))
+        if title_score:
+            return title_score
+    return None
 
 
 def _clean_team_name(name: str) -> str:
@@ -1092,6 +1120,144 @@ def parse_minutes(time_text: str):
     return minute
 
 
+def _looks_like_event_line(text: str) -> bool:
+    if not text:
+        return False
+    compact = " ".join(str(text).split())
+    if len(compact) < 6 or len(compact) > 180:
+        return False
+    lower = compact.lower()
+    if lower.startswith("score after first half") or lower.startswith("score after full time"):
+        return True
+    if re.match(r"^\d+(?:\+\d+)?['’]", compact):
+        return True
+    return False
+
+
+def _event_kind_from_text(text: str) -> str | None:
+    if not text:
+        return None
+    lower = _to_ascii(str(text).lower())
+    if "score after first half" in lower:
+        return "score_after_ht"
+    if "score after full time" in lower:
+        return "score_after_ft"
+    if "race to" in lower:
+        return "race_to"
+    if "yellow card" in lower:
+        return "yellow_card"
+    if "red card" in lower and "yellow/red" not in lower:
+        return "red_card"
+    if "corner" in lower:
+        return "corner"
+    if "goal" in lower:
+        return "goal"
+    return None
+
+
+def _extract_event_team(text: str, home_team: str, away_team: str) -> str | None:
+    if not text:
+        return None
+    candidates = []
+    candidates.extend(re.findall(r"\(([^()]+)\)", text))
+    candidates.extend(part.strip() for part in re.split(r"\s+-\s+", text) if part.strip())
+    home_norm = _normalize_team_name(home_team)
+    away_norm = _normalize_team_name(away_team)
+    for candidate in candidates:
+        cand_norm = _normalize_team_name(candidate)
+        if not cand_norm:
+            continue
+        if home_norm and (cand_norm == home_norm or cand_norm in home_norm or home_norm in cand_norm):
+            return home_team
+        if away_norm and (cand_norm == away_norm or cand_norm in away_norm or away_norm in cand_norm):
+            return away_team
+    return None
+
+
+def _build_event_entry(text: str, home_team: str, away_team: str) -> dict | None:
+    compact = " ".join(str(text or "").split())
+    if not _looks_like_event_line(compact):
+        return None
+    minute_match = re.match(r"^(\d+(?:\+\d+)?)\s*['’]", compact)
+    minute = None
+    time_text = ""
+    if minute_match:
+        time_text = f"{minute_match.group(1)}'"
+        minute = parse_minutes(time_text)
+    kind = _event_kind_from_text(compact)
+    if not kind:
+        return None
+    return {
+        "time_text": time_text,
+        "minute": minute,
+        "kind": kind,
+        "team": _extract_event_team(compact, home_team, away_team),
+        "text": compact,
+    }
+
+
+def _extract_events_from_container(container, home_team: str, away_team: str) -> list[dict]:
+    if not container:
+        return []
+    items = []
+    seen = set()
+    for tag in container.find_all(["tr", "li", "div", "p"], recursive=True):
+        text = tag.get_text(" ", strip=True)
+        entry = _build_event_entry(text, home_team, away_team)
+        if not entry:
+            continue
+        key = (entry.get("time_text"), entry.get("kind"), entry.get("text"))
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(entry)
+    if items:
+        return items
+    for line in container.get_text("\n", strip=True).splitlines():
+        entry = _build_event_entry(line, home_team, away_team)
+        if not entry:
+            continue
+        key = (entry.get("time_text"), entry.get("kind"), entry.get("text"))
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(entry)
+    return items
+
+
+def _extract_match_events(soup, home_team: str, away_team: str) -> list[dict]:
+    if not soup:
+        return []
+    headings = soup.find_all(["h2", "h3", "h4", "h5", "h6", "div", "span", "strong"])
+    for tag in headings:
+        heading = _normalize_heading(tag.get_text(" ", strip=True))
+        if heading not in ("events", "eventos", "match events"):
+            continue
+        container = None
+        parent = tag.parent
+        if parent:
+            container = parent.find("table") or parent.find("ul") or parent.find("div")
+        if not container:
+            container = tag.find_next(["table", "ul", "div"])
+        events = _extract_events_from_container(container, home_team, away_team)
+        if events:
+            return events
+
+    fallback_items = []
+    seen = set()
+    for tag in soup.find_all(["tr", "li", "div", "p"]):
+        text = tag.get_text(" ", strip=True)
+        entry = _build_event_entry(text, home_team, away_team)
+        if not entry:
+            continue
+        key = (entry.get("time_text"), entry.get("kind"), entry.get("text"))
+        if key in seen:
+            continue
+        seen.add(key)
+        fallback_items.append(entry)
+    return fallback_items
+
+
 def is_first_half_extra_time(time_text: str) -> bool:
     if not time_text:
         return False
@@ -1210,11 +1376,13 @@ def fetch_match_stats(session, url):
     rows = stat_tables[0].find_all("tr")
     home_team = ""
     away_team = ""
+    header_score = None
     if rows:
         first = rows[0].find_all("td")
         if len(first) == 3:
             home_team = _clean_team_name(first[0].get_text(strip=True))
             away_team = _clean_team_name(first[2].get_text(strip=True))
+    header_score = _extract_match_score(soup, rows)
 
     title_home, title_away = _teams_from_title(soup)
     url_home, url_away = _teams_from_url(url)
@@ -1238,10 +1406,11 @@ def fetch_match_stats(session, url):
 
     home_team = _clean_team_name(home_team)
     away_team = _clean_team_name(away_team)
+    events = _extract_match_events(soup, home_team, away_team)
 
     stats = {}
     raw_stats = {}
-    score = "0 x 0"
+    score = header_score or "0 x 0"
     best_goals = (0, 0)
 
     all_rows = []
@@ -1289,7 +1458,8 @@ def fetch_match_stats(session, url):
             if home_int is not None and away_int is not None:
                 if (home_int + away_int) >= sum(best_goals):
                     best_goals = (home_int, away_int)
-                    score = f"{home_int} x {away_int}"
+                    if not header_score:
+                        score = f"{home_int} x {away_int}"
         if home_int is not None and away_int is not None:
             new_total = home_int + away_int
             prev = stats.get(key)
@@ -1326,14 +1496,28 @@ def fetch_match_stats(session, url):
         "minute": minute_value,
         "stats": stats,
         "raw_stats": raw_stats,
+        "events": events,
     }
 
 
 HISTORY_LIMITS = {"h2h": 8, "home": 6, "away": 6}
 HISTORY_LABELS = {
     "head to head": "h2h",
+    "h2h": "h2h",
+    "historico h2h": "h2h",
+    "historico de confrontos": "h2h",
+    "confrontos diretos": "h2h",
+    "head-to-head": "h2h",
     "home history": "home",
+    "home form": "home",
+    "historico em casa": "home",
+    "historico do mandante": "home",
+    "mandante": "home",
     "away history": "away",
+    "away form": "away",
+    "historico fora": "away",
+    "historico do visitante": "away",
+    "visitante": "away",
 }
 
 
@@ -1369,6 +1553,21 @@ def _find_history_tables(soup):
                 if table:
                     tables[key] = table
                     used.add(id(table))
+    if len(tables) < 3:
+        scored_tables = []
+        for table in soup.find_all("table"):
+            parsed = _parse_history_table(table)
+            if parsed:
+                scored_tables.append((table, len(parsed)))
+        scored_tables.sort(key=lambda item: item[1], reverse=True)
+        remaining_keys = [key for key in ("h2h", "home", "away") if key not in tables]
+        for key in remaining_keys:
+            for table, _ in scored_tables:
+                if id(table) in used:
+                    continue
+                tables[key] = table
+                used.add(id(table))
+                break
     return tables
 
 
@@ -1377,14 +1576,9 @@ def _parse_history_table(table):
     if not table:
         return items
     for row in table.find_all("tr"):
-        text = row.get_text(" ", strip=True)
-        if not text:
+        home_goals, away_goals = _extract_history_score(row)
+        if home_goals is None or away_goals is None:
             continue
-        score_match = re.search(r"(\d+)\s*-\s*(\d+)", text)
-        if not score_match:
-            continue
-        home_goals = int(score_match.group(1))
-        away_goals = int(score_match.group(2))
         items.append(
             {
                 "home": home_goals,
@@ -1393,6 +1587,37 @@ def _parse_history_table(table):
             }
         )
     return items
+
+
+def _extract_history_score(row):
+    if not row:
+        return None, None
+
+    candidates = []
+
+    def collect_candidates(text: str):
+        if not text:
+            return
+        for home_raw, away_raw in re.findall(r"(\d+)\s*(?:-|:|x)\s*(\d+)", text, flags=re.IGNORECASE):
+            home_goals = int(home_raw)
+            away_goals = int(away_raw)
+            # Ignore date-like and obviously invalid score pairs.
+            if home_goals > 20 or away_goals > 20:
+                continue
+            candidates.append((home_goals, away_goals))
+
+    cols = row.find_all("td")
+    for col in cols:
+        collect_candidates(col.get_text(" ", strip=True))
+
+    if not candidates:
+        collect_candidates(row.get_text(" ", strip=True))
+
+    if not candidates:
+        return None, None
+
+    # Prefer the last plausible pair because row text often starts with a date.
+    return candidates[-1]
 
 
 def fetch_match_history(session, match_url: str, limits=None):

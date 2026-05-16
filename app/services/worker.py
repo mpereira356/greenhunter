@@ -5,7 +5,7 @@ import threading
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from statistics import mean
 from types import SimpleNamespace
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
@@ -15,7 +15,7 @@ from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
 
 from app.extensions import db
 from app.models import LiveGameState, MatchAlert, Rule, User
-from app.services.evaluator import _build_ai_assessment, compare, evaluate_rule, history_confidence, render_message, stats_to_json
+from app.services.evaluator import _build_ai_assessment, _build_ai_commentary, compare, evaluate_rule, history_confidence, render_message, stats_to_json
 from app.services.exporter import export_alert
 from app.services.ml_engine import infer_green_profile, maybe_retrain_model, predict_alert_ml
 from app.services.scraper import (
@@ -35,6 +35,13 @@ from app.utils.time import now_sp
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
 ALERTS_POLL_INTERVAL = float(os.environ.get("ALERTS_POLL_INTERVAL", "5"))
 GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
+FETCH_STATS_ATTEMPTS = max(1, int(os.environ.get("FETCH_STATS_ATTEMPTS", "2")))
+FETCH_STATS_DELAY = max(0.0, float(os.environ.get("FETCH_STATS_DELAY", "0.25")))
+ALERT_FETCH_STATS_ATTEMPTS = max(1, int(os.environ.get("ALERT_FETCH_STATS_ATTEMPTS", str(FETCH_STATS_ATTEMPTS))))
+ALERT_FETCH_STATS_DELAY = max(0.0, float(os.environ.get("ALERT_FETCH_STATS_DELAY", str(FETCH_STATS_DELAY))))
+FINALIZE_POLL_INTERVAL = max(5.0, float(os.environ.get("FINALIZE_POLL_INTERVAL", "60")))
+FOLLOW_SETTLED_WINDOW_MINUTES = max(5, int(os.environ.get("FOLLOW_SETTLED_WINDOW_MINUTES", "20")))
+FINALIZE_LOOKBACK_HOURS = max(1, int(os.environ.get("FINALIZE_LOOKBACK_HOURS", "12")))
 EXPORT_DIR = os.environ.get("EXPORT_DIR", "data/exports")
 RULE_CONF_SAMPLE = int(os.environ.get("RULE_CONF_SAMPLE", "50"))
 RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
@@ -44,6 +51,7 @@ LEAGUE_CONF_MIN = int(os.environ.get("LEAGUE_CONF_MIN", "8"))
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
 BOT_STARTED_AT = None
+LAST_FINALIZE_RUN_AT = None
 SECOND_HALF_BASELINES = {}
 SECOND_HALF_FROM_NOW = {}
 GAME_FIRST_SEEN_AT = {}
@@ -58,7 +66,7 @@ NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
-USE_SERIAL_PREFETCH = os.environ.get("BETSAPI_CF_MODE", "manual").strip().lower() not in ("off", "0", "false", "no")
+USE_SERIAL_PREFETCH = os.environ.get("WORKER_SERIAL_PREFETCH", "0").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_ENFORCE_MAIN_RULES = os.environ.get("IA_SHADOW_ENFORCE_MAIN_RULES", "0").strip().lower() in ("1", "true", "yes")
@@ -79,6 +87,12 @@ IA_SHADOW_LAST_SENT = {}
 IA_SHADOW_PROFILE_CACHE = None
 IA_SHADOW_PROFILE_UPDATED_AT = None
 IA_SHADOW_LOCK = threading.Lock()
+GREEN_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("GREEN_GROUP_WINDOW_SECONDS", "8")))
+GREEN_NOTIFICATION_PENDING = {}
+RED_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("RED_GROUP_WINDOW_SECONDS", "180")))
+RED_NOTIFICATION_PENDING = {}
+ENTRY_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "1")))
+ENTRY_NOTIFICATION_PENDING = {}
 
 def get_api_status() -> dict:
     return {
@@ -528,6 +542,16 @@ def fetch_match_stats_fresh(session, url: str, attempts: int = 3, delay: float =
             time.sleep(delay)
     return best
 
+
+def _recently_settled_alerts_query():
+    cutoff = now_sp() - timedelta(minutes=FOLLOW_SETTLED_WINDOW_MINUTES)
+    return (
+        MatchAlert.query.filter_by(ft_completed=False)
+        .filter(MatchAlert.status.in_(("green", "red")))
+        .filter(MatchAlert.created_at >= cutoff)
+        .all()
+    )
+
 def is_half_time(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
     return "ht" in text or "half time" in text or "interval" in text or 45 <= minute <= 47
@@ -590,6 +614,109 @@ def parse_score(score_text: str):
     return (int(nums[0]), int(nums[1])) if len(nums) >= 2 else (0, 0)
 
 
+def _events_to_json(events) -> str | None:
+    if not events:
+        return None
+    try:
+        return json.dumps(events, ensure_ascii=False)
+    except Exception:
+        return None
+
+
+def _normalize_team_token(value: str) -> str:
+    text = str(value or "").strip().casefold()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _event_in_first_half(event: dict) -> bool:
+    if not isinstance(event, dict):
+        return False
+    time_text = str(event.get("time_text") or "")
+    if time_text.startswith("45+"):
+        return True
+    minute = event.get("minute")
+    return isinstance(minute, int) and minute <= 45
+
+
+def _build_event_metrics(events, alert_minute: int | None = None) -> dict:
+    if not isinstance(events, list):
+        return {}
+    timeline = [item for item in events if isinstance(item, dict)]
+    metrics = {
+        "total_events": len(timeline),
+        "goals_total": 0,
+        "corners_total": 0,
+        "yellow_cards_total": 0,
+        "red_cards_total": 0,
+        "first_goal_minute": None,
+        "first_goal_team": None,
+        "goal_before_ht": False,
+        "goals_before_alert": 0,
+        "corners_before_alert": 0,
+        "yellow_cards_before_alert": 0,
+        "red_cards_before_alert": 0,
+        "events_after_alert_count": 0,
+        "goals_after_alert": 0,
+        "corners_after_alert": 0,
+        "yellow_cards_after_alert": 0,
+        "red_cards_after_alert": 0,
+        "time_to_first_goal_after_alert": None,
+    }
+    first_goal_after_alert = None
+    for event in timeline:
+        kind = event.get("kind")
+        minute = event.get("minute")
+        if kind == "goal":
+            metrics["goals_total"] += 1
+            if metrics["first_goal_minute"] is None:
+                metrics["first_goal_minute"] = minute
+                metrics["first_goal_team"] = event.get("team")
+            if _event_in_first_half(event):
+                metrics["goal_before_ht"] = True
+        elif kind == "corner":
+            metrics["corners_total"] += 1
+        elif kind == "yellow_card":
+            metrics["yellow_cards_total"] += 1
+        elif kind == "red_card":
+            metrics["red_cards_total"] += 1
+
+        if alert_minute is None or not isinstance(minute, int):
+            continue
+        if minute <= alert_minute:
+            if kind == "goal":
+                metrics["goals_before_alert"] += 1
+            elif kind == "corner":
+                metrics["corners_before_alert"] += 1
+            elif kind == "yellow_card":
+                metrics["yellow_cards_before_alert"] += 1
+            elif kind == "red_card":
+                metrics["red_cards_before_alert"] += 1
+        if minute >= alert_minute:
+            metrics["events_after_alert_count"] += 1
+            if kind == "goal":
+                metrics["goals_after_alert"] += 1
+                if first_goal_after_alert is None:
+                    first_goal_after_alert = minute
+            elif kind == "corner":
+                metrics["corners_after_alert"] += 1
+            elif kind == "yellow_card":
+                metrics["yellow_cards_after_alert"] += 1
+            elif kind == "red_card":
+                metrics["red_cards_after_alert"] += 1
+    if first_goal_after_alert is not None and isinstance(alert_minute, int):
+        metrics["time_to_first_goal_after_alert"] = max(0, first_goal_after_alert - alert_minute)
+    return metrics
+
+
+def _event_metrics_json(events, alert_minute: int | None = None) -> str | None:
+    metrics = _build_event_metrics(events, alert_minute=alert_minute)
+    if not metrics:
+        return None
+    return json.dumps(metrics, ensure_ascii=False)
+
+
 def _ml_feedback_for_result(alert, final_status: str) -> str:
     score = alert.ml_pred_score
     verdict = alert.ml_pred_verdict
@@ -614,6 +741,278 @@ def _ml_feedback_for_result(alert, final_status: str) -> str:
     if samples:
         msg += f" Base atual: {samples} amostras."
     return msg
+
+
+def _normalized_market_target(rule, market_ctx: dict) -> tuple[str, str, str, str]:
+    market_key = str(market_ctx.get("market_key") or "")
+    side = str(market_ctx.get("target_side") or "")
+    operator = str(market_ctx.get("target_operator") or "")
+    target_value = market_ctx.get("target_value")
+    normalized_value = str(target_value) if target_value not in (None, "", "*") else ""
+
+    if market_key == "goals" and side == "total" and operator in ("", ">="):
+        if not normalized_value:
+            hay = f"{getattr(rule, 'name', '')} {getattr(rule, 'message_template', '')}".lower()
+            score_pairs = re.findall(r"(\d+)\s*x\s*(\d+)", hay)
+            if score_pairs:
+                normalized_value = score_pairs[0][0]
+            else:
+                goal_mentions = re.findall(r"(\d+)\s*gols?", hay)
+                normalized_value = goal_mentions[0] if goal_mentions else "1"
+            operator = ">="
+
+    signature_family = "|".join(part for part in (market_key, side, operator, normalized_value) if part)
+    return market_key, side, operator, signature_family
+
+
+def _notification_group_key(alert, status: str) -> tuple:
+    rule = getattr(alert, "rule", None)
+    market_ctx = infer_green_profile(rule)
+    stage_attr = "outcome_green_stage" if status in ("green", "entry") else "outcome_red_stage"
+    stage = (getattr(rule, stage_attr, None) or "HT").upper() if rule else "HT"
+    market_key, side, operator, signature_family = _normalized_market_target(rule, market_ctx)
+    return (
+        getattr(alert, "user_id", None),
+        str(getattr(alert, "game_id", "") or ""),
+        market_key,
+        side,
+        operator,
+        signature_family,
+        stage,
+    )
+
+
+def _notification_pending_store(status: str) -> dict:
+    if status == "green":
+        return GREEN_NOTIFICATION_PENDING
+    if status == "red":
+        return RED_NOTIFICATION_PENDING
+    return ENTRY_NOTIFICATION_PENDING
+
+
+def _notification_group_window_seconds(status: str) -> int:
+    if status == "green":
+        return GREEN_GROUP_WINDOW_SECONDS
+    if status == "red":
+        return RED_GROUP_WINDOW_SECONDS
+    return ENTRY_GROUP_WINDOW_SECONDS
+
+
+def _queue_grouped_notification(alert, minute, score, msg_prefix, status: str):
+    if not alert or not getattr(alert, "rule", None):
+        return
+    user = getattr(alert, "user", None)
+    rule = getattr(alert, "rule", None)
+    if not user or not rule or not rule.notify_telegram or not user.telegram_token or not user.telegram_chat_id:
+        return
+
+    now = now_sp()
+    key = _notification_group_key(alert, status)
+    market_ctx = infer_green_profile(rule)
+    stage_attr = "outcome_green_stage" if status == "green" else "outcome_red_stage"
+    entry = _notification_pending_store(status).get(key)
+    if not entry:
+        entry = {
+            "created_at": now,
+            "last_updated_at": now,
+            "token": user.telegram_token,
+            "chat_id": user.telegram_chat_id,
+            "home_team": alert.home_team,
+            "away_team": alert.away_team,
+            "url": alert.url,
+            "market_label": market_ctx.get("market_label") or "Mercado",
+            "target_text": market_ctx.get("target_text") or "",
+            "stage": (getattr(rule, stage_attr, None) or "HT").upper(),
+            "msg_prefix": msg_prefix,
+            "status": status,
+            "alerts": {},
+        }
+        _notification_pending_store(status)[key] = entry
+
+    entry["last_updated_at"] = now
+    entry["home_team"] = alert.home_team or entry.get("home_team")
+    entry["away_team"] = alert.away_team or entry.get("away_team")
+    entry["url"] = alert.url or entry.get("url")
+    entry["market_label"] = market_ctx.get("market_label") or entry.get("market_label")
+    entry["target_text"] = market_ctx.get("target_text") or entry.get("target_text")
+    entry["stage"] = (getattr(rule, stage_attr, None) or entry.get("stage") or "HT").upper()
+    entry["alerts"][alert.id] = {
+        "rule_name": rule.name,
+        "minute": minute,
+        "score": score,
+        "ml_score": alert.ml_pred_score,
+        "ml_verdict": alert.ml_pred_verdict,
+        "ml_model_samples": alert.ml_model_samples,
+        "result_time_hhmm": alert.result_time_hhmm,
+    }
+
+
+def _flush_grouped_notification_queue(status: str, force: bool = False):
+    pending_store = _notification_pending_store(status)
+    if not pending_store:
+        return
+    now = now_sp()
+    to_delete = []
+    for key, entry in list(pending_store.items()):
+        last_updated_at = entry.get("last_updated_at") or entry.get("created_at") or now
+        if not force and (now - last_updated_at).total_seconds() < _notification_group_window_seconds(status):
+            continue
+
+        alerts = list((entry.get("alerts") or {}).values())
+        if not alerts:
+            to_delete.append(key)
+            continue
+        alerts.sort(key=lambda item: ((item.get("minute") or 0), item.get("rule_name") or ""))
+        latest = max(alerts, key=lambda item: (item.get("minute") or 0, item.get("rule_name") or ""))
+        latest_minute = latest.get("minute")
+        latest_score = latest.get("score")
+        rules_sorted = sorted({item.get("rule_name") for item in alerts if item.get("rule_name")})
+
+        if len(rules_sorted) == 1:
+            alert_info = alerts[0]
+            temp_alert = SimpleNamespace(
+                ml_pred_score=alert_info.get("ml_score"),
+                ml_pred_verdict=alert_info.get("ml_verdict"),
+                ml_model_samples=alert_info.get("ml_model_samples"),
+            )
+            ml_feedback = _ml_feedback_for_result(temp_alert, status)
+            message = (
+                f"{entry.get('msg_prefix')}\n"
+                f"Regra: {rules_sorted[0]}\n"
+                f"{entry.get('home_team')} vs {entry.get('away_team')}\n"
+                f"Tempo: {latest_minute}'\n"
+                f"Placar: {latest_score}\n"
+                f"{ml_feedback}\n"
+                f"Link: {entry.get('url')}"
+            )
+        else:
+            target_text = entry.get("target_text") or entry.get("market_label") or "Mercado"
+            stage_label = "HT" if entry.get("stage") == "HT" else entry.get("stage")
+            rules_block = "\n".join(f"- {name}" for name in rules_sorted)
+            status_title = "GREEN AGRUPADO" if status == "green" else "RED AGRUPADO"
+            message = (
+                f"{'✅' if status == 'green' else '❌'} {status_title} - {target_text} ({stage_label})\n"
+                f"{entry.get('home_team')} vs {entry.get('away_team')}\n"
+                f"Tempo: {latest_minute}'\n"
+                f"Placar: {latest_score}\n"
+                f"Regras que bateram ({len(rules_sorted)}):\n"
+                f"{rules_block}\n"
+                f"Link: {entry.get('url')}"
+            )
+
+        _send_message_safe(
+            entry.get("token"),
+            entry.get("chat_id"),
+            message,
+            context=f"green_group_{entry.get('home_team')}_{entry.get('away_team')}",
+        )
+        to_delete.append(key)
+
+    for key in to_delete:
+        pending_store.pop(key, None)
+
+
+def _queue_entry_notification(alert, meta: dict, rendered_message: str):
+    if not alert or not getattr(alert, "rule", None):
+        return
+    user = getattr(alert, "user", None)
+    rule = getattr(alert, "rule", None)
+    if not user or not rule or not rule.notify_telegram or not user.telegram_token or not user.telegram_chat_id:
+        return
+
+    now = now_sp()
+    key = _notification_group_key(alert, "entry")
+    market_ctx = infer_green_profile(rule)
+    entry = ENTRY_NOTIFICATION_PENDING.get(key)
+    if not entry:
+        entry = {
+            "created_at": now,
+            "last_updated_at": now,
+            "token": user.telegram_token,
+            "chat_id": user.telegram_chat_id,
+            "home_team": alert.home_team,
+            "away_team": alert.away_team,
+            "url": alert.url,
+            "market_label": market_ctx.get("market_label") or "Mercado",
+            "target_text": market_ctx.get("target_text") or "",
+            "stage": (getattr(rule, "outcome_green_stage", None) or "HT").upper(),
+            "meta": dict(meta or {}),
+            "alerts": {},
+        }
+        ENTRY_NOTIFICATION_PENDING[key] = entry
+
+    entry["last_updated_at"] = now
+    entry["home_team"] = alert.home_team or entry.get("home_team")
+    entry["away_team"] = alert.away_team or entry.get("away_team")
+    entry["url"] = alert.url or entry.get("url")
+    entry["meta"] = dict(meta or entry.get("meta") or {})
+    entry["alerts"][alert.id] = {
+        "rule_name": rule.name,
+        "minute": alert.alert_minute,
+        "score": alert.initial_score,
+        "ml_score": alert.ml_pred_score,
+        "ai_score": alert.ai_score,
+        "rendered_message": rendered_message,
+    }
+
+
+def _flush_entry_notification_queue(force: bool = False):
+    if not ENTRY_NOTIFICATION_PENDING:
+        return
+    now = now_sp()
+    to_delete = []
+    for key, entry in list(ENTRY_NOTIFICATION_PENDING.items()):
+        last_updated_at = entry.get("last_updated_at") or entry.get("created_at") or now
+        if not force and (now - last_updated_at).total_seconds() < ENTRY_GROUP_WINDOW_SECONDS:
+            continue
+
+        alerts = list((entry.get("alerts") or {}).values())
+        if not alerts:
+            to_delete.append(key)
+            continue
+        alerts.sort(key=lambda item: ((item.get("minute") or 0), item.get("rule_name") or ""))
+
+        if len(alerts) == 1:
+            message = alerts[0].get("rendered_message") or ""
+            if message:
+                _send_message_safe(
+                    entry.get("token"),
+                    entry.get("chat_id"),
+                    message,
+                    context=f"entry_single_{entry.get('home_team')}_{entry.get('away_team')}",
+                )
+            to_delete.append(key)
+            continue
+
+        latest = max(alerts, key=lambda item: (item.get("minute") or 0, item.get("rule_name") or ""))
+        rules_sorted = sorted({item.get("rule_name") for item in alerts if item.get("rule_name")})
+        meta = entry.get("meta") or {}
+        ai_score = meta.get("ai_score", "N/A")
+        ai_verdict = meta.get("ai_verdict", "N/A")
+        ai_commentary = meta.get("ai_commentary", "N/A")
+        ml_best = max((item.get("ml_score") for item in alerts if isinstance(item.get("ml_score"), int)), default=None)
+        stage_label = "HT" if entry.get("stage") == "HT" else entry.get("stage")
+        message = (
+            f"📢 ALERTA AGRUPADO - {entry.get('target_text') or entry.get('market_label') or 'Mercado'} ({stage_label})\n"
+            f"{entry.get('home_team')} vs {entry.get('away_team')}\n"
+            f"Min: {latest.get('minute')} | Placar: {latest.get('score')}\n"
+            f"Regras que bateram ({len(rules_sorted)}):\n"
+            f"{chr(10).join(f'- {name}' for name in rules_sorted)}\n"
+            f"IA: {ai_verdict} ({ai_score}/100)\n"
+            f"Leitura IA: {ai_commentary}\n"
+            f"Melhor ML do grupo: {ml_best if ml_best is not None else 'N/A'}/100\n"
+            f"Link: {entry.get('url')}"
+        )
+        _send_message_safe(
+            entry.get("token"),
+            entry.get("chat_id"),
+            message,
+            context=f"entry_group_{entry.get('home_team')}_{entry.get('away_team')}",
+        )
+        to_delete.append(key)
+
+    for key in to_delete:
+        ENTRY_NOTIFICATION_PENDING.pop(key, None)
 
 
 def rule_confidence_text(rule_id: int | None, user_id: int | None) -> str | None:
@@ -930,6 +1329,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     state.minute = stats_payload.get("minute")
     state.score = stats_payload.get("score")
     state.stats_json = json.dumps(stats_payload.get("stats", {}), ensure_ascii=False)
+    state.events_json = _events_to_json(stats_payload.get("events"))
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     
@@ -1183,6 +1583,7 @@ def start_worker(app):
 def run_worker(app):
     with app.app_context():
         global BOT_STARTED_AT
+        global LAST_FINALIZE_RUN_AT
         BOT_STARTED_AT = now_sp()
         maybe_retrain_model(force=False)
         session = make_session()
@@ -1190,7 +1591,14 @@ def run_worker(app):
             try:
                 maybe_retrain_model(force=False)
                 process_live_games(session)
-                finalize_full_time(session)
+                _flush_entry_notification_queue(force=False)
+                now = now_sp()
+                if (
+                    LAST_FINALIZE_RUN_AT is None
+                    or (now - LAST_FINALIZE_RUN_AT).total_seconds() >= FINALIZE_POLL_INTERVAL
+                ):
+                    finalize_full_time(session)
+                    LAST_FINALIZE_RUN_AT = now
             except Exception as exc:
                 db.session.rollback()
                 print(f"[worker] erro: {exc}")
@@ -1203,6 +1611,8 @@ def run_alerts_worker(app):
         while True:
             try:
                 follow_alerts(session)
+                _flush_grouped_notification_queue("green", force=False)
+                _flush_grouped_notification_queue("red", force=False)
             except Exception as exc:
                 db.session.rollback()
                 print(f"[alerts] erro: {exc}")
@@ -1424,7 +1834,12 @@ def _prefetch_game_stats(game: dict):
         return key, None, None
     session = make_session()
     try:
-        stats_payload = fetch_match_stats_fresh(session, game["url"], attempts=3, delay=1)
+        stats_payload = fetch_match_stats_fresh(
+            session,
+            game["url"],
+            attempts=FETCH_STATS_ATTEMPTS,
+            delay=FETCH_STATS_DELAY,
+        )
         if not stats_payload:
             stats_payload = fetch_match_stats(session, game["url"])
         if not stats_payload or is_youth_match(stats_payload):
@@ -1667,6 +2082,13 @@ def process_live_games(session):
                 if IA_SHADOW_ENFORCE_MAIN_RULES and not shadow_gate["accepted"]:
                     continue
                 market_ctx = infer_green_profile(rule)
+                ai_assessment = _ia_shadow_assessment_for_phase(
+                    phase,
+                    int(effective_minute or 0),
+                    stats_payload.get("score") if stats_payload else "",
+                    stats_for_rule,
+                )
+                event_timeline = (stats_payload or {}).get("events") or []
                 ml_prediction = predict_alert_ml(
                     rule_id=rule.id,
                     league=stats_payload.get("league"),
@@ -1690,11 +2112,22 @@ def process_live_games(session):
                     initial_stats_json=stats_to_json(stats_for_rule),
                     league=stats_payload.get("league"), home_team=stats_payload.get("home_team"),
                     away_team=stats_payload.get("away_team"),
+                    ai_score=int((ai_assessment or {}).get("score") or 0),
+                    ai_verdict=(ai_assessment or {}).get("verdict"),
                     ml_pred_score=(ml_prediction or {}).get("score"),
                     ml_pred_verdict=(ml_prediction or {}).get("verdict"),
                     ml_pred_prob_green=(ml_prediction or {}).get("prob_green"),
                     ml_model_samples=(ml_prediction or {}).get("samples"),
                     ml_model_trained_at=(ml_prediction or {}).get("trained_at"),
+                    market_key=market_ctx.get("market_key"),
+                    market_label=market_ctx.get("market_label"),
+                    outcome_signature=market_ctx.get("outcome_signature"),
+                    target_side=market_ctx.get("target_side"),
+                    target_operator=market_ctx.get("target_operator"),
+                    target_value=market_ctx.get("target_value"),
+                    target_text=market_ctx.get("target_text"),
+                    initial_events_json=_events_to_json(event_timeline),
+                    initial_event_metrics_json=_event_metrics_json(event_timeline, effective_minute),
                 )
                 db.session.add(alert)
                 try:
@@ -1731,16 +2164,26 @@ def process_live_games(session):
                         except Exception as exc:
                             print(f"[worker] falha ao coletar historico do jogo {game.get('game_id')}: {exc}")
                         meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
-                        message = render_message(rule, meta)
-                        _send_message_safe(
-                            user.telegram_token,
-                            user.telegram_chat_id,
-                            message,
-                            context=f"new_alert_rule_{rule.id}_immediate",
+                        ai_live_assessment = _build_ai_assessment(rule, meta)
+                        alert.ai_score = int(ai_live_assessment.get("score") or alert.ai_score or 0)
+                        alert.ai_verdict = ai_live_assessment.get("verdict") or alert.ai_verdict
+                        alert.ai_commentary = _build_ai_commentary(
+                            rule,
+                            {
+                                **meta,
+                                "ai_score": alert.ai_score,
+                                "ai_verdict": alert.ai_verdict,
+                            },
                         )
+                        try:
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                        message = render_message(rule, meta)
+                        _queue_entry_notification(alert, meta, message)
 
-                    # Re-fetch latest stats for accurate initial alert message.
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    # Refresh once without blocking the cycle with multiple sleeps.
+                    latest_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
                     if latest_payload:
                         stats_payload = latest_payload
                         if rule.second_half_only:
@@ -1755,6 +2198,11 @@ def process_live_games(session):
                         alert.last_score = stats_payload.get("score")
                         alert.last_score_minute = stats_payload.get("minute")
                         alert.initial_stats_json = stats_to_json(stats_for_rule)
+                        alert.initial_events_json = _events_to_json(stats_payload.get("events"))
+                        alert.initial_event_metrics_json = _event_metrics_json(
+                            stats_payload.get("events"),
+                            alert.alert_minute,
+                        )
                         db.session.commit()
                 except IntegrityError:
                     db.session.rollback()
@@ -1825,7 +2273,8 @@ def _close_pending_without_live_payload(alert, rule) -> bool:
     return True
 
 def follow_alerts(session):
-    active_alerts = MatchAlert.query.filter(MatchAlert.status.in_(("pending", "green", "red"))).all()
+    pending_alerts = MatchAlert.query.filter_by(status="pending", ft_completed=False).all()
+    active_alerts = pending_alerts + _recently_settled_alerts_query()
     stats_cache = {}
     for alert in active_alerts:
         rule = alert.rule
@@ -1836,7 +2285,12 @@ def follow_alerts(session):
         cache_key = alert.url
         if alert.status == "pending":
             # Double-check with multiple reads to catch recent score changes.
-            stats_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+            stats_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                delay=ALERT_FETCH_STATS_DELAY,
+            )
         else:
             if cache_key in stats_cache:
                 stats_payload = stats_cache[cache_key]
@@ -1890,6 +2344,8 @@ def follow_alerts(session):
                 alert.result_time_hhmm = None
                 alert.ht_score = None
                 alert.ht_stats_json = None
+                alert.result_events_json = None
+                alert.result_event_metrics_json = None
                 alert.last_score = current_score
                 alert.last_score_minute = minute
                 alert.penalty_last_total = penalties_total if isinstance(penalties_total, int) else 0
@@ -1917,7 +2373,12 @@ def follow_alerts(session):
             if alert.status == "red" and rule and rule.outcome_red_if_no_green:
                 red_time = _result_time_to_dt(alert.result_time_hhmm)
                 if red_time and (now_sp() - red_time).total_seconds() <= RED_CORRECTION_SECONDS:
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    latest_payload = fetch_match_stats_fresh(
+                        session,
+                        alert.url,
+                        attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                        delay=ALERT_FETCH_STATS_DELAY,
+                    )
                     if latest_payload:
                         latest_score = latest_payload.get("score") or alert.last_score
                         latest_minute = latest_payload.get("minute") or alert.result_minute
@@ -1960,6 +2421,7 @@ def follow_alerts(session):
                                 latest_score,
                                 latest_stats,
                                 "✅ GREEN - correção pós-RED",
+                                events=latest_payload.get("events"),
                             )
             continue
         maybe_notify_penalty(alert, stats, minute, current_score, time_text=stats_payload.get("time_text"))
@@ -2000,17 +2462,38 @@ def follow_alerts(session):
         
         # 1. Verificar GREEN customizado
         if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
-            latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+            latest_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                delay=ALERT_FETCH_STATS_DELAY,
+            )
             if latest_payload:
                 minute = latest_payload.get("minute") or minute
                 current_score = latest_payload.get("score") or current_score
                 stats = latest_payload.get("stats", {}) or stats
-            update_alert_status(alert, "green", minute, current_score, stats, "✅ GREEN - condições atingidas")
+            update_alert_status(
+                alert,
+                "green",
+                minute,
+                current_score,
+                stats,
+                "✅ GREEN - condições atingidas",
+                events=latest_payload.get("events") if latest_payload else stats_payload.get("events"),
+            )
             continue
 
         # 2. Verificar RED customizado
         if allow_red_eval and red_conds and evaluate_outcome_conditions(red_conds, stats_for_outcome):
-            update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - condições de RED atingidas")
+            update_alert_status(
+                alert,
+                "red",
+                minute,
+                current_score,
+                stats,
+                "❌ RED - condições de RED atingidas",
+                events=stats_payload.get("events"),
+            )
             continue
 
         # 3. Verificar RED por tempo (se habilitado)
@@ -2047,12 +2530,25 @@ def follow_alerts(session):
                 )
                 latest_outcome_stats = merge_score_delta_into_stats(latest_outcome_stats, alert.initial_score, latest_score)
                 if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
-                    latest_payload = fetch_match_stats_fresh(session, alert.url, attempts=3, delay=1)
+                    latest_payload = fetch_match_stats_fresh(
+                        session,
+                        alert.url,
+                        attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                        delay=ALERT_FETCH_STATS_DELAY,
+                    )
                     if latest_payload:
                         latest_minute = latest_payload.get("minute") or latest_minute
                         latest_score = latest_payload.get("score") or latest_score
                         latest_stats = latest_payload.get("stats", {}) or latest_stats
-                    update_alert_status(alert, "green", latest_minute, latest_score, latest_stats, "GREEN - condicoes atingidas")
+                    update_alert_status(
+                        alert,
+                        "green",
+                        latest_minute,
+                        latest_score,
+                        latest_stats,
+                        "GREEN - condicoes atingidas",
+                        events=latest_payload.get("events") if latest_payload else None,
+                    )
                     RED_CONFIRM_PENDING.pop(alert.id, None)
                     continue
 
@@ -2064,63 +2560,92 @@ def follow_alerts(session):
                 continue
 
             # Final refresh to avoid stale score in RED message.
-            final_payload = fetch_match_stats_fresh(session, alert.url, attempts=2, delay=1)
+            final_payload = fetch_match_stats_fresh(
+                session,
+                alert.url,
+                attempts=max(1, ALERT_FETCH_STATS_ATTEMPTS),
+                delay=ALERT_FETCH_STATS_DELAY,
+            )
             if final_payload:
                 latest_minute = final_payload.get("minute") or latest_minute
                 latest_score = final_payload.get("score") or latest_score
                 latest_stats = final_payload.get("stats", {}) or latest_stats
             RED_CONFIRM_PENDING.pop(alert.id, None)
-            update_alert_status(alert, "red", latest_minute, latest_score, latest_stats, "❌ RED - prazo do GREEN expirou")
+            update_alert_status(
+                alert,
+                "red",
+                latest_minute,
+                latest_score,
+                latest_stats,
+                "❌ RED - prazo do GREEN expirou",
+                events=final_payload.get("events") if final_payload else None,
+            )
             continue
 
         # 4. Lógica padrão (se não houver condições customizadas)
         if not green_conds and not red_conds:
             if alert.initial_score and current_score != alert.initial_score and is_first_half_goal(stats_payload.get("time_text", ""), minute):
-                update_alert_status(alert, "green", minute, current_score, stats, "✅ GREEN - gol no 1o tempo")
+                update_alert_status(
+                    alert,
+                    "green",
+                    minute,
+                    current_score,
+                    stats,
+                    "✅ GREEN - gol no 1o tempo",
+                    events=stats_payload.get("events"),
+                )
             elif is_half_time(stats_payload.get("time_text", ""), minute):
-                update_alert_status(alert, "red", minute, current_score, stats, "❌ RED - fim do 1o tempo sem gol")
+                update_alert_status(
+                    alert,
+                    "red",
+                    minute,
+                    current_score,
+                    stats,
+                    "❌ RED - fim do 1o tempo sem gol",
+                    events=stats_payload.get("events"),
+                )
 
-def update_alert_status(alert, status, minute, score, stats, msg_prefix):
+def update_alert_status(alert, status, minute, score, stats, msg_prefix, events=None):
     RED_CONFIRM_PENDING.pop(alert.id, None)
     alert.status = status
     alert.result_minute = minute
     alert.result_time_hhmm = now_sp().strftime("%H:%M")
     alert.ht_score = score
     alert.ht_stats_json = stats_to_json(stats)
+    alert.result_events_json = _events_to_json(events)
+    alert.result_event_metrics_json = _event_metrics_json(events, alert.alert_minute)
     alert.last_score = score
     alert.last_score_minute = minute
     if not _commit_allow_missing_alert(alert.id, f"update_status_{status}"):
         return
     export_alert(alert, alert.rule.name, EXPORT_DIR)
     if alert.rule and alert.rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
-        ml_feedback = _ml_feedback_for_result(alert, status)
-        _send_message_safe(
-            alert.user.telegram_token,
-            alert.user.telegram_chat_id,
-            (
-                f"{msg_prefix}\n"
-                f"Regra: {alert.rule.name}\n"
-                f"{alert.home_team} vs {alert.away_team}\n"
-                f"Tempo: {minute}'\n"
-                f"Placar: {score}\n"
-                f"{ml_feedback}\n"
-                f"Link: {alert.url}"
-            ),
-            context=f"status_{status}_rule_{alert.rule.id if alert.rule else 'na'}",
-        )
+        if status == "green":
+            _queue_grouped_notification(alert, minute, score, msg_prefix, "green")
+        else:
+            _queue_grouped_notification(alert, minute, score, msg_prefix, "red")
 
 def finalize_full_time(session):
-    for alert in MatchAlert.query.filter_by(ft_completed=False).all():
+    cutoff = now_sp() - timedelta(hours=FINALIZE_LOOKBACK_HOURS)
+    alerts = (
+        MatchAlert.query.filter_by(ft_completed=False)
+        .filter(MatchAlert.status.in_(("green", "red")))
+        .filter(MatchAlert.created_at >= cutoff)
+        .all()
+    )
+    for alert in alerts:
         stats_payload = fetch_match_stats(session, alert.url)
-        if not stats_payload: continue
+        if not stats_payload:
+            continue
         minute = stats_payload.get("minute") or 0
         if is_full_time(stats_payload.get("time_text", ""), minute):
             alert.ft_score = stats_payload.get("score")
             alert.ft_stats_json = stats_to_json(stats_payload["stats"])
+            alert.ft_events_json = _events_to_json(stats_payload.get("events"))
+            alert.ft_event_metrics_json = _event_metrics_json(stats_payload.get("events"), alert.alert_minute)
             alert.ft_completed = True
             db.session.commit()
             export_alert(alert, alert.rule.name, EXPORT_DIR)
             SECOND_HALF_BASELINES.pop(alert.game_id, None)
             LAST_GAME_SNAPSHOTS.pop(alert.game_id, None)
             HALFTIME_SEEN_AT.pop(alert.game_id, None)
-        time.sleep(0.4)

@@ -243,6 +243,22 @@ def _ensure_alert_columns():
         "ml_pred_prob_green": "FLOAT",
         "ml_model_samples": "INTEGER",
         "ml_model_trained_at": "VARCHAR(32)",
+        "ai_score": "INTEGER",
+        "ai_verdict": "VARCHAR(40)",
+        "ai_commentary": "TEXT",
+        "market_key": "VARCHAR(64)",
+        "market_label": "VARCHAR(120)",
+        "outcome_signature": "TEXT",
+        "target_side": "VARCHAR(20)",
+        "target_operator": "VARCHAR(8)",
+        "target_value": "INTEGER",
+        "target_text": "VARCHAR(255)",
+        "initial_events_json": "TEXT",
+        "result_events_json": "TEXT",
+        "ft_events_json": "TEXT",
+        "initial_event_metrics_json": "TEXT",
+        "result_event_metrics_json": "TEXT",
+        "ft_event_metrics_json": "TEXT",
     }
 
     with db.engine.connect() as conn:
@@ -260,6 +276,7 @@ def _ensure_live_game_state_columns():
     columns = {
         "first_half_snapshot_json": "TEXT",
         "first_half_snapshot_minute": "INTEGER",
+        "events_json": "TEXT",
     }
 
     with db.engine.connect() as conn:

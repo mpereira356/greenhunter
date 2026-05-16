@@ -1,7 +1,18 @@
 import requests
 import time
+import threading
 
 from .scraper import make_session
+
+_SESSION_LOCAL = threading.local()
+
+
+def _telegram_session():
+    session = getattr(_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = make_session()
+        _SESSION_LOCAL.session = session
+    return session
 
 
 def _post_with_retry(session, url, payload):
@@ -24,7 +35,7 @@ def _post_with_retry(session, url, payload):
 def send_message(token: str, chat_id: str, text: str):
     if not token or not chat_id:
         return False, "Token/chat_id ausente."
-    session = make_session()
+    session = _telegram_session()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -66,7 +77,7 @@ def send_document(token: str, chat_id: str, file_path: str, caption: str | None 
         return False, "Token/chat_id ausente."
     if not file_path:
         return False, "Arquivo nao informado."
-    session = make_session()
+    session = _telegram_session()
     url = f"https://api.telegram.org/bot{token}/sendDocument"
     data = {"chat_id": chat_id}
     if caption:
