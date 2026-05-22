@@ -1,9 +1,13 @@
 from datetime import datetime, timedelta
 import json
+import os
+import sqlite3
+import tempfile
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, after_this_request, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import case, func
+from sqlalchemy.engine.url import make_url
 
 from ..extensions import db
 from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
@@ -15,6 +19,67 @@ from ..utils.time import now_sp
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 ALERTS_PER_HOUR_THRESHOLD = 20
+
+
+def _sqlite_db_path() -> str:
+    database_url = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    url = make_url(database_url)
+    if url.drivername not in {"sqlite", "sqlite+pysqlite"}:
+        raise RuntimeError("Backup de DB disponivel apenas para SQLite.")
+    if not url.database:
+        raise RuntimeError("Caminho do banco SQLite nao encontrado.")
+    return os.path.abspath(url.database)
+
+
+def _validate_sqlite_file(path: str) -> None:
+    try:
+        conn = sqlite3.connect(path)
+        try:
+            result = conn.execute("PRAGMA integrity_check").fetchone()
+            if not result or result[0] != "ok":
+                raise ValueError("integrity_check falhou.")
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            required_tables = {"user", "rule", "match_alert"}
+            missing = sorted(required_tables - tables)
+            if missing:
+                raise ValueError(f"tabelas obrigatorias ausentes: {', '.join(missing)}")
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as exc:
+        raise ValueError("arquivo enviado nao e um SQLite valido.") from exc
+
+
+def _snapshot_sqlite_db(source_path: str, destination_path: str) -> None:
+    source = sqlite3.connect(source_path)
+    try:
+        destination = sqlite3.connect(destination_path)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+
+
+def _replace_sqlite_db(upload_path: str, db_path: str) -> str:
+    backup_path = f"{db_path}.backup_{now_sp().strftime('%Y%m%d_%H%M%S')}"
+
+    if os.path.exists(db_path):
+        _snapshot_sqlite_db(db_path, backup_path)
+
+    db.session.remove()
+    db.engine.dispose()
+    os.replace(upload_path, db_path)
+    for suffix in ("-wal", "-shm", "-journal"):
+        sidecar = f"{db_path}{suffix}"
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+    return backup_path
 
 
 def _require_admin():
@@ -289,6 +354,89 @@ def live_monitor():
             "games": _build_tracked_games(now),
         }
     )
+
+
+@admin_bp.route("/database/download")
+@login_required
+def download_database():
+    _require_admin()
+    try:
+        db_path = _sqlite_db_path()
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.dashboard"))
+
+    if not os.path.exists(db_path):
+        flash("Banco de dados nao encontrado.", "danger")
+        return redirect(url_for("admin.dashboard"))
+
+    db.session.remove()
+    filename = f"greenhunter-db-{now_sp().strftime('%Y%m%d-%H%M%S')}.db"
+    fd, snapshot_path = tempfile.mkstemp(prefix="greenhunter_download_", suffix=".db")
+    os.close(fd)
+    try:
+        _snapshot_sqlite_db(db_path, snapshot_path)
+    except Exception:
+        if os.path.exists(snapshot_path):
+            os.remove(snapshot_path)
+        current_app.logger.exception("Falha ao gerar snapshot do banco de dados.")
+        flash("Nao foi possivel gerar o download do banco de dados.", "danger")
+        return redirect(url_for("admin.dashboard"))
+
+    @after_this_request
+    def _cleanup_snapshot(response):
+        try:
+            if os.path.exists(snapshot_path):
+                os.remove(snapshot_path)
+        except OSError:
+            current_app.logger.exception("Falha ao remover snapshot temporario do banco.")
+        return response
+
+    return send_file(
+        snapshot_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.sqlite3",
+        max_age=0,
+    )
+
+
+@admin_bp.route("/database/import", methods=["POST"])
+@login_required
+def import_database():
+    _require_admin()
+    uploaded = request.files.get("database_file")
+    if not uploaded or not uploaded.filename:
+        flash("Selecione um arquivo de banco de dados para importar.", "warning")
+        return redirect(url_for("admin.dashboard"))
+
+    try:
+        db_path = _sqlite_db_path()
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.dashboard"))
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix="db_import_", suffix=".db", dir=os.path.dirname(db_path))
+    os.close(fd)
+    try:
+        uploaded.save(temp_path)
+        _validate_sqlite_file(temp_path)
+        backup_path = _replace_sqlite_db(temp_path, db_path)
+    except ValueError as exc:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        flash(f"Importacao cancelada: {exc}", "danger")
+        return redirect(url_for("admin.dashboard"))
+    except Exception:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        current_app.logger.exception("Falha ao importar banco de dados.")
+        flash("Nao foi possivel importar o banco de dados.", "danger")
+        return redirect(url_for("admin.dashboard"))
+
+    flash(f"Banco de dados importado. Backup anterior salvo em {backup_path}.", "success")
+    return redirect(url_for("admin.dashboard"))
 
 
 @admin_bp.route("/users")

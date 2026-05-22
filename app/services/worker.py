@@ -1316,6 +1316,14 @@ def _apply_live_row_identity(game: dict, stats_payload: dict | None) -> dict | N
 def copy_stats(stats):
     return {key: value.copy() if isinstance(value, dict) else value for key, value in stats.items()}
 
+
+def stats_with_score_goals(stats: dict, score_text: str | None) -> dict:
+    stats_copy = copy_stats(stats or {})
+    home, away = parse_score(score_text or "")
+    stats_copy["Goals"] = {"home": home, "away": away, "total": home + away}
+    return stats_copy
+
+
 def remember_game_snapshot(game_id: str, stats_payload) -> None:
     if not game_id or not stats_payload:
         return
@@ -2198,7 +2206,7 @@ def process_live_games(session):
                 if not _league_allowed(league_name, allowed_items):
                     continue
 
-            stats_for_rule = stats_payload["stats"]
+            stats_for_rule = stats_with_score_goals(stats_payload.get("stats", {}), stats_payload.get("score"))
             h_score, a_score = parse_score(stats_payload.get("score", ""))
             if (rule.score_home is not None and h_score != rule.score_home) or \
                (rule.score_away is not None and a_score != rule.score_away):
@@ -2225,7 +2233,7 @@ def process_live_games(session):
                     latest_payload = fetch_match_stats(session, game["url"])
                     if latest_payload:
                         latest_payload = _apply_live_row_identity(game, latest_payload)
-                        latest_stats_for_rule = latest_payload.get("stats", {})
+                        latest_stats_for_rule = stats_with_score_goals(latest_payload.get("stats", {}), latest_payload.get("score"))
                         latest_minute = latest_payload.get("minute")
                         latest_score = latest_payload.get("score", "")
                         lh_score, la_score = parse_score(latest_score)
@@ -2255,7 +2263,7 @@ def process_live_games(session):
                             forced_ok = False
                             if forced_payload:
                                 forced_payload = _apply_live_row_identity(game, forced_payload)
-                                forced_stats_for_rule = forced_payload.get("stats", {})
+                                forced_stats_for_rule = stats_with_score_goals(forced_payload.get("stats", {}), forced_payload.get("score"))
                                 forced_minute = forced_payload.get("minute")
                                 fs_home, fs_away = parse_score(forced_payload.get("score", ""))
                                 forced_score_matches = not (

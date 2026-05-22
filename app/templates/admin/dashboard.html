@@ -8,6 +8,14 @@
   </div>
 </div>
 
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a class="btn btn-outline-primary" href="{{ url_for('admin.download_database') }}">Exportar DB</a>
+  <form method="post" action="{{ url_for('admin.import_database') }}" enctype="multipart/form-data" class="d-inline" id="db-import-form">
+    <input class="d-none" type="file" name="database_file" id="database_file" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" required>
+    <button class="btn btn-outline-danger" type="button" id="db-import-button">Importar DB</button>
+  </form>
+</div>
+
 <div class="stat-grid mb-3">
   <div class="stat-card">
     <div class="stat-label">Usuarios</div>
@@ -222,6 +230,23 @@
 {% block scripts %}
 {{ super() }}
 <script>
-  // live monitor removed
+  document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("database_file");
+    const button = document.getElementById("db-import-button");
+    const form = document.getElementById("db-import-form");
+    if (!input || !button || !form) {
+      return;
+    }
+    button.addEventListener("click", function () {
+      input.click();
+    });
+    input.addEventListener("change", function () {
+      if (input.files.length && confirm("Importar este arquivo vai substituir o banco de dados inteiro. Continuar?")) {
+        form.submit();
+      } else {
+        input.value = "";
+      }
+    });
+  });
 </script>
 {% endblock %}
