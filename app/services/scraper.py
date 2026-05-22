@@ -9,6 +9,7 @@ import base64
 import sqlite3
 import ctypes
 import subprocess
+import resource
 from urllib.parse import urlparse
 import tempfile
 from urllib.parse import unquote
@@ -579,6 +580,18 @@ def _browser_chrome_binary() -> str:
             if os.path.exists(candidate):
                 chrome_binary = candidate
                 break
+    if not chrome_binary and os.name != "nt":
+        for candidate in (
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+            "/usr/bin/chrome",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/snap/bin/chromium",
+        ):
+            if os.path.exists(candidate):
+                chrome_binary = candidate
+                break
     return chrome_binary
 
 
@@ -604,11 +617,22 @@ def _launch_debug_browser(start_url: str):
     if not chrome_binary:
         raise RuntimeError("Chrome/Edge nao encontrado para o fallback do BetsAPI")
     profile_dir = _browser_profile_dir()
+    env = os.environ.copy()
+    forced_display = (env.get("BETSAPI_DISPLAY") or "").strip()
+    if forced_display and not env.get("DISPLAY"):
+        env["DISPLAY"] = forced_display
+    if not env.get("XAUTHORITY"):
+        xauthority = (env.get("BETSAPI_XAUTHORITY") or os.path.expanduser("~/.Xauthority")).strip()
+        if xauthority and os.path.exists(xauthority):
+            env["XAUTHORITY"] = xauthority
     args = [
         chrome_binary,
         f"--remote-debugging-port={_browser_debug_port()}",
         "--remote-allow-origins=*",
         f"--user-data-dir={profile_dir}",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-background-networking",
@@ -618,9 +642,19 @@ def _launch_debug_browser(start_url: str):
         "stdout": subprocess.DEVNULL,
         "stderr": subprocess.DEVNULL,
         "stdin": subprocess.DEVNULL,
+        "env": env,
     }
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        def _reset_child_limits():
+            _, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
+            if hard_limit == resource.RLIM_INFINITY:
+                resource.setrlimit(resource.RLIMIT_AS, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+            else:
+                resource.setrlimit(resource.RLIMIT_AS, (hard_limit, hard_limit))
+
+        kwargs["preexec_fn"] = _reset_child_limits
     subprocess.Popen(args, **kwargs)
     _BROWSER_LAST_LAUNCHED_AT = time.time()
 
@@ -1277,6 +1311,7 @@ def is_first_half_extra_time(time_text: str) -> bool:
 def fetch_live_games(session):
     last_status = None
     merged_games = {}
+    got_success = False
 
     for base in BASE_URLS:
         try:
@@ -1286,6 +1321,7 @@ def fetch_live_games(session):
         last_status = resp.status_code
         if resp.status_code != 200:
             continue
+        got_success = True
 
         soup = BeautifulSoup(resp.text, "html.parser")
         trs = soup.find_all("tr", id=lambda x: x and x.startswith("r_"))
@@ -1354,7 +1390,7 @@ def fetch_live_games(session):
 
     if not merged_games:
         return [], last_status
-    return list(merged_games.values()), last_status
+    return list(merged_games.values()), 200 if got_success else last_status
 
 
 def fetch_match_stats(session, url):
@@ -1390,19 +1426,19 @@ def fetch_match_stats(session, url):
     def _valid_team(name: str) -> bool:
         return bool(name and name.strip() and not name.strip().isdigit())
 
-    if not _valid_team(home_team) or not _valid_team(away_team):
+    if _valid_team(url_home) and _valid_team(url_away):
+        if (
+            _valid_team(title_home)
+            and _valid_team(title_away)
+            and _team_names_match(title_home, url_home)
+            and _team_names_match(title_away, url_away)
+        ):
+            home_team, away_team = title_home, title_away
+        else:
+            home_team, away_team = url_home, url_away
+    elif not _valid_team(home_team) or not _valid_team(away_team):
         if _valid_team(title_home) and _valid_team(title_away):
             home_team, away_team = title_home, title_away
-        elif _valid_team(url_home) and _valid_team(url_away):
-            home_team, away_team = url_home, url_away
-    elif _valid_team(url_home) and _valid_team(url_away):
-        home_ok = _team_names_match(home_team, url_home)
-        away_ok = _team_names_match(away_team, url_away)
-        if not (home_ok and away_ok):
-            if _valid_team(title_home) and _valid_team(title_away) and _team_names_match(title_home, url_home) and _team_names_match(title_away, url_away):
-                home_team, away_team = title_home, title_away
-            else:
-                home_team, away_team = url_home, url_away
 
     home_team = _clean_team_name(home_team)
     away_team = _clean_team_name(away_team)

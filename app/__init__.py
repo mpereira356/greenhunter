@@ -1,4 +1,5 @@
 import os
+import resource
 import sqlite3
 
 from sqlalchemy import event, text
@@ -30,6 +31,15 @@ def create_app():
     # Carrega variáveis do .env
     # =========================
     load_dotenv()
+
+    # =========================
+    # Limite de memória para evitar travamento
+    # =========================
+    # Limita a ~1GB por processo sem reduzir o hard limit herdado por subprocessos.
+    mem_limit = 1024 * 1024 * 1024
+    _, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
+    soft_limit = min(mem_limit, hard_limit) if hard_limit != resource.RLIM_INFINITY else mem_limit
+    resource.setrlimit(resource.RLIMIT_AS, (soft_limit, hard_limit))
 
     app = Flask(__name__)
 
@@ -259,6 +269,8 @@ def _ensure_alert_columns():
         "initial_event_metrics_json": "TEXT",
         "result_event_metrics_json": "TEXT",
         "ft_event_metrics_json": "TEXT",
+        "telegram_entry_message_id": "INTEGER",
+        "telegram_entry_enriched": "BOOLEAN DEFAULT 0",
     }
 
     with db.engine.connect() as conn:

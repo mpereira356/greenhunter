@@ -30,3 +30,4 @@ chromedriver/
 data/*.db-shm*
 data/*.db-wal*
 data/*.db
+*.deb

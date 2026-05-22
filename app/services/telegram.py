@@ -67,6 +67,41 @@ def send_message(token: str, chat_id: str, text: str):
                 )
             print(f"[telegram] falha ao enviar (HTTP {resp.status_code}): {resp.text[:180]}")
             return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
+        message_id = None
+        try:
+            body = resp.json()
+            message_id = ((body.get("result") or {}).get("message_id"))
+        except Exception:
+            message_id = None
+        return True, "ok", message_id
+    except requests.RequestException as exc:
+        return False, str(exc)
+
+
+def edit_message_text(token: str, chat_id: str, message_id: int, text: str):
+    if not token or not chat_id or not message_id:
+        return False, "Token/chat_id/message_id ausente."
+    session = _telegram_session()
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": True,
+    }
+    fallback_payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    try:
+        resp = _post_with_retry(session, url, payload)
+        if resp.status_code != 200:
+            resp = _post_with_retry(session, url, fallback_payload)
+        if resp.status_code != 200:
+            return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
         return True, "ok"
     except requests.RequestException as exc:
         return False, str(exc)

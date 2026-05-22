@@ -672,6 +672,12 @@ def maybe_retrain_model(force: bool = False) -> bool:
     global _MODEL_CACHE, _LAST_TRAIN_AT
     with _MODEL_LOCK:
         now = now_sp()
+        if not force and _MODEL_CACHE is None:
+            loaded = _load_model_file()
+            if loaded:
+                _MODEL_CACHE = loaded
+                _LAST_TRAIN_AT = now
+                return False
         if not force and _LAST_TRAIN_AT and (now - _LAST_TRAIN_AT) < timedelta(seconds=ML_TRAIN_INTERVAL_SECONDS):
             return False
         model = _build_model()

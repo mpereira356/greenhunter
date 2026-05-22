@@ -1823,6 +1823,21 @@ code {
   background: rgba(255, 77, 106, 0.12);
 }
 
+.history-btn-inline-view {
+  border-color: var(--history-border);
+  background: transparent;
+  color: var(--history-green);
+  min-height: 32px;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.history-btn-inline-view:hover {
+  color: #05110d;
+  border-color: rgba(0, 229, 160, 0.45);
+  background: var(--history-green);
+}
+
 .history-table-card {
   background: var(--history-surface);
   border: 1px solid var(--history-border);

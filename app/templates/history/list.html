@@ -179,6 +179,14 @@
 
             {% if is_admin %}
             <td class="text-end">
+              {% if alert.url %}
+              <a
+                class="history-btn history-btn-inline-view me-1"
+                href="{{ alert.url }}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >Ver</a>
+              {% endif %}
               <form
                 method="post"
                 action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"

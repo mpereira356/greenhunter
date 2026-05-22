@@ -141,6 +141,8 @@ class MatchAlert(db.Model):
     result_event_metrics_json = db.Column(db.Text)
     ft_event_metrics_json = db.Column(db.Text)
     ft_completed = db.Column(db.Boolean, default=False, nullable=False)
+    telegram_entry_message_id = db.Column(db.Integer)
+    telegram_entry_enriched = db.Column(db.Boolean, default=False, nullable=False)
 
     __table_args__ = (db.UniqueConstraint("rule_id", "game_id", name="uix_rule_game"),)
 

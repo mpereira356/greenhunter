@@ -1,9 +1,11 @@
 import json
 import os
 import re
+import resource
 import threading
 import time
 import unicodedata
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from statistics import mean
@@ -29,11 +31,11 @@ from app.services.scraper import (
     summarize_history,
     is_second_half as scraper_is_second_half,
 )
-from app.services.telegram import send_message
+from app.services.telegram import edit_message_text, send_message
 from app.utils.time import now_sp
 
-POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "15"))
-ALERTS_POLL_INTERVAL = float(os.environ.get("ALERTS_POLL_INTERVAL", "5"))
+POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "1"))
+ALERTS_POLL_INTERVAL = float(os.environ.get("ALERTS_POLL_INTERVAL", "1"))
 GAME_DELAY = float(os.environ.get("WORKER_GAME_DELAY", "1.5"))
 FETCH_STATS_ATTEMPTS = max(1, int(os.environ.get("FETCH_STATS_ATTEMPTS", "2")))
 FETCH_STATS_DELAY = max(0.0, float(os.environ.get("FETCH_STATS_DELAY", "0.25")))
@@ -65,7 +67,7 @@ FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST
 NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
-ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "6")))
+ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "4")))
 USE_SERIAL_PREFETCH = os.environ.get("WORKER_SERIAL_PREFETCH", "0").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
@@ -91,8 +93,14 @@ GREEN_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("GREEN_GROUP_WINDOW_SECON
 GREEN_NOTIFICATION_PENDING = {}
 RED_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("RED_GROUP_WINDOW_SECONDS", "180")))
 RED_NOTIFICATION_PENDING = {}
-ENTRY_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "1")))
+ENTRY_GROUP_WINDOW_SECONDS = max(0, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "0")))
+REALTIME_ENTRY_ALERTS = os.environ.get("REALTIME_ENTRY_ALERTS", "1").strip().lower() in ("1", "true", "yes")
+REALTIME_SKIP_ENTRY_HISTORY = os.environ.get("REALTIME_SKIP_ENTRY_HISTORY", "1").strip().lower() in ("1", "true", "yes")
+ML_AUTOTRAIN_ENABLED = os.environ.get("ML_AUTOTRAIN_ENABLED", "0").strip().lower() in ("1", "true", "yes")
 ENTRY_NOTIFICATION_PENDING = {}
+ENTRY_ENRICHMENT_QUEUE = deque()
+ENTRY_ENRICHMENT_QUEUED = set()
+ENTRY_ENRICHMENT_LOCK = threading.Lock()
 
 def get_api_status() -> dict:
     return {
@@ -132,17 +140,36 @@ def notify_api_status(ok: bool, code: int | None):
 
 
 def _send_message_safe(token: str, chat_id: str, text: str, context: str = "") -> bool:
+    ok, _detail, _message_id = _send_message_result(token, chat_id, text, context=context)
+    return ok
+
+
+def _send_message_result(token: str, chat_id: str, text: str, context: str = ""):
     try:
         result = send_message(token, chat_id, text)
+        message_id = None
         if isinstance(result, tuple):
             ok, detail = bool(result[0]), result[1] if len(result) > 1 else ""
+            if len(result) > 2:
+                message_id = result[2]
         else:
             ok, detail = bool(result), ""
         if not ok:
             print(f"[telegram] envio falhou ({context}): {detail}")
-        return ok
+        return ok, detail, message_id
     except Exception as exc:
         print(f"[telegram] excecao ao enviar ({context}): {exc}")
+        return False, str(exc), None
+
+
+def _edit_message_safe(token: str, chat_id: str, message_id: int, text: str, context: str = "") -> bool:
+    try:
+        ok, detail = edit_message_text(token, chat_id, message_id, text)
+        if not ok:
+            print(f"[telegram] edicao falhou ({context}): {detail}")
+        return ok
+    except Exception as exc:
+        print(f"[telegram] excecao ao editar ({context}): {exc}")
         return False
 
 
@@ -594,6 +621,15 @@ def _is_recent_game_update(game_id: str) -> bool:
     if not state or not state.updated_at:
         return False
     return (now_sp() - state.updated_at).total_seconds() <= ALERT_FRESH_SECONDS
+
+
+def _last_live_update_at(game_id: str):
+    if not game_id:
+        return None
+    state = LiveGameState.query.filter_by(game_id=game_id).first()
+    if not state:
+        return None
+    return state.updated_at
 
 def _result_time_to_dt(result_time_hhmm: str | None):
     if not result_time_hhmm:
@@ -1121,10 +1157,161 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
         meta["history_confidence"] = "Sem historico de um contra o outro"
     return meta
 
+
+def render_fast_entry_message(rule, stats_payload: dict, game: dict, stats_for_rule: dict) -> str:
+    stats = stats_for_rule if isinstance(stats_for_rule, dict) else (stats_payload or {}).get("stats", {})
+
+    def total(key: str):
+        bucket = stats.get(key, {})
+        if not isinstance(bucket, dict):
+            return 0
+        value = bucket.get("total", 0)
+        return value if value not in (None, "", "-") else 0
+
+    market_ctx = infer_green_profile(rule)
+    return (
+        f"ALERTA AO VIVO\n"
+        f"Regra: {getattr(rule, 'name', '')}\n"
+        f"Liga: {(stats_payload or {}).get('league') or (game or {}).get('league') or ''}\n"
+        f"Jogo: {(stats_payload or {}).get('home_team') or (game or {}).get('home_team')} vs "
+        f"{(stats_payload or {}).get('away_team') or (game or {}).get('away_team')}\n"
+        f"Min: {(stats_payload or {}).get('minute')} | Placar: {(stats_payload or {}).get('score')}\n"
+        f"Mercado: {market_ctx.get('target_text') or market_ctx.get('market_label') or 'N/A'}\n"
+        f"On Target: {total('On Target')} | Dangerous: {total('Dangerous Attacks')} | Corners: {total('Corners')}\n"
+        f"Status: analisando historico e IA...\n"
+        f"Link: {(game or {}).get('url') or (stats_payload or {}).get('url') or ''}"
+    )
+
+
+def _queue_entry_enrichment(alert_id: int | None):
+    if not alert_id:
+        return
+    with ENTRY_ENRICHMENT_LOCK:
+        if alert_id in ENTRY_ENRICHMENT_QUEUED:
+            return
+        ENTRY_ENRICHMENT_QUEUED.add(alert_id)
+        ENTRY_ENRICHMENT_QUEUE.append(alert_id)
+
+
+def _pop_entry_enrichment_id():
+    with ENTRY_ENRICHMENT_LOCK:
+        if not ENTRY_ENRICHMENT_QUEUE:
+            return None
+        return ENTRY_ENRICHMENT_QUEUE.popleft()
+
+
+def _finish_entry_enrichment_id(alert_id: int | None):
+    if not alert_id:
+        return
+    with ENTRY_ENRICHMENT_LOCK:
+        ENTRY_ENRICHMENT_QUEUED.discard(alert_id)
+
+
+def _build_history_meta(session, rule, url: str):
+    history_meta = {}
+    history_data = fetch_match_history(session, url)
+    h2h_items = (history_data or {}).get("h2h", [])
+    home_items = (history_data or {}).get("home", [])
+    away_items = (history_data or {}).get("away", [])
+    h2h_summary = summarize_history(h2h_items)
+    home_summary = summarize_history(home_items)
+    away_summary = summarize_history(away_items)
+    conf_pct = history_confidence((rule.conditions or []) if rule else [], h2h_items)
+    if h2h_summary:
+        history_meta["history_h2h"] = format_history_summary("H2H:", h2h_summary)
+    if home_summary:
+        history_meta["history_home"] = format_history_summary("Mandante:", home_summary)
+    if away_summary:
+        history_meta["history_away"] = format_history_summary("Visitante:", away_summary)
+    if conf_pct is not None:
+        history_meta["history_confidence"] = f"{conf_pct}%"
+    return history_meta
+
+
+def enrich_entry_alert(session, alert_id: int):
+    alert = MatchAlert.query.get(alert_id)
+    if not alert or alert.telegram_entry_enriched or not alert.telegram_entry_message_id:
+        return
+    rule = alert.rule
+    user = alert.user
+    if not rule or not user or not user.telegram_token or not user.telegram_chat_id:
+        return
+
+    try:
+        stats_override = json.loads(alert.initial_stats_json or "{}")
+    except Exception:
+        stats_override = {}
+    stats_payload = {
+        "league": alert.league,
+        "home_team": alert.home_team,
+        "away_team": alert.away_team,
+        "minute": alert.alert_minute,
+        "score": alert.initial_score,
+        "stats": stats_override,
+        "events": [],
+    }
+    game = {"url": alert.url, "game_id": alert.game_id}
+
+    try:
+        history_meta = _build_history_meta(session, rule, alert.url)
+    except Exception as exc:
+        history_meta = {}
+        print(f"[worker] falha ao enriquecer historico do alerta {alert.id}: {exc}")
+
+    meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_override)
+    ai_live_assessment = _build_ai_assessment(rule, meta)
+    alert.ai_score = int(ai_live_assessment.get("score") or alert.ai_score or 0)
+    alert.ai_verdict = ai_live_assessment.get("verdict") or alert.ai_verdict
+    alert.ai_commentary = _build_ai_commentary(
+        rule,
+        {
+            **meta,
+            "ai_score": alert.ai_score,
+            "ai_verdict": alert.ai_verdict,
+        },
+    )
+    meta["ai_score"] = alert.ai_score
+    meta["ai_verdict"] = alert.ai_verdict
+    meta["ai_commentary"] = alert.ai_commentary
+    message = render_message(rule, meta)
+    if _edit_message_safe(
+        user.telegram_token,
+        user.telegram_chat_id,
+        alert.telegram_entry_message_id,
+        message,
+        context=f"entry_enrich_{alert.id}",
+    ):
+        alert.telegram_entry_enriched = True
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
 def is_youth_match(stats_payload: dict) -> bool:
     if not stats_payload: return False
     hay = f"{stats_payload.get('league', '')} {stats_payload.get('home_team', '')} {stats_payload.get('away_team', '')}".lower()
     return any(token in hay for token in YOUTH_TOKENS)
+
+
+def _valid_team_name(value: str | None) -> bool:
+    text = str(value or "").strip()
+    return bool(text and not text.isdigit() and text.lower() not in ("none", "null", "x"))
+
+
+def _apply_live_row_identity(game: dict, stats_payload: dict | None) -> dict | None:
+    if not game or not stats_payload:
+        return stats_payload
+    home_team = game.get("home_team")
+    away_team = game.get("away_team")
+    # The live row is tied to the game_id being processed. Prefer it over
+    # names parsed from stats tables, which can be stale or ambiguous.
+    if _valid_team_name(home_team) and _valid_team_name(away_team):
+        stats_payload["home_team"] = home_team
+        stats_payload["away_team"] = away_team
+    if not stats_payload.get("league") and game.get("league"):
+        stats_payload["league"] = game.get("league")
+    return stats_payload
+
 
 def copy_stats(stats):
     return {key: value.copy() if isinstance(value, dict) else value for key, value in stats.items()}
@@ -1444,7 +1631,7 @@ def effective_minute(rule, minute: int | None) -> int | None:
         return max(0, minute - 45)
     return minute
 
-def should_time_red(rule, alert, minute: int | None) -> bool:
+def should_time_red(rule, alert, minute: int | None, last_update_at=None, allow_wall_clock: bool = False) -> bool:
     if not rule or not rule.outcome_red_if_no_green or rule.outcome_red_minute is None:
         return False
     eff_minute = effective_minute(rule, minute)
@@ -1452,17 +1639,26 @@ def should_time_red(rule, alert, minute: int | None) -> bool:
         return True
     if eff_minute is not None and eff_minute <= 1:
         return False
-    # Fallback: use wall-clock if o minuto do jogo nao avança
-    if alert and alert.created_at and alert.alert_minute is not None:
-        alert_eff = effective_minute(rule, alert.alert_minute)
-        if alert_eff is None:
-            return False
-        remaining = rule.outcome_red_minute - alert_eff
-        if remaining <= 0:
-            return True
-        elapsed = (now_sp() - alert.created_at).total_seconds()
-        if elapsed >= remaining * 60:
-            return True
+    # Wall-clock fallback is only for missing/stale live payloads. When we have
+    # a fresh BetsAPI minute, trust that minute instead of double-counting time.
+    if not allow_wall_clock or not alert:
+        return False
+
+    reference_minute = alert.last_score_minute if last_update_at else alert.alert_minute
+    if reference_minute is None:
+        return False
+    reference_time = last_update_at or alert.created_at
+    if not reference_time:
+        return False
+    elapsed_minutes = max(0.0, (now_sp() - reference_time).total_seconds() / 60.0)
+    estimated_minute = int(reference_minute + elapsed_minutes)
+    estimated_eff = effective_minute(rule, estimated_minute)
+    if estimated_eff is None:
+        return False
+    if estimated_eff <= 1:
+        return False
+    if estimated_eff >= rule.outcome_red_minute:
+        return True
     return False
 
 def _stage_window_open_for_annulment(rule, time_text: str, minute: int | None) -> bool:
@@ -1577,19 +1773,27 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
         maybe_notify_penalty(alert, stats, minute, score, time_text=time_text)
 
 def start_worker(app):
+    # Limite de memória para threads do worker
+    mem_limit = 1024 * 1024 * 1024
+    _, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
+    soft_limit = min(mem_limit, hard_limit) if hard_limit != resource.RLIM_INFINITY else mem_limit
+    resource.setrlimit(resource.RLIMIT_AS, (soft_limit, hard_limit))
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
+    threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
 
 def run_worker(app):
     with app.app_context():
         global BOT_STARTED_AT
         global LAST_FINALIZE_RUN_AT
         BOT_STARTED_AT = now_sp()
-        maybe_retrain_model(force=False)
+        if ML_AUTOTRAIN_ENABLED:
+            maybe_retrain_model(force=False)
         session = make_session()
         while True:
             try:
-                maybe_retrain_model(force=False)
+                if ML_AUTOTRAIN_ENABLED:
+                    maybe_retrain_model(force=False)
                 process_live_games(session)
                 _flush_entry_notification_queue(force=False)
                 now = now_sp()
@@ -1617,6 +1821,23 @@ def run_alerts_worker(app):
                 db.session.rollback()
                 print(f"[alerts] erro: {exc}")
             time.sleep(ALERTS_POLL_INTERVAL)
+
+
+def run_entry_enrichment_worker(app):
+    with app.app_context():
+        session = make_session()
+        while True:
+            alert_id = _pop_entry_enrichment_id()
+            if not alert_id:
+                time.sleep(1)
+                continue
+            try:
+                enrich_entry_alert(session, alert_id)
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[entry_enrich] erro alert_id={alert_id}: {exc}")
+            finally:
+                _finish_entry_enrichment_id(alert_id)
 
 def _game_key(game: dict) -> str:
     return str(game.get("game_id") or game.get("url") or "")
@@ -1919,7 +2140,7 @@ def process_live_games(session):
         prefetched_item = prefetched.get(game_key) if game_key else None
         if not prefetched_item:
             continue
-        stats_payload = prefetched_item["stats_payload"]
+        stats_payload = _apply_live_row_identity(game, prefetched_item["stats_payload"])
         minute = prefetched_item["minute"]
         _maybe_emit_ia_shadow_signal(game, stats_payload, ia_profiles)
 
@@ -1952,7 +2173,7 @@ def process_live_games(session):
                     forced_url = _cache_bust_url(game["url"])
                     forced_payload = fetch_match_stats(session, forced_url)
                     if forced_payload and forced_payload.get("score") and forced_payload.get("score") != stats_payload.get("score"):
-                        stats_payload = forced_payload
+                        stats_payload = _apply_live_row_identity(game, forced_payload)
                         minute = stats_payload.get("minute") or minute
 
         ensure_second_half_baseline(game["game_id"], stats_payload)
@@ -2003,6 +2224,7 @@ def process_live_games(session):
                 if has_stat_cond or rule.score_home is not None or rule.score_away is not None:
                     latest_payload = fetch_match_stats(session, game["url"])
                     if latest_payload:
+                        latest_payload = _apply_live_row_identity(game, latest_payload)
                         latest_stats_for_rule = latest_payload.get("stats", {})
                         latest_minute = latest_payload.get("minute")
                         latest_score = latest_payload.get("score", "")
@@ -2032,6 +2254,7 @@ def process_live_games(session):
                             forced_payload = fetch_match_stats(session, _cache_bust_url(game["url"]))
                             forced_ok = False
                             if forced_payload:
+                                forced_payload = _apply_live_row_identity(game, forced_payload)
                                 forced_stats_for_rule = forced_payload.get("stats", {})
                                 forced_minute = forced_payload.get("minute")
                                 fs_home, fs_away = parse_score(forced_payload.get("score", ""))
@@ -2143,48 +2366,36 @@ def process_live_games(session):
                     
                     # Send entry alert immediately after rule hit to reduce latency.
                     if rule.notify_telegram:
-                        history_meta = {}
-                        try:
-                            history_data = fetch_match_history(session, game.get("url"))
-                            h2h_items = (history_data or {}).get("h2h", [])
-                            home_items = (history_data or {}).get("home", [])
-                            away_items = (history_data or {}).get("away", [])
-                            h2h_summary = summarize_history(h2h_items)
-                            home_summary = summarize_history(home_items)
-                            away_summary = summarize_history(away_items)
-                            conf_pct = history_confidence(rule.conditions or [], h2h_items)
-                            if h2h_summary:
-                                history_meta["history_h2h"] = format_history_summary("H2H:", h2h_summary)
-                            if home_summary:
-                                history_meta["history_home"] = format_history_summary("Mandante:", home_summary)
-                            if away_summary:
-                                history_meta["history_away"] = format_history_summary("Visitante:", away_summary)
-                            if conf_pct is not None:
-                                history_meta["history_confidence"] = f"{conf_pct}%"
-                        except Exception as exc:
-                            print(f"[worker] falha ao coletar historico do jogo {game.get('game_id')}: {exc}")
-                        meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
-                        ai_live_assessment = _build_ai_assessment(rule, meta)
-                        alert.ai_score = int(ai_live_assessment.get("score") or alert.ai_score or 0)
-                        alert.ai_verdict = ai_live_assessment.get("verdict") or alert.ai_verdict
-                        alert.ai_commentary = _build_ai_commentary(
-                            rule,
-                            {
-                                **meta,
-                                "ai_score": alert.ai_score,
-                                "ai_verdict": alert.ai_verdict,
-                            },
-                        )
-                        try:
-                            db.session.commit()
-                        except Exception:
-                            db.session.rollback()
-                        message = render_message(rule, meta)
-                        _queue_entry_notification(alert, meta, message)
+                        if REALTIME_ENTRY_ALERTS and ENTRY_GROUP_WINDOW_SECONDS <= 0:
+                            message = render_fast_entry_message(rule, stats_payload, game, stats_for_rule)
+                            ok, _detail, message_id = _send_message_result(
+                                user.telegram_token,
+                                user.telegram_chat_id,
+                                message,
+                                context=f"entry_realtime_{alert.home_team}_{alert.away_team}",
+                            )
+                            if ok and message_id:
+                                alert.telegram_entry_message_id = int(message_id)
+                                try:
+                                    db.session.commit()
+                                except Exception:
+                                    db.session.rollback()
+                                _queue_entry_enrichment(alert.id)
+                        else:
+                            history_meta = {}
+                            if not REALTIME_SKIP_ENTRY_HISTORY:
+                                try:
+                                    history_meta = _build_history_meta(session, rule, game.get("url"))
+                                except Exception as exc:
+                                    print(f"[worker] falha ao coletar historico do jogo {game.get('game_id')}: {exc}")
+                            meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
+                            message = render_message(rule, meta)
+                            _queue_entry_notification(alert, meta, message)
 
                     # Refresh once without blocking the cycle with multiple sleeps.
                     latest_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
                     if latest_payload:
+                        latest_payload = _apply_live_row_identity(game, latest_payload)
                         stats_payload = latest_payload
                         if rule.second_half_only:
                             baseline = get_second_half_baseline(game["game_id"])
@@ -2247,7 +2458,8 @@ def _close_pending_without_live_payload(alert, rule) -> bool:
     if alert.status != "pending" or not rule:
         return False
     fallback_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
-    if not should_time_red(rule, alert, fallback_minute):
+    last_update_at = _last_live_update_at(alert.game_id)
+    if not should_time_red(rule, alert, fallback_minute, last_update_at=last_update_at, allow_wall_clock=True):
         return False
 
     fallback_score = alert.last_score or alert.initial_score or "0 x 0"
