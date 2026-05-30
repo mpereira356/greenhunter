@@ -25,6 +25,7 @@ from app.services.scraper import (
     fetch_match_history,
     fetch_match_stats,
     format_history_summary,
+    enrich_history_with_ht_goals,
     is_first_half_extra_time,
     make_session,
     normalize_stat_key,
@@ -49,6 +50,11 @@ RULE_CONF_SAMPLE = int(os.environ.get("RULE_CONF_SAMPLE", "50"))
 RULE_CONF_MIN = int(os.environ.get("RULE_CONF_MIN", "10"))
 LEAGUE_CONF_SAMPLE = int(os.environ.get("LEAGUE_CONF_SAMPLE", "80"))
 LEAGUE_CONF_MIN = int(os.environ.get("LEAGUE_CONF_MIN", "8"))
+HISTORY_HT_DETAIL_LIMITS = {
+    "h2h": int(os.environ.get("HISTORY_HT_H2H_LIMIT", "8")),
+    "home": int(os.environ.get("HISTORY_HT_HOME_LIMIT", "6")),
+    "away": int(os.environ.get("HISTORY_HT_AWAY_LIMIT", "6")),
+}
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
@@ -67,7 +73,8 @@ FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST
 NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
-ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "4")))
+ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "1")))
+WORKER_MAX_CANDIDATE_GAMES = max(1, int(os.environ.get("WORKER_MAX_CANDIDATE_GAMES", "8")))
 USE_SERIAL_PREFETCH = os.environ.get("WORKER_SERIAL_PREFETCH", "0").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_NOTIFY = os.environ.get("IA_SHADOW_NOTIFY", "1").strip().lower() in ("1", "true", "yes")
@@ -96,11 +103,13 @@ RED_NOTIFICATION_PENDING = {}
 ENTRY_GROUP_WINDOW_SECONDS = max(0, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "0")))
 REALTIME_ENTRY_ALERTS = os.environ.get("REALTIME_ENTRY_ALERTS", "1").strip().lower() in ("1", "true", "yes")
 REALTIME_SKIP_ENTRY_HISTORY = os.environ.get("REALTIME_SKIP_ENTRY_HISTORY", "1").strip().lower() in ("1", "true", "yes")
+ENTRY_ENRICHMENT_ENABLED = os.environ.get("ENTRY_ENRICHMENT_ENABLED", "0").strip().lower() in ("1", "true", "yes")
 ML_AUTOTRAIN_ENABLED = os.environ.get("ML_AUTOTRAIN_ENABLED", "0").strip().lower() in ("1", "true", "yes")
 ENTRY_NOTIFICATION_PENDING = {}
 ENTRY_ENRICHMENT_QUEUE = deque()
 ENTRY_ENRICHMENT_QUEUED = set()
 ENTRY_ENRICHMENT_LOCK = threading.Lock()
+LIVE_GAME_CURSOR = 0
 
 def get_api_status() -> dict:
     return {
@@ -160,6 +169,10 @@ def _send_message_result(token: str, chat_id: str, text: str, context: str = "")
     except Exception as exc:
         print(f"[telegram] excecao ao enviar ({context}): {exc}")
         return False, str(exc), None
+
+
+def _append_premium_analysis_link(message: str, alert) -> str:
+    return message
 
 
 def _edit_message_safe(token: str, chat_id: str, message_id: int, text: str, context: str = "") -> bool:
@@ -587,6 +600,16 @@ def is_half_time_text(time_text: str) -> bool:
     text = (time_text or "").lower()
     return "ht" in text or "half time" in text or "interval" in text
 
+def is_first_half_boundary_text(time_text: str) -> bool:
+    text = (time_text or "").strip().lower()
+    if not text:
+        return False
+    if is_first_half_extra_time(text):
+        return True
+    if any(x in text for x in ["2nd", "2o", "2h", "2º", "second half"]):
+        return False
+    return bool(re.match(r"^45\s*['’]?$", text))
+
 def is_first_half_goal(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()
     if any(x in text for x in ["2nd", "2o", "2h", "2º"]): return False
@@ -605,7 +628,7 @@ def second_half_allowed(game_id: str, time_text: str, minute: int | None) -> boo
         return False
     if is_half_time_text(time_text):
         return False
-    if is_first_half_extra_time(time_text):
+    if is_first_half_boundary_text(time_text):
         return False
     # Only allow 2H alerts after HT confirmed or 50+ to avoid 45+ stoppage false positives.
     if not HALFTIME_CONFIRMED_AT.get(game_id) and minute < 50:
@@ -988,7 +1011,7 @@ def _queue_entry_notification(alert, meta: dict, rendered_message: str):
         "score": alert.initial_score,
         "ml_score": alert.ml_pred_score,
         "ai_score": alert.ai_score,
-        "rendered_message": rendered_message,
+        "rendered_message": _append_premium_analysis_link(rendered_message, alert),
     }
 
 
@@ -1160,6 +1183,14 @@ def build_message_meta(rule, stats_payload, game, history_meta=None, stats_overr
 
 def render_fast_entry_message(rule, stats_payload: dict, game: dict, stats_for_rule: dict) -> str:
     stats = stats_for_rule if isinstance(stats_for_rule, dict) else (stats_payload or {}).get("stats", {})
+    if getattr(rule, "message_template", None):
+        payload = dict(stats_payload or {})
+        payload.setdefault("url", (game or {}).get("url", ""))
+        payload.setdefault("league", (game or {}).get("league", ""))
+        payload.setdefault("home_team", (game or {}).get("home_team", ""))
+        payload.setdefault("away_team", (game or {}).get("away_team", ""))
+        meta = build_message_meta(rule, payload, game or {}, history_meta=None, stats_override=stats)
+        return render_message(rule, meta)
 
     def total(key: str):
         bucket = stats.get(key, {})
@@ -1184,6 +1215,8 @@ def render_fast_entry_message(rule, stats_payload: dict, game: dict, stats_for_r
 
 
 def _queue_entry_enrichment(alert_id: int | None):
+    if not ENTRY_ENRICHMENT_ENABLED:
+        return
     if not alert_id:
         return
     with ENTRY_ENRICHMENT_LOCK:
@@ -1210,6 +1243,12 @@ def _finish_entry_enrichment_id(alert_id: int | None):
 def _build_history_meta(session, rule, url: str):
     history_meta = {}
     history_data = fetch_match_history(session, url)
+    market_ctx = infer_green_profile(rule) if rule else {}
+    is_goal_rule = (
+        market_ctx.get("market_key") == "goals"
+    )
+    if is_goal_rule:
+        history_data = enrich_history_with_ht_goals(session, history_data, HISTORY_HT_DETAIL_LIMITS)
     h2h_items = (history_data or {}).get("h2h", [])
     home_items = (history_data or {}).get("home", [])
     away_items = (history_data or {}).get("away", [])
@@ -1273,7 +1312,7 @@ def enrich_entry_alert(session, alert_id: int):
     meta["ai_score"] = alert.ai_score
     meta["ai_verdict"] = alert.ai_verdict
     meta["ai_commentary"] = alert.ai_commentary
-    message = render_message(rule, meta)
+    message = _append_premium_analysis_link(render_message(rule, meta), alert)
     if _edit_message_safe(
         user.telegram_token,
         user.telegram_chat_id,
@@ -1310,6 +1349,27 @@ def _apply_live_row_identity(game: dict, stats_payload: dict | None) -> dict | N
         stats_payload["away_team"] = away_team
     if not stats_payload.get("league") and game.get("league"):
         stats_payload["league"] = game.get("league")
+    game_time_text = str(game.get("time_text") or "")
+    game_minute = game.get("minute")
+    if is_first_half_boundary_text(game_time_text) or is_half_time_text(game_time_text) or (
+        isinstance(game_minute, int) and game_minute <= 45 and not is_second_half(game_time_text, game_minute)
+    ):
+        stats_payload["time_text"] = game_time_text
+        if isinstance(game_minute, int):
+            stats_payload["minute"] = game_minute
+            stats = stats_payload.get("stats")
+            if isinstance(stats, dict):
+                stats["Minute"] = {"home": game_minute, "away": game_minute, "total": game_minute}
+        return stats_payload
+    game_score = game.get("score")
+    if game_score:
+        game_home, game_away = parse_score(game_score)
+        payload_home, payload_away = parse_score(stats_payload.get("score") or "")
+        if (game_home + game_away) > (payload_home + payload_away):
+            stats_payload["score"] = game_score
+    payload_minute = stats_payload.get("minute")
+    if isinstance(game_minute, int) and (not isinstance(payload_minute, int) or game_minute > payload_minute):
+        stats_payload["minute"] = game_minute
     return stats_payload
 
 
@@ -1414,7 +1474,7 @@ def _baseline_source_for_second_half(game_id: str, stats_payload):
     if not isinstance(prev_stats, dict):
         return current_stats
     # If we just crossed to 2nd half, prefer the last first-half snapshot as baseline.
-    if is_half_time_text(prev_time) or is_first_half_extra_time(prev_time):
+    if is_half_time_text(prev_time) or is_first_half_boundary_text(prev_time):
         return prev_stats
     if isinstance(prev_minute, int) and prev_minute <= 45 and not is_second_half(prev_time, prev_minute):
         return prev_stats
@@ -1436,7 +1496,7 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         return
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
-    if is_first_half_extra_time(time_text):
+    if is_first_half_boundary_text(time_text):
         return
     if minute < 45:
         HALFTIME_SEEN_AT.pop(game_id, None)
@@ -1788,7 +1848,8 @@ def start_worker(app):
     resource.setrlimit(resource.RLIMIT_AS, (soft_limit, hard_limit))
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
-    threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
+    if ENTRY_ENRICHMENT_ENABLED:
+        threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
 
 def run_worker(app):
     with app.app_context():
@@ -1832,6 +1893,8 @@ def run_alerts_worker(app):
 
 
 def run_entry_enrichment_worker(app):
+    if not ENTRY_ENRICHMENT_ENABLED:
+        return
     with app.app_context():
         session = make_session()
         while True:
@@ -2110,12 +2173,18 @@ def _prefetch_live_stats(games: list[dict]) -> dict[str, dict]:
 
 
 def process_live_games(session):
+    global LIVE_GAME_CURSOR
     games, status_code = fetch_live_games(session)
     update_api_status(status_code == 200, status_code)
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
     games = _filter_candidate_games(games, active_rules)
+    if len(games) > WORKER_MAX_CANDIDATE_GAMES:
+        start = LIVE_GAME_CURSOR % len(games)
+        rotated = games[start:] + games[:start]
+        games = rotated[:WORKER_MAX_CANDIDATE_GAMES]
+        LIVE_GAME_CURSOR = (start + WORKER_MAX_CANDIDATE_GAMES) % len(rotated)
     rule_ids = [rule.id for rule in active_rules]
     game_ids = [str(game.get("game_id")) for game in games if game.get("game_id") is not None]
     existing_pairs = set()
@@ -2291,6 +2360,11 @@ def process_live_games(session):
                                     stats_payload = forced_payload
                             if not forced_ok:
                                 print(f"[worker] regra {rule.id} manteve match inicial; revalidacao divergente game={game.get('game_id')} url={game.get('url')}")
+                                if rule.score_home is not None or rule.score_away is not None:
+                                    continue
+                    elif rule.score_home is not None or rule.score_away is not None:
+                        print(f"[worker] regra {rule.id} ignorada; sem revalidacao fresca de placar game={game.get('game_id')} url={game.get('url')}")
+                        continue
                 if not user:
                     continue
                 if rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
@@ -2375,7 +2449,10 @@ def process_live_games(session):
                     # Send entry alert immediately after rule hit to reduce latency.
                     if rule.notify_telegram:
                         if REALTIME_ENTRY_ALERTS and ENTRY_GROUP_WINDOW_SECONDS <= 0:
-                            message = render_fast_entry_message(rule, stats_payload, game, stats_for_rule)
+                            message = _append_premium_analysis_link(
+                                render_fast_entry_message(rule, stats_payload, game, stats_for_rule),
+                                alert,
+                            )
                             ok, _detail, message_id = _send_message_result(
                                 user.telegram_token,
                                 user.telegram_chat_id,
@@ -2397,7 +2474,7 @@ def process_live_games(session):
                                 except Exception as exc:
                                     print(f"[worker] falha ao coletar historico do jogo {game.get('game_id')}: {exc}")
                             meta = build_message_meta(rule, stats_payload, game, history_meta, stats_override=stats_for_rule)
-                            message = render_message(rule, meta)
+                            message = _append_premium_analysis_link(render_message(rule, meta), alert)
                             _queue_entry_notification(alert, meta, message)
 
                     # Refresh once without blocking the cycle with multiple sleeps.
@@ -2480,6 +2557,8 @@ def _close_pending_without_live_payload(alert, rule) -> bool:
                 fallback_stats = parsed
         except Exception:
             fallback_stats = {}
+    if _looks_like_stale_exact_score(rule, alert, fallback_minute, fallback_score, fallback_stats):
+        return False
 
     result_minute = fallback_minute if fallback_minute is not None else rule.outcome_red_minute
     update_alert_status(
@@ -2490,6 +2569,31 @@ def _close_pending_without_live_payload(alert, rule) -> bool:
         fallback_stats,
         "❌ RED - prazo do GREEN expirou (sem atualização ao vivo)",
     )
+    return True
+
+
+def _looks_like_stale_exact_score(rule, alert, minute, score, stats) -> bool:
+    if not rule or not alert:
+        return False
+    rule_name = (getattr(rule, "name", "") or "").lower()
+    is_exact_score = (
+        "placar correto" in rule_name
+        or "placar exato" in rule_name
+        or "correct score" in rule_name
+        or (getattr(alert, "market_key", None) == "exact_score")
+    )
+    if not is_exact_score:
+        return False
+    if not isinstance(minute, int) or minute < 85:
+        return False
+    if (score or "") != (alert.initial_score or ""):
+        return False
+    home, away = parse_score(score or "")
+    if home + away != 0:
+        return False
+    goals = (stats or {}).get("Goals") if isinstance(stats, dict) else None
+    if isinstance(goals, dict) and (goals.get("total") or 0) > 0:
+        return False
     return True
 
 def follow_alerts(session):
@@ -2647,8 +2751,12 @@ def follow_alerts(session):
         maybe_notify_penalty(alert, stats, minute, current_score, time_text=stats_payload.get("time_text"))
 
         if rule and rule.second_half_only:
+            if not second_half_allowed(alert.game_id, stats_payload.get("time_text", ""), minute):
+                continue
             baseline = get_second_half_baseline(alert.game_id)
-            if baseline: stats = apply_second_half_delta(stats_payload["stats"], baseline)
+            if not baseline:
+                continue
+            stats = apply_second_half_delta(stats_payload["stats"], baseline)
             m2h = max(0, minute - 45)
             stats["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
@@ -2790,6 +2898,9 @@ def follow_alerts(session):
                 latest_minute = final_payload.get("minute") or latest_minute
                 latest_score = final_payload.get("score") or latest_score
                 latest_stats = final_payload.get("stats", {}) or latest_stats
+            if _looks_like_stale_exact_score(rule, alert, latest_minute, latest_score, latest_stats):
+                RED_CONFIRM_PENDING[alert.id] = {"seen_at": now_sp()}
+                continue
             RED_CONFIRM_PENDING.pop(alert.id, None)
             update_alert_status(
                 alert,

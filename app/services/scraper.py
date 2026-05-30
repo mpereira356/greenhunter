@@ -10,7 +10,7 @@ import sqlite3
 import ctypes
 import subprocess
 import resource
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 import tempfile
 from urllib.parse import unquote
 
@@ -1012,6 +1012,14 @@ def _extract_score_from_text(text: str) -> str | None:
     return f"{int(match.group(1))} x {int(match.group(2))}"
 
 
+def _parse_score_pair(text: str) -> tuple[int, int]:
+    score = _extract_score_from_text(text or "")
+    if not score:
+        return 0, 0
+    home, away = score.split(" x ", 1)
+    return int(home), int(away)
+
+
 def _extract_match_score(soup, rows) -> str | None:
     if rows:
         first = rows[0].find_all("td")
@@ -1184,6 +1192,10 @@ def _event_kind_from_text(text: str) -> str | None:
         return "red_card"
     if "corner" in lower:
         return "corner"
+    if "shot on target" in lower or "on target" in lower or "chute ao alvo" in lower or "chutes ao alvo" in lower:
+        return "on_target"
+    if "shot off target" in lower or "off target" in lower or "chute fora" in lower or "chutes fora" in lower:
+        return "off_target"
     if "goal" in lower:
         return "goal"
     return None
@@ -1509,7 +1521,10 @@ def fetch_match_stats(session, url):
 
     minute_value = parse_minutes(time_text)
     raw_minute = raw_stats.get("Minute")
-    if raw_minute:
+    allow_raw_minute_override = not is_first_half_extra_time(time_text)
+    if minute_value is not None and minute_value <= 45 and not is_second_half(time_text, minute_value):
+        allow_raw_minute_override = False
+    if raw_minute and allow_raw_minute_override:
         candidates = []
         for candidate in raw_minute:
             parsed = parse_minutes(candidate)
@@ -1523,6 +1538,9 @@ def fetch_match_stats(session, url):
         stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
     else:
         stats.pop("Minute", None)
+    score_home, score_away = _parse_score_pair(score)
+    if sum(best_goals) > (score_home + score_away):
+        score = f"{best_goals[0]} x {best_goals[1]}"
     return {
         "league": league,
         "home_team": home_team,
@@ -1607,6 +1625,21 @@ def _find_history_tables(soup):
     return tables
 
 
+def _history_match_url(row) -> str | None:
+    if not row:
+        return None
+    for link in row.find_all("a", href=True):
+        href = (link.get("href") or "").strip()
+        if not href:
+            continue
+        parsed_path = urlparse(href).path
+        if "/r/" in parsed_path:
+            return urljoin(BASE_URLS[0], href)
+        if "/rh/" in parsed_path:
+            return urljoin(BASE_URLS[0], href.replace("/rh/", "/r/", 1))
+    return None
+
+
 def _parse_history_table(table):
     items = []
     if not table:
@@ -1615,13 +1648,15 @@ def _parse_history_table(table):
         home_goals, away_goals = _extract_history_score(row)
         if home_goals is None or away_goals is None:
             continue
-        items.append(
-            {
-                "home": home_goals,
-                "away": away_goals,
-                "total": home_goals + away_goals,
-            }
-        )
+        item = {
+            "home": home_goals,
+            "away": away_goals,
+            "total": home_goals + away_goals,
+        }
+        match_url = _history_match_url(row)
+        if match_url:
+            item["url"] = match_url
+        items.append(item)
     return items
 
 
@@ -1656,11 +1691,17 @@ def _extract_history_score(row):
     return candidates[-1]
 
 
-def fetch_match_history(session, match_url: str, limits=None):
+def fetch_match_history(session, match_url: str, limits=None, use_fallback: bool = True, timeout: int = 15):
     history_url = history_url_from_match(match_url)
     if not history_url:
         return {"h2h": [], "home": [], "away": []}
-    resp = get_with_fallback(session, history_url)
+    if use_fallback:
+        resp = get_with_fallback(session, history_url)
+    else:
+        try:
+            resp = session.get(history_url, timeout=timeout)
+        except Exception:
+            return {"h2h": [], "home": [], "away": []}
     if resp.status_code != 200:
         return {"h2h": [], "home": [], "away": []}
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -1674,6 +1715,91 @@ def fetch_match_history(session, match_url: str, limits=None):
     return result
 
 
+def _history_event_in_first_half(event: dict) -> bool:
+    if not isinstance(event, dict):
+        return False
+    time_text = str(event.get("time_text") or "")
+    if time_text.startswith("45+"):
+        return True
+    minute = event.get("minute")
+    return isinstance(minute, int) and minute <= 45
+
+
+def _history_event_in_second_half(event: dict) -> bool:
+    if not isinstance(event, dict):
+        return False
+    time_text = str(event.get("time_text") or "")
+    if time_text.startswith("45+"):
+        return False
+    minute = event.get("minute")
+    return isinstance(minute, int) and minute > 45
+
+
+def enrich_history_with_ht_goals(session, history_data, limits=None):
+    if not isinstance(history_data, dict):
+        return history_data
+    limits = limits or {"h2h": 8, "home": 6, "away": 6}
+    seen_urls = {}
+    for key, items in history_data.items():
+        if not isinstance(items, list):
+            continue
+        detail_limit = limits.get(key) if isinstance(limits, dict) else None
+        checked = 0
+        for item in items:
+            if not isinstance(item, dict) or not item.get("url"):
+                continue
+            if detail_limit is not None and checked >= detail_limit:
+                break
+            checked += 1
+            url = item.get("url")
+            if url in seen_urls:
+                item.update(seen_urls[url])
+                continue
+            payload = fetch_match_stats(session, url)
+            events = (payload or {}).get("events") or []
+            if not events and int(item.get("total") or 0) > 0:
+                continue
+            ht_events = [
+                event
+                for event in events
+                if isinstance(event, dict) and _history_event_in_first_half(event)
+            ]
+            sh_events = [
+                event
+                for event in events
+                if isinstance(event, dict) and _history_event_in_second_half(event)
+            ]
+            ft_events = [event for event in events if isinstance(event, dict)]
+            goals_ht = sum(1 for event in ht_events if event.get("kind") == "goal")
+            goals_2h = sum(1 for event in sh_events if event.get("kind") == "goal")
+            goals_ft = sum(1 for event in ft_events if event.get("kind") == "goal")
+            detail = {
+                "goals_ht": goals_ht,
+                "goals_2h": goals_2h,
+                "goals_ft_events": goals_ft,
+                "goal_before_ht": goals_ht > 0,
+                "goal_after_ht": goals_2h > 0,
+                "corners_ht": sum(1 for event in ht_events if event.get("kind") == "corner"),
+                "corners_2h": sum(1 for event in sh_events if event.get("kind") == "corner"),
+                "corners_ft_events": sum(1 for event in ft_events if event.get("kind") == "corner"),
+                "yellow_cards_ht": sum(1 for event in ht_events if event.get("kind") == "yellow_card"),
+                "yellow_cards_2h": sum(1 for event in sh_events if event.get("kind") == "yellow_card"),
+                "yellow_cards_ft_events": sum(1 for event in ft_events if event.get("kind") == "yellow_card"),
+                "red_cards_ht": sum(1 for event in ht_events if event.get("kind") == "red_card"),
+                "red_cards_2h": sum(1 for event in sh_events if event.get("kind") == "red_card"),
+                "red_cards_ft_events": sum(1 for event in ft_events if event.get("kind") == "red_card"),
+                "on_target_events_ht": sum(1 for event in ht_events if event.get("kind") == "on_target"),
+                "on_target_events_2h": sum(1 for event in sh_events if event.get("kind") == "on_target"),
+                "on_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "on_target"),
+                "off_target_events_ht": sum(1 for event in ht_events if event.get("kind") == "off_target"),
+                "off_target_events_2h": sum(1 for event in sh_events if event.get("kind") == "off_target"),
+                "off_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "off_target"),
+            }
+            seen_urls[url] = detail
+            item.update(detail)
+    return history_data
+
+
 def summarize_history(items):
     total = len(items)
     if total == 0:
@@ -1683,25 +1809,90 @@ def summarize_history(items):
     over25 = sum(1 for item in items if item.get("total", 0) > 2)
     btts = sum(1 for item in items if item.get("home", 0) > 0 and item.get("away", 0) > 0)
     avg_goals = round(goals_sum / total, 1)
-    return {
+    ht_items = [item for item in items if item.get("goals_ht") is not None]
+    summary = {
         "count": total,
         "avg_goals": avg_goals,
         "over15": over15,
         "over25": over25,
         "btts": btts,
     }
+    if ht_items:
+        ht_total = len(ht_items)
+        ht_goals_sum = sum(int(item.get("goals_ht") or 0) for item in ht_items)
+        ht_goal_games = sum(1 for item in ht_items if int(item.get("goals_ht") or 0) > 0)
+        ht_corners_sum = sum(int(item.get("corners_ht") or 0) for item in ht_items)
+        sh_goals_sum = sum(int(item.get("goals_2h") or 0) for item in ht_items)
+        sh_goal_games = sum(1 for item in ht_items if int(item.get("goals_2h") or 0) > 0)
+        sh_corners_sum = sum(int(item.get("corners_2h") or 0) for item in ht_items)
+        ht_yellows_sum = sum(int(item.get("yellow_cards_ht") or 0) for item in ht_items)
+        sh_yellows_sum = sum(int(item.get("yellow_cards_2h") or 0) for item in ht_items)
+        ht_reds_sum = sum(int(item.get("red_cards_ht") or 0) for item in ht_items)
+        sh_reds_sum = sum(int(item.get("red_cards_2h") or 0) for item in ht_items)
+        ht_on_target_sum = sum(int(item.get("on_target_events_ht") or 0) for item in ht_items)
+        sh_on_target_sum = sum(int(item.get("on_target_events_2h") or 0) for item in ht_items)
+        ht_off_target_sum = sum(int(item.get("off_target_events_ht") or 0) for item in ht_items)
+        sh_off_target_sum = sum(int(item.get("off_target_events_2h") or 0) for item in ht_items)
+        summary.update(
+            {
+                "ht_count": ht_total,
+                "avg_ht_goals": round(ht_goals_sum / ht_total, 2),
+                "ht_goal_games": ht_goal_games,
+                "ht_goal_pct": round((ht_goal_games / ht_total) * 100),
+                "avg_2h_goals": round(sh_goals_sum / ht_total, 2),
+                "2h_goal_games": sh_goal_games,
+                "2h_goal_pct": round((sh_goal_games / ht_total) * 100),
+                "avg_ht_corners": round(ht_corners_sum / ht_total, 2),
+                "avg_2h_corners": round(sh_corners_sum / ht_total, 2),
+                "avg_ht_yellow_cards": round(ht_yellows_sum / ht_total, 2),
+                "avg_2h_yellow_cards": round(sh_yellows_sum / ht_total, 2),
+                "avg_ht_red_cards": round(ht_reds_sum / ht_total, 2),
+                "avg_2h_red_cards": round(sh_reds_sum / ht_total, 2),
+                "avg_ht_on_target_events": round(ht_on_target_sum / ht_total, 2),
+                "avg_2h_on_target_events": round(sh_on_target_sum / ht_total, 2),
+                "avg_ht_off_target_events": round(ht_off_target_sum / ht_total, 2),
+                "avg_2h_off_target_events": round(sh_off_target_sum / ht_total, 2),
+            }
+        )
+    return summary
 
 
 def format_history_summary(label: str, summary):
     if not summary:
         return ""
-    return (
+    text = (
         f"{label} {summary['count']}j | "
         f"Media gols {summary['avg_goals']} | "
         f"O1.5 {summary['over15']}/{summary['count']} | "
         f"O2.5 {summary['over25']}/{summary['count']} | "
         f"BTTS {summary['btts']}/{summary['count']}"
     )
+    if summary.get("ht_count"):
+        text += (
+            f" | Gol 1T {summary['ht_goal_games']}/{summary['ht_count']} "
+            f"({summary['ht_goal_pct']}%) | Gol 2T {summary['2h_goal_games']}/{summary['ht_count']} "
+            f"({summary['2h_goal_pct']}%) | Media gols 1T/2T "
+            f"{summary['avg_ht_goals']}/{summary['avg_2h_goals']}"
+        )
+        if summary.get("avg_ht_corners") or summary.get("avg_2h_corners"):
+            text += f" | Esc 1T/2T {summary['avg_ht_corners']}/{summary['avg_2h_corners']}"
+        if summary.get("avg_ht_on_target_events") or summary.get("avg_2h_on_target_events"):
+            text += (
+                f" | Chutes alvo 1T/2T "
+                f"{summary['avg_ht_on_target_events']}/{summary['avg_2h_on_target_events']}"
+            )
+        if (
+            summary.get("avg_ht_yellow_cards")
+            or summary.get("avg_2h_yellow_cards")
+            or summary.get("avg_ht_red_cards")
+            or summary.get("avg_2h_red_cards")
+        ):
+            text += (
+                f" | Cartoes A/V 1T "
+                f"{summary['avg_ht_yellow_cards']}/{summary['avg_ht_red_cards']}"
+                f" 2T {summary['avg_2h_yellow_cards']}/{summary['avg_2h_red_cards']}"
+            )
+    return text
 
 def is_second_half(time_text: str, minute: int) -> bool:
     text = (time_text or "").lower()

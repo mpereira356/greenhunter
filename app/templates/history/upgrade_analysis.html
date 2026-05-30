@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Analise Premium{% endblock %}
+{% block page_title %}Analise Premium{% endblock %}
+{% block content %}
+<section class="analysis-page">
+  <div class="analysis-hero analysis-locked">
+    <div>
+      <div class="analysis-kicker">Recurso Pro</div>
+      <h1>Analise completa do jogo</h1>
+      <p>{{ alert.home_team }} vs {{ alert.away_team }}</p>
+    </div>
+  </div>
+  <div class="analysis-upgrade">
+    <h2>Esta pagina e exclusiva para usuarios pagantes.</h2>
+    <p>O plano free continua recebendo os alertas das 2 regras. No Pro, cada alerta pode abrir uma pagina com H2H, medias por tempo, escanteios, chutes a gol e leitura por mandante/visitante quando nao houver confronto direto.</p>
+    <a class="history-btn history-btn-primary" href="{{ url_for('settings.settings') }}">Ver minha conta</a>
+  </div>
+</section>
+{% endblock %}

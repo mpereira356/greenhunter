@@ -1,37 +1,50 @@
 {% extends "base.html" %}
 {% block title %}Cadastro | GreenHunter{% endblock %}
+{% block main_class %}auth-shell ghx-auth-shell{% endblock %}
 {% block content %}
-<div class="card border-0 shadow-lg">
-  <div class="card-body p-5">
-    <div class="text-center mb-5">
-      <div class="brand-icon mx-auto mb-3" style="width: 60px; height: 60px; font-size: 1.5rem;">G</div>
-      <h2 class="fw-800 mb-1">Criar Conta</h2>
-      <p class="text-muted">Comece a monitorar partidas em minutos.</p>
+<div class="ghx-auth-card">
+  <div class="ghx-auth-glow" aria-hidden="true"></div>
+  <div class="ghx-auth-header">
+    <a class="ghx-auth-brand" href="{{ url_for('main.dashboard') }}" aria-label="GreenHunter">
+      <span>GH</span>
+      <strong>GreenHunter</strong>
+    </a>
+    <div class="ghx-auth-kicker">AI Signal Engine</div>
+  </div>
+
+  <div class="ghx-auth-body">
+    <div class="text-center mb-4">
+      <div class="ghx-auth-logo mx-auto mb-3">
+        <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="GreenHunter">
+      </div>
+      <h2>Criar conta</h2>
+      <p>Comece no plano Starter gratuito e teste ate 2 regras.</p>
     </div>
-    
+
     <form method="post">
-      <div class="mb-3">
-        <label class="form-label">Usuário</label>
-        <input class="form-control form-control-lg" name="username" placeholder="Escolha um usuário" required>
+      <div class="mb-4">
+        <label class="form-label">Usuario</label>
+        <input class="form-control form-control-lg ghx-auth-input" name="username" placeholder="Escolha um usuario" required>
       </div>
-      
-      <div class="mb-3">
+
+      <div class="mb-4">
         <label class="form-label">E-mail</label>
-        <input class="form-control form-control-lg" name="email" type="email" placeholder="seu@email.com" required>
+        <input class="form-control form-control-lg ghx-auth-input" name="email" type="email" placeholder="seu@email.com" required>
       </div>
-      
+
       <div class="mb-4">
         <label class="form-label">Senha</label>
-        <input type="password" class="form-control form-control-lg" name="password" placeholder="Crie uma senha forte" required>
+        <input type="password" class="form-control form-control-lg ghx-auth-input" name="password" placeholder="Crie uma senha forte" required>
       </div>
-      
+
       <div class="d-grid gap-2 mt-5">
-        <button class="btn btn-primary btn-lg shadow-sm" type="submit">Finalizar Cadastro</button>
+        <button class="ghx-auth-submit" type="submit">Criar conta gratis</button>
       </div>
     </form>
-    
-    <div class="mt-4 text-center">
-      <p class="text-muted small">Já possui uma conta? <a href="{{ url_for('auth.login') }}" class="fw-bold">Fazer login</a></p>
+
+    <div class="ghx-auth-footer">
+      Ja possui uma conta?
+      <a href="{{ url_for('auth.login') }}">Fazer login</a>
     </div>
   </div>
 </div>

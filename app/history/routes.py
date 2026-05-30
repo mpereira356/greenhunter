@@ -8,10 +8,38 @@ from markupsafe import Markup, escape
 
 from ..extensions import db
 from ..models import MatchAlert, Rule, User
+from ..services.match_analysis import build_alert_analysis
 from ..services.telegram import send_document
 from ..services.undo import create_undo_action, snapshot_alert
+from ..utils.time import now_sp
 
 history_bp = Blueprint("history", __name__, url_prefix="/history")
+
+
+def _can_manage_alert(alert) -> bool:
+    return current_user.is_admin_user or alert.user_id == current_user.id
+
+
+@history_bp.route("/<int:alert_id>/analysis")
+@login_required
+def alert_analysis(alert_id):
+    alert = MatchAlert.query.get_or_404(alert_id)
+    if not _can_manage_alert(alert):
+        flash("Voce nao tem permissao para ver esta analise.", "danger")
+        return redirect(url_for("history.history"))
+    if not current_user.has_premium_analysis:
+        return render_template("history/upgrade_analysis.html", alert=alert)
+
+    try:
+        analysis = build_alert_analysis(
+            alert,
+            force_refresh=request.args.get("refresh") == "1",
+            include_details=request.args.get("details") == "1",
+        )
+    except Exception as exc:
+        analysis = None
+        flash(f"Nao foi possivel montar a analise agora: {exc}", "warning")
+    return render_template("history/analysis.html", alert=alert, analysis=analysis)
 
 
 @history_bp.route("/")
@@ -20,6 +48,7 @@ def history():
     rule_id = request.args.get("rule_id", type=int)
     user_id = request.args.get("user_id", type=int)
     status = request.args.get("status", "").strip()
+    league = request.args.get("league", "").strip()
     date_from = request.args.get("from", "").strip()
     date_to = request.args.get("to", "").strip()
     page = request.args.get("page", 1, type=int)
@@ -27,15 +56,23 @@ def history():
 
     is_admin = current_user.is_admin_user
     query = MatchAlert.query
+    leagues_query = db.session.query(MatchAlert.league).filter(
+        MatchAlert.league.isnot(None),
+        MatchAlert.league != "",
+    )
     if not is_admin:
         query = query.filter_by(user_id=current_user.id)
+        leagues_query = leagues_query.filter(MatchAlert.user_id == current_user.id)
 
     if rule_id:
         query = query.filter(MatchAlert.rule_id == rule_id)
     if is_admin and user_id:
         query = query.filter(MatchAlert.user_id == user_id)
+        leagues_query = leagues_query.filter(MatchAlert.user_id == user_id)
     if status:
         query = query.filter(MatchAlert.status == status)
+    if league:
+        query = query.filter(MatchAlert.league == league)
     if date_from:
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d")
@@ -63,6 +100,11 @@ def history():
     else:
         rules = Rule.query.filter_by(user_id=current_user.id).order_by(Rule.name).all()
         users = []
+    leagues = [
+        row[0]
+        for row in leagues_query.distinct().order_by(MatchAlert.league.asc()).all()
+        if row[0]
+    ]
     query_args = request.args.to_dict()
     query_args.pop("page", None)
     return render_template(
@@ -71,6 +113,7 @@ def history():
         is_admin=is_admin,
         rules=rules,
         users=users,
+        leagues=leagues,
         query_args=query_args,
         total_count=total_count,
         green_count=green_count,
@@ -102,6 +145,45 @@ def delete_alert(alert_id):
         "success",
     )
     return redirect(target_url)
+
+
+@history_bp.route("/<int:alert_id>/bet", methods=["POST"])
+@login_required
+def save_bet(alert_id):
+    alert = MatchAlert.query.get_or_404(alert_id)
+    if not _can_manage_alert(alert):
+        flash("Voce nao tem permissao para editar esta aposta.", "danger")
+        return redirect(url_for("history.history"))
+
+    amount_raw = (request.form.get("stake_amount") or "").strip().replace(",", ".")
+    odd_raw = (request.form.get("stake_odd") or "").strip().replace(",", ".")
+    note = (request.form.get("bet_note") or "").strip()
+
+    def _money(raw):
+        if not raw:
+            return None
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return value if value >= 0 else None
+
+    stake_amount = _money(amount_raw)
+    stake_odd = _money(odd_raw)
+    if stake_amount is None and amount_raw:
+        flash("Valor apostado invalido.", "warning")
+        return redirect(url_for("history.history", **request.args.to_dict()))
+    if stake_odd is None and odd_raw:
+        flash("Odd invalida.", "warning")
+        return redirect(url_for("history.history", **request.args.to_dict()))
+
+    alert.stake_amount = stake_amount
+    alert.stake_odd = stake_odd
+    alert.bet_note = note or None
+    alert.bet_recorded_at = now_sp() if stake_amount is not None or stake_odd is not None or note else None
+    db.session.commit()
+    flash("Aposta salva no historico.", "success")
+    return redirect(url_for("history.history", **request.args.to_dict()))
 
 
 @history_bp.route("/delete-selected", methods=["POST"])

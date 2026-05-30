@@ -18,7 +18,35 @@
 <div class="stat-grid mb-3">
   <div class="stat-card">
     <div class="stat-label">Regras</div>
-    <div class="stat-value">{{ rules|length }}</div>
+    <div class="stat-value">{{ rules|length }} / {{ user.effective_rule_limit }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Plano</div>
+    <div class="stat-value">{{ user.plan_label }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Plano pago</div>
+    <div class="stat-value">
+      {% if user.paid_active %}
+        {{ user.paid_days_left }}d restantes
+      {% elif user.paid_until %}
+        Expirado
+      {% else %}
+        -
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Teste pago</div>
+    <div class="stat-value">
+      {% if user.trial_active %}
+        {{ user.trial_days_left }}d restantes
+      {% elif user.trial_until %}
+        Expirado
+      {% else %}
+        -
+      {% endif %}
+    </div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Alertas recentes</div>
@@ -98,6 +126,7 @@
                 <th>Jogo</th>
                 <th>Status</th>
                 <th>Data</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -114,10 +143,13 @@
                   {% endif %}
                 </td>
                 <td>{{ alert.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('history.alert_analysis', alert_id=alert.id) }}" data-analysis-loading>Análise</a>
+                </td>
               </tr>
               {% endfor %}
               {% if recent_alerts|length == 0 %}
-              <tr><td colspan="3" class="text-muted">Sem alertas recentes.</td></tr>
+              <tr><td colspan="4" class="text-muted">Sem alertas recentes.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -126,4 +158,27 @@
     </div>
   </div>
 </div>
+<div class="analysis-loading-overlay" id="analysis-loading-overlay" aria-hidden="true">
+  <div class="analysis-loading-box" role="status" aria-live="polite">
+    <span class="analysis-loading-spinner" aria-hidden="true"></span>
+    <strong>Gerando análise</strong>
+    <p>Buscando histórico, eventos e médias do jogo.</p>
+  </div>
+</div>
+<script>
+  (function () {
+    const overlay = document.getElementById('analysis-loading-overlay');
+    if (!overlay) return;
+    document.querySelectorAll('[data-analysis-loading]').forEach((link) => {
+      link.addEventListener('click', function () {
+        overlay.classList.add('is-visible');
+        overlay.setAttribute('aria-hidden', 'false');
+      });
+    });
+    window.addEventListener('pageshow', function () {
+      overlay.classList.remove('is-visible');
+      overlay.setAttribute('aria-hidden', 'true');
+    });
+  })();
+</script>
 {% endblock %}

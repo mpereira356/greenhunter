@@ -16,6 +16,11 @@ class User(UserMixin, db.Model):
     telegram_chat_id = db.Column(db.String(64))
     telegram_verified = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    subscription_plan = db.Column(db.String(20), default="starter", nullable=False)
+    rule_limit = db.Column(db.Integer, default=2, nullable=False)
+    paid_until = db.Column(db.DateTime)
+    trial_until = db.Column(db.DateTime)
+    favorite_live_leagues_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
     rules = db.relationship("Rule", backref="user", cascade="all, delete-orphan")
@@ -32,6 +37,68 @@ class User(UserMixin, db.Model):
         if self.is_admin:
             return True
         return (self.username or "").lower() == "admin"
+
+    @property
+    def has_premium_analysis(self) -> bool:
+        if self.is_admin_user:
+            return True
+        return self.has_paid_access
+
+    @property
+    def trial_active(self) -> bool:
+        return bool(self.trial_until and self.trial_until > now_sp())
+
+    @property
+    def paid_active(self) -> bool:
+        plan = (self.subscription_plan or "starter").lower()
+        return bool(plan in ("pro", "custom") and self.paid_until and self.paid_until > now_sp())
+
+    @property
+    def paid_days_left(self) -> int:
+        if not self.paid_active:
+            return 0
+        delta = self.paid_until - now_sp()
+        return max(1, int((delta.total_seconds() + 86399) // 86400))
+
+    @property
+    def trial_days_left(self) -> int:
+        if not self.trial_active:
+            return 0
+        delta = self.trial_until - now_sp()
+        return max(1, int((delta.total_seconds() + 86399) // 86400))
+
+    @property
+    def has_paid_access(self) -> bool:
+        if self.paid_active:
+            return True
+        return self.trial_active
+
+    @property
+    def plan_label(self) -> str:
+        plan = (self.subscription_plan or "starter").lower()
+        if self.paid_active:
+            labels = {"pro": "Pro", "custom": "Custom"}
+            return f"{labels.get(plan, 'Pago')} ({self.paid_days_left}d)"
+        if self.trial_active and (self.subscription_plan or "starter").lower() == "starter":
+            return f"Trial Pro ({self.trial_days_left}d)"
+        labels = {
+            "starter": "Starter",
+            "pro": "Pro",
+            "custom": "Custom",
+        }
+        return labels.get((self.subscription_plan or "starter").lower(), "Starter")
+
+    @property
+    def effective_rule_limit(self) -> int:
+        if not self.is_admin_user and not self.has_paid_access:
+            return 2
+        if self.trial_active and (self.subscription_plan or "starter").lower() == "starter":
+            return 10
+        try:
+            limit = int(self.rule_limit or 0)
+        except (TypeError, ValueError):
+            limit = 0
+        return max(0, limit)
 
 
 class Rule(db.Model):
@@ -143,6 +210,10 @@ class MatchAlert(db.Model):
     ft_completed = db.Column(db.Boolean, default=False, nullable=False)
     telegram_entry_message_id = db.Column(db.Integer)
     telegram_entry_enriched = db.Column(db.Boolean, default=False, nullable=False)
+    stake_amount = db.Column(db.Float)
+    stake_odd = db.Column(db.Float)
+    bet_note = db.Column(db.Text)
+    bet_recorded_at = db.Column(db.DateTime)
 
     __table_args__ = (db.UniqueConstraint("rule_id", "game_id", name="uix_rule_game"),)
 

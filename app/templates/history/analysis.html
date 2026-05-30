@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Analise Premium{% endblock %}
+{% block page_title %}Analise Premium{% endblock %}
+{% block content %}
+<section class="analysis-page">
+  <div class="analysis-hero">
+    <div>
+      <div class="analysis-kicker">{{ alert.league or "Jogo monitorado" }}</div>
+      <h1>{{ alert.home_team }} <span>vs</span> {{ alert.away_team }}</h1>
+      <p>{{ alert.rule.name }} · alerta aos {{ alert.alert_minute }}' · {{ alert.initial_score or "-" }}</p>
+    </div>
+    <div class="analysis-status">
+      <span class="history-badge history-badge-{{ 'green' if alert.status == 'green' else ('red' if alert.status == 'red' else 'pending') }}">{{ alert.status|capitalize }}</span>
+      <a href="{{ alert.url }}" target="_blank" rel="noopener noreferrer">Abrir BetsAPI</a>
+    </div>
+  </div>
+
+  {% if not analysis %}
+    <div class="analysis-empty">A analise nao ficou disponivel neste momento.</div>
+  {% else %}
+  <div class="analysis-live-band">
+    <div>
+      <span>Placar atual</span>
+      <strong>{{ analysis.current.score or alert.last_score or "-" }}</strong>
+    </div>
+    <div>
+      <span>Minuto</span>
+      <strong>{{ analysis.current.minute if analysis.current.minute is not none else "-" }}{% if analysis.current.minute is not none %}'{% endif %}</strong>
+    </div>
+    <div>
+      <span>Chutes alvo</span>
+      <strong>{{ analysis.current.on_target if analysis.current.on_target is not none else "-" }}</strong>
+    </div>
+    <div>
+      <span>Escanteios</span>
+      <strong>{{ analysis.current.corners if analysis.current.corners is not none else "-" }}</strong>
+    </div>
+    <div>
+      <span>Ataques perigosos</span>
+      <strong>{{ analysis.current.dangerous_attacks if analysis.current.dangerous_attacks is not none else "-" }}</strong>
+    </div>
+  </div>
+
+  <div class="analysis-summary-grid">
+    {% for group in analysis.groups %}
+    <article class="analysis-group-card">
+      <div class="analysis-card-head">
+        <h2>{{ group.key }}</h2>
+        <span>{{ group.count }} jogos</span>
+      </div>
+      <div class="analysis-metrics">
+        <div><span>Media gols FT</span><strong>{{ group.avg_goals if group.avg_goals is not none else "-" }}</strong></div>
+        <div><span>O1.5</span><strong>{{ group.over15 }}/{{ group.count }}</strong></div>
+        <div><span>O2.5</span><strong>{{ group.over25 }}/{{ group.count }}</strong></div>
+        <div><span>BTTS</span><strong>{{ group.btts }}/{{ group.count }}</strong></div>
+      </div>
+      <div class="analysis-phase-row">
+        <div>
+          <span>Gol 1T</span>
+          <strong>{{ group.phase.goal_1h_games }}/{{ group.phase.samples }}</strong>
+          <small>{{ group.phase.goal_1h_pct }}%</small>
+        </div>
+        <div>
+          <span>Gol 2T</span>
+          <strong>{{ group.phase.goal_2h_games }}/{{ group.phase.samples }}</strong>
+          <small>{{ group.phase.goal_2h_pct }}%</small>
+        </div>
+      </div>
+      <div class="analysis-mini-table">
+        <div><span>Gols 1T/2T</span><strong>{{ group.phase.avg_goals_1h if group.phase.avg_goals_1h is not none else "-" }} / {{ group.phase.avg_goals_2h if group.phase.avg_goals_2h is not none else "-" }}</strong></div>
+        <div><span>Escanteios 1T/2T</span><strong>{{ group.phase.avg_corners_1h if group.phase.avg_corners_1h is not none else "-" }} / {{ group.phase.avg_corners_2h if group.phase.avg_corners_2h is not none else "-" }}</strong></div>
+        <div><span>Chutes alvo 1T/2T</span><strong>{{ group.phase.avg_on_target_1h if group.phase.avg_on_target_1h is not none else "-" }} / {{ group.phase.avg_on_target_2h if group.phase.avg_on_target_2h is not none else "-" }}</strong></div>
+        <div><span>Cartoes 1T/2T</span><strong>{{ group.phase.avg_cards_1h if group.phase.avg_cards_1h is not none else "-" }} / {{ group.phase.avg_cards_2h if group.phase.avg_cards_2h is not none else "-" }}</strong></div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  <div class="analysis-detail-layout">
+    <section class="analysis-panel">
+      <div class="analysis-card-head">
+        <h2>Leitura Rapida</h2>
+        <span>{{ analysis.best_signal.key }}</span>
+      </div>
+      <p>
+        Melhor base disponivel: {{ analysis.best_signal.key }} com {{ analysis.best_signal.phase.samples }}
+        jogos detalhados por eventos. Gol 1T em {{ analysis.best_signal.phase.goal_1h_pct }}% e
+        gol 2T em {{ analysis.best_signal.phase.goal_2h_pct }}%.
+      </p>
+      <p>
+        Quando nao ha H2H suficiente, a leitura de mandante e visitante ajuda a manter contexto sem forcar
+        conclusao em confronto direto pequeno.
+      </p>
+    </section>
+
+    <section class="analysis-panel">
+      <div class="analysis-card-head">
+        <h2>Ultimos Jogos</h2>
+        <span>com eventos quando disponiveis</span>
+      </div>
+      <div class="analysis-match-list">
+        {% for group in analysis.groups %}
+          {% for item in group["items"][:4] %}
+          <div class="analysis-match-row">
+            <span>{{ group.key }}</span>
+            <strong>{{ item.home }} x {{ item.away }}</strong>
+            <small>1T {{ item.goals_ht if item.goals_ht is defined else "-" }} · 2T {{ item.goals_2h if item.goals_2h is defined else "-" }} · Esc {{ item.corners_ht if item.corners_ht is defined else "-" }}/{{ item.corners_2h if item.corners_2h is defined else "-" }}</small>
+          </div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

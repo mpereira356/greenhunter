@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from glob import glob
 import json
 import os
 import sqlite3
@@ -19,6 +20,45 @@ from ..utils.time import now_sp
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 ALERTS_PER_HOUR_THRESHOLD = 20
+PLAN_RULE_LIMITS = {
+    "starter": 2,
+    "pro": 10,
+    "custom": 50,
+}
+
+
+def _format_age(value: datetime | None, now: datetime) -> str:
+    if not value:
+        return "-"
+    delta = now - value
+    total_seconds = max(0, int(delta.total_seconds()))
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return f"{minutes}min"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h"
+    return f"{hours // 24}d"
+
+
+def _database_info() -> dict:
+    try:
+        db_path = _sqlite_db_path()
+    except RuntimeError:
+        return {"available": False, "size_mb": "-", "backup_count": 0, "path": "-"}
+
+    size_mb = "-"
+    if os.path.exists(db_path):
+        size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+    backup_count = len(glob(f"{db_path}.backup_*"))
+    return {
+        "available": os.path.exists(db_path),
+        "size_mb": size_mb,
+        "backup_count": backup_count,
+        "path": db_path,
+    }
 
 
 def _sqlite_db_path() -> str:
@@ -234,6 +274,47 @@ def dashboard():
         .filter(MatchAlert.created_at >= start_day, MatchAlert.created_at < end_day)
         .count()
     )
+    pending_alerts = MatchAlert.query.filter_by(status="pending").count()
+    settled_today = greens_today + reds_today
+    win_rate_today = round((greens_today / settled_today) * 100, 1) if settled_today else 0
+
+    latest_live_at = db.session.query(func.max(LiveGameState.updated_at)).scalar()
+    latest_alert_at = db.session.query(func.max(MatchAlert.created_at)).scalar()
+    fresh_live_since = now - timedelta(minutes=5)
+    live_games_fresh = LiveGameState.query.filter(LiveGameState.updated_at >= fresh_live_since).count()
+    live_games_total = LiveGameState.query.count()
+    stale_live_games = max(0, live_games_total - live_games_fresh)
+    exact_score_rules = (
+        Rule.query.filter(Rule.is_active == True)
+        .filter((Rule.score_home.isnot(None)) | (Rule.score_away.isnot(None)))
+        .count()
+    )
+    system_health = {
+        "api_status": get_api_status(),
+        "latest_live_at": latest_live_at,
+        "latest_live_age": _format_age(latest_live_at, now),
+        "latest_alert_at": latest_alert_at,
+        "latest_alert_age": _format_age(latest_alert_at, now),
+        "live_games_fresh": live_games_fresh,
+        "live_games_total": live_games_total,
+        "stale_live_games": stale_live_games,
+        "pending_alerts": pending_alerts,
+        "exact_score_rules": exact_score_rules,
+        "win_rate_today": win_rate_today,
+    }
+
+    plan_stats = {
+        "starter": 0,
+        "pro": 0,
+        "custom": 0,
+    }
+    for plan, total in (
+        db.session.query(User.subscription_plan, func.count(User.id))
+        .group_by(User.subscription_plan)
+        .all()
+    ):
+        plan_key = (plan or "starter").lower()
+        plan_stats[plan_key] = plan_stats.get(plan_key, 0) + total
 
     rule_counts = {
         row.user_id: {"rules": row.rules, "active_rules": row.active_rules}
@@ -322,6 +403,11 @@ def dashboard():
         risk_users.append({"user": user, "alerts": row.alerts})
 
     tracked_games = _build_tracked_games(now)
+    recent_alerts = (
+        MatchAlert.query.order_by(MatchAlert.created_at.desc())
+        .limit(10)
+        .all()
+    )
 
     return render_template(
         "admin/dashboard.html",
@@ -331,14 +417,20 @@ def dashboard():
         alerts_today=alerts_today,
         greens_today=greens_today,
         reds_today=reds_today,
+        pending_alerts=pending_alerts,
+        win_rate_today=win_rate_today,
         users=users,
         top_rules=top_rules,
         risk_users=risk_users,
         tracked_games=tracked_games,
+        recent_alerts=recent_alerts,
+        system_health=system_health,
+        plan_stats=plan_stats,
+        database_info=_database_info(),
         alerts_per_hour_threshold=ALERTS_PER_HOUR_THRESHOLD,
         login_attempts=LoginAttempt.query.order_by(LoginAttempt.created_at.desc()).limit(20).all(),
         broadcasts=AdminBroadcast.query.order_by(AdminBroadcast.created_at.desc()).limit(5).all(),
-        api_status=get_api_status(),
+        api_status=system_health["api_status"],
     )
 
 
@@ -515,10 +607,22 @@ def edit_user(user_id):
         email = request.form.get("email", "").strip()
         is_admin = bool(request.form.get("is_admin"))
         new_password = request.form.get("new_password", "").strip()
+        subscription_plan = (request.form.get("subscription_plan") or "starter").strip().lower()
+        rule_limit_raw = (request.form.get("rule_limit") or "").strip()
+        paid_days_raw = (request.form.get("paid_days") or "").strip()
+        trial_days_raw = (request.form.get("trial_days") or "").strip()
+        clear_paid = bool(request.form.get("clear_paid"))
+        clear_trial = bool(request.form.get("clear_trial"))
 
         if not username_normalized:
             flash("Usuario e obrigatorio.", "warning")
             return render_template("admin/user_edit.html", user=user)
+        if subscription_plan not in PLAN_RULE_LIMITS:
+            subscription_plan = "starter"
+        if rule_limit_raw.isdigit():
+            rule_limit = max(0, int(rule_limit_raw))
+        else:
+            rule_limit = PLAN_RULE_LIMITS[subscription_plan]
         existing = User.query.filter(
             func.lower(User.username) == username_normalized, User.id != user.id
         ).first()
@@ -534,6 +638,26 @@ def edit_user(user_id):
         user.username = username_normalized
         user.email = email or None
         user.is_admin = is_admin
+        user.subscription_plan = subscription_plan
+        user.rule_limit = rule_limit
+        if clear_paid:
+            user.paid_until = None
+        elif paid_days_raw:
+            try:
+                paid_days = int(paid_days_raw)
+            except ValueError:
+                paid_days = 0
+            if paid_days > 0:
+                user.paid_until = now_sp() + timedelta(days=paid_days)
+        if clear_trial:
+            user.trial_until = None
+        elif trial_days_raw:
+            try:
+                trial_days = int(trial_days_raw)
+            except ValueError:
+                trial_days = 0
+            if trial_days > 0:
+                user.trial_until = now_sp() + timedelta(days=trial_days)
         if new_password:
             user.set_password(new_password)
         db.session.commit()

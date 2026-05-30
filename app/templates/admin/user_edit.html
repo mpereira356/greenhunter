@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Editar usuario</div>
-    <div class="page-subtitle">Atualize dados e permissao.</div>
+    <div class="page-subtitle">Atualize dados, permissao e plano.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-outline-secondary" href="{{ url_for('admin.user_detail', user_id=user.id) }}">Voltar</a>
@@ -26,6 +26,65 @@
         <input class="form-check-input" type="checkbox" name="is_admin" id="is_admin" {% if user.is_admin_user %}checked{% endif %}>
         <label class="form-check-label" for="is_admin">Administrador</label>
       </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Plano</label>
+          <select class="form-select" name="subscription_plan" id="subscription_plan">
+            <option value="starter" {% if (user.subscription_plan or 'starter') == 'starter' %}selected{% endif %}>Starter - Free</option>
+            <option value="pro" {% if user.subscription_plan == 'pro' %}selected{% endif %}>Pro - R$ 25</option>
+            <option value="custom" {% if user.subscription_plan == 'custom' %}selected{% endif %}>Custom</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Limite de regras</label>
+          <input class="form-control" type="number" min="0" name="rule_limit" id="rule_limit" value="{{ user.effective_rule_limit }}">
+          <div class="form-text">Starter: 2 regras. Pro: 10 regras. Custom: ajuste manual.</div>
+        </div>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Plano pago por dias</label>
+          <input class="form-control" type="number" min="0" name="paid_days" placeholder="Ex: 30">
+          <div class="form-text">
+            Use junto com Plano Pro/Custom. Atual:
+            {% if user.paid_active %}
+              ate {{ user.paid_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.paid_days_left }} dia(s))
+            {% elif user.paid_until %}
+              expirado em {{ user.paid_until.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              sem plano pago ativo
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="clear_paid" id="clear_paid">
+            <label class="form-check-label" for="clear_paid">Remover plano pago atual</label>
+          </div>
+        </div>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Teste pago por dias</label>
+          <input class="form-control" type="number" min="0" name="trial_days" placeholder="Ex: 7">
+          <div class="form-text">
+            Ativa acesso Pro temporario sem mudar o plano. Atual:
+            {% if user.trial_active %}
+              ate {{ user.trial_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.trial_days_left }} dia(s))
+            {% elif user.trial_until %}
+              expirado em {{ user.trial_until.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              sem teste ativo
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="clear_trial" id="clear_trial">
+            <label class="form-check-label" for="clear_trial">Remover teste atual</label>
+          </div>
+        </div>
+      </div>
       <div class="mb-3">
         <label class="form-label">Nova senha (opcional)</label>
         <input class="form-control" type="password" name="new_password" placeholder="Deixe vazio para manter">
@@ -34,4 +93,15 @@
     </form>
   </div>
 </div>
+<script>
+  const planSelect = document.getElementById("subscription_plan");
+  const ruleLimitInput = document.getElementById("rule_limit");
+  const planLimits = { starter: 2, pro: 10, custom: 50 };
+
+  if (planSelect && ruleLimitInput) {
+    planSelect.addEventListener("change", () => {
+      ruleLimitInput.value = planLimits[planSelect.value] || 2;
+    });
+  }
+</script>
 {% endblock %}

@@ -16,6 +16,55 @@
   </form>
 </div>
 
+<div class="admin-monitor mb-3">
+  <div class="admin-monitor-head">
+    <div>
+      <h5 class="mb-1">Monitor do Sistema</h5>
+      <div class="text-muted small">Saude do worker, dados ao vivo, banco e operacao.</div>
+    </div>
+    {% if api_status.ok %}
+      <span class="badge-status badge-on">API OK {{ api_status.code or '' }}</span>
+    {% elif api_status.ok is sameas false %}
+      <span class="badge-status badge-off">API OFF {{ api_status.code or '' }}</span>
+    {% else %}
+      <span class="badge-status badge-muted">Aguardando leitura</span>
+    {% endif %}
+  </div>
+
+  <div class="admin-health-grid">
+    <article class="admin-health-card">
+      <span>Ultimo ciclo</span>
+      <strong>{{ api_status.last_cycle or '-' }}</strong>
+      <small>Worker</small>
+    </article>
+    <article class="admin-health-card">
+      <span>Live atualizado</span>
+      <strong>{{ system_health.latest_live_age }}</strong>
+      <small>{{ system_health.live_games_fresh }} jogos frescos / {{ system_health.live_games_total }} total</small>
+    </article>
+    <article class="admin-health-card">
+      <span>Ultimo alerta</span>
+      <strong>{{ system_health.latest_alert_age }}</strong>
+      <small>{{ pending_alerts }} pendentes</small>
+    </article>
+    <article class="admin-health-card">
+      <span>Win rate hoje</span>
+      <strong>{{ win_rate_today }}%</strong>
+      <small>{{ greens_today }} green / {{ reds_today }} red</small>
+    </article>
+    <article class="admin-health-card">
+      <span>Regras placar exato</span>
+      <strong>{{ system_health.exact_score_rules }}</strong>
+      <small>Revalidacao ativa</small>
+    </article>
+    <article class="admin-health-card">
+      <span>Banco</span>
+      <strong>{{ database_info.size_mb }} MB</strong>
+      <small>{{ database_info.backup_count }} backups locais</small>
+    </article>
+  </div>
+</div>
+
 <div class="stat-grid mb-3">
   <div class="stat-card">
     <div class="stat-label">Usuarios</div>
@@ -43,6 +92,70 @@
   </div>
 </div>
 
+<div class="row g-3 mb-3">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="mb-3">Planos</h5>
+        <div class="admin-plan-list">
+          <div><span>Starter</span><strong>{{ plan_stats.starter }}</strong></div>
+          <div><span>Pro</span><strong>{{ plan_stats.pro }}</strong></div>
+          <div><span>Custom</span><strong>{{ plan_stats.custom }}</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Alertas recentes</h5>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('history.history') }}">Ver historico</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Regra</th>
+                <th>Jogo</th>
+                <th>Status</th>
+                <th>Placar</th>
+                <th>Data</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in recent_alerts %}
+              <tr>
+                <td>{{ alert.rule.name }}</td>
+                <td>{{ alert.home_team }} x {{ alert.away_team }}</td>
+                <td>
+                  {% if alert.status == "green" %}
+                    <span class="badge-status badge-on">Green</span>
+                  {% elif alert.status == "red" %}
+                    <span class="badge-status badge-off">Red</span>
+                  {% else %}
+                    <span class="badge-status badge-muted">Pendente</span>
+                  {% endif %}
+                </td>
+                <td>{{ alert.last_score or alert.initial_score or '-' }}</td>
+                <td>{{ alert.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('history.alert_analysis', alert_id=alert.id) }}" data-analysis-loading>Análise</a>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if recent_alerts|length == 0 %}
+              <tr><td colspan="6" class="text-muted">Sem alertas recentes.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-7">
     <div class="card">
@@ -56,6 +169,7 @@
             <thead>
               <tr>
                 <th>Usuario</th>
+                <th>Plano</th>
                 <th>Regras</th>
                 <th>Ativas</th>
                 <th>Alertas</th>
@@ -67,7 +181,8 @@
               {% for row in users %}
               <tr>
                 <td>{{ row.user.username }}</td>
-                <td>{{ row.rules }}</td>
+                <td>{{ row.user.plan_label }}</td>
+                <td>{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
                 <td>{{ row.active_rules }}</td>
                 <td>{{ row.alerts }}</td>
                 <td>{{ row.last_alert.strftime('%d/%m %H:%M') if row.last_alert else '-' }}</td>
@@ -77,7 +192,7 @@
               </tr>
               {% endfor %}
               {% if users|length == 0 %}
-              <tr><td colspan="6" class="text-muted">Sem usuarios ainda.</td></tr>
+              <tr><td colspan="7" class="text-muted">Sem usuarios ainda.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -225,6 +340,30 @@
     </div>
   </div>
 </div>
+
+<div class="analysis-loading-overlay" id="analysis-loading-overlay" aria-hidden="true">
+  <div class="analysis-loading-box" role="status" aria-live="polite">
+    <span class="analysis-loading-spinner" aria-hidden="true"></span>
+    <strong>Gerando análise</strong>
+    <p>Buscando histórico, eventos e médias do jogo.</p>
+  </div>
+</div>
+<script>
+  (function () {
+    const overlay = document.getElementById('analysis-loading-overlay');
+    if (!overlay) return;
+    document.querySelectorAll('[data-analysis-loading]').forEach((link) => {
+      link.addEventListener('click', function () {
+        overlay.classList.add('is-visible');
+        overlay.setAttribute('aria-hidden', 'false');
+      });
+    });
+    window.addEventListener('pageshow', function () {
+      overlay.classList.remove('is-visible');
+      overlay.setAttribute('aria-hidden', 'true');
+    });
+  })();
+</script>
 {% endblock %}
 
 {% block scripts %}

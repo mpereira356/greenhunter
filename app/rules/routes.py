@@ -31,6 +31,25 @@ AI_HINT_CACHE = {}
 IA_SHADOW_CONTROL_RULE_NAME = os.environ.get("IA_SHADOW_CONTROL_RULE_NAME", "REGRA IA SOMBRA (Sistema)")
 
 
+def _visible_rule_count(user_id: int) -> int:
+    return (
+        Rule.query.filter(Rule.user_id == user_id, Rule.name != IA_SHADOW_CONTROL_RULE_NAME)
+        .count()
+    )
+
+
+def _rule_limit_reached(user) -> bool:
+    if getattr(user, "is_admin_user", False):
+        return False
+    return _visible_rule_count(user.id) >= user.effective_rule_limit
+
+
+def _rule_slots_remaining(user) -> int:
+    if getattr(user, "is_admin_user", False):
+        return 10**9
+    return max(0, user.effective_rule_limit - _visible_rule_count(user.id))
+
+
 def _ensure_ia_shadow_control_rule(user_id: int):
     existing = (
         Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
@@ -1210,15 +1229,15 @@ def list_rules():
                 if team:
                     team_counts[rule_id][status][team] = team_counts[rule_id][status].get(team, 0) + 1
 
-        def _top5(d):
+        def _rank_items(d):
             items = sorted(d.items(), key=lambda item: (-item[1], item[0]))
-            return [{"name": name, "count": count} for name, count in items[:5]]
+            return [{"name": name, "count": count} for name, count in items]
 
         for rid in rule_ids:
-            rule_rankings[rid]["leagues"]["green"] = _top5(league_counts[rid]["green"])
-            rule_rankings[rid]["leagues"]["red"] = _top5(league_counts[rid]["red"])
-            rule_rankings[rid]["teams"]["green"] = _top5(team_counts[rid]["green"])
-            rule_rankings[rid]["teams"]["red"] = _top5(team_counts[rid]["red"])
+            rule_rankings[rid]["leagues"]["green"] = _rank_items(league_counts[rid]["green"])
+            rule_rankings[rid]["leagues"]["red"] = _rank_items(league_counts[rid]["red"])
+            rule_rankings[rid]["teams"]["green"] = _rank_items(team_counts[rid]["green"])
+            rule_rankings[rid]["teams"]["red"] = _rank_items(team_counts[rid]["red"])
     rules = sorted(
         rules,
         key=lambda rule: (
@@ -1280,6 +1299,15 @@ def import_rules():
         flash("Formato invalido: campo 'rules' nao encontrado.", "danger")
         return redirect(url_for("rules.list_rules"))
 
+    slots_remaining = _rule_slots_remaining(current_user)
+    if slots_remaining <= 0:
+        flash(
+            f"Limite do plano {current_user.plan_label} atingido: "
+            f"{current_user.effective_rule_limit} regra(s).",
+            "warning",
+        )
+        return redirect(url_for("rules.list_rules"))
+
     imported = 0
     skipped = 0
     duplicated = 0
@@ -1293,6 +1321,9 @@ def import_rules():
     }
 
     for item in rule_items:
+        if imported >= slots_remaining:
+            skipped += 1
+            continue
         if not isinstance(item, dict):
             skipped += 1
             continue
@@ -1393,6 +1424,14 @@ def import_rules():
 @rules_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def create_rule():
+    if _rule_limit_reached(current_user):
+        flash(
+            f"Limite do plano {current_user.plan_label} atingido: "
+            f"{current_user.effective_rule_limit} regra(s).",
+            "warning",
+        )
+        return redirect(url_for("rules.list_rules"))
+
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         time_limit_raw = request.form.get("time_limit_min", "").strip()

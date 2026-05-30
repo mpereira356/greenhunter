@@ -74,6 +74,16 @@
       </div>
 
       <div class="history-filter-group">
+        <label class="history-filter-label" for="league">Liga/Campeonato</label>
+        <select class="history-filter-control" id="league" name="league">
+          <option value="">Todos</option>
+          {% for league in leagues %}
+            <option value="{{ league }}" {% if request.args.get('league') == league %}selected{% endif %}>{{ league }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="history-filter-group">
         <label class="history-filter-label" for="from">De</label>
         <input class="history-filter-control" id="from" type="date" name="from" value="{{ request.args.get('from','') }}">
       </div>
@@ -129,10 +139,9 @@
             <th>Min alerta</th>
             <th>HT</th>
             <th>FT</th>
+            <th>Aposta</th>
             <th>Data</th>
-            {% if is_admin %}
-            <th class="text-end">Acoes</th>
-            {% endif %}
+            <th class="text-end history-actions-col">Acoes</th>
           </tr>
         </thead>
         <tbody>
@@ -173,39 +182,118 @@
             </td>
 
             <td><span class="history-mono">{{ alert.alert_minute }}'</span></td>
+            {% set display_score = alert.ft_score if alert.ft_completed and alert.ft_score else alert.last_score or alert.ft_score or '-' %}
             <td><span class="history-mono">{{ alert.ht_score or '-' }}</span></td>
-            <td><span class="history-mono">{{ alert.ft_score or '-' }}</span></td>
+            <td><span class="history-mono">{{ display_score }}</span></td>
+            <td>
+              {% if alert.stake_amount is not none %}
+                <span class="history-mono">R$ {{ "%.2f"|format(alert.stake_amount) }}</span>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
             <td><span class="history-date">{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</span></td>
 
-            {% if is_admin %}
-            <td class="text-end">
-              {% if alert.url %}
-              <a
-                class="history-btn history-btn-inline-view me-1"
-                href="{{ alert.url }}"
-                target="_blank"
-                rel="noopener noreferrer"
-              >Ver</a>
-              {% endif %}
-              <form
-                method="post"
-                action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"
-                onsubmit="return confirm('Excluir este historico de forma definitiva?');"
-                class="d-inline"
-              >
-                <button class="history-btn history-btn-inline-danger" type="submit">Excluir</button>
-              </form>
+            <td class="text-end history-actions-cell">
+              <div class="dropdown history-action-menu">
+                <button
+                  class="history-btn history-action-menu-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  aria-label="Abrir ações"
+                >
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end history-action-dropdown">
+                  {% if alert.url %}
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="{{ alert.url }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >Ver jogo</a>
+                  </li>
+                  {% endif %}
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="{{ url_for('history.alert_analysis', alert_id=alert.id) }}"
+                      data-analysis-loading
+                    >Análise</a>
+                  </li>
+                  <li>
+                    <button
+                      class="dropdown-item"
+                      type="button"
+                      data-bs-toggle="modal"
+                      data-bs-target="#betModal{{ alert.id }}"
+                    >Registrar aposta</button>
+                  </li>
+                  {% if is_admin %}
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <form
+                      method="post"
+                      action="{{ url_for('history.delete_alert', alert_id=alert.id, **query_args) }}"
+                      onsubmit="return confirm('Excluir este historico de forma definitiva?');"
+                      class="history-action-form"
+                    >
+                      <button class="dropdown-item history-dropdown-danger" type="submit">Excluir</button>
+                    </form>
+                  </li>
+                  {% endif %}
+                </ul>
+              </div>
             </td>
-            {% endif %}
           </tr>
           {% else %}
           <tr>
-            <td colspan="{% if is_admin %}10{% else %}8{% endif %}" class="history-empty">Nenhum historico encontrado para os filtros atuais.</td>
+            <td colspan="{% if is_admin %}11{% else %}9{% endif %}" class="history-empty">Nenhum historico encontrado para os filtros atuais.</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    {% for alert in pagination.items %}
+    <div class="modal fade" id="betModal{{ alert.id }}" tabindex="-1" aria-labelledby="betModalLabel{{ alert.id }}" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <form method="post" action="{{ url_for('history.save_bet', alert_id=alert.id, **query_args) }}">
+            <div class="modal-header">
+              <h5 class="modal-title" id="betModalLabel{{ alert.id }}">Registrar aposta</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2 fw-semibold">{{ alert.home_team }} x {{ alert.away_team }}</div>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Valor apostado</label>
+                  <input class="form-control" name="stake_amount" inputmode="decimal" value="{{ alert.stake_amount if alert.stake_amount is not none else '' }}" placeholder="Ex: 25,00">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Odd</label>
+                  <input class="form-control" name="stake_odd" inputmode="decimal" value="{{ alert.stake_odd if alert.stake_odd is not none else '' }}" placeholder="Ex: 1.85">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Anotacao</label>
+                  <textarea class="form-control" name="bet_note" rows="3" placeholder="Opcional">{{ alert.bet_note or '' }}</textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
 
     <div class="history-pagination-wrap">
       <div class="history-pagination-info">Mostrando pagina {{ pagination.page }} de {{ pagination.pages }}</div>
@@ -227,6 +315,14 @@
     </div>
   </div>
 </section>
+
+<div class="analysis-loading-overlay" id="analysis-loading-overlay" aria-hidden="true">
+  <div class="analysis-loading-box" role="status" aria-live="polite">
+    <span class="analysis-loading-spinner" aria-hidden="true"></span>
+    <strong>Gerando análise</strong>
+    <p>Buscando histórico, eventos e médias do jogo.</p>
+  </div>
+</div>
 
 {% if is_admin %}
 <script>
@@ -260,4 +356,22 @@
   })();
 </script>
 {% endif %}
+<script>
+  (function () {
+    const overlay = document.getElementById('analysis-loading-overlay');
+    if (!overlay) return;
+
+    document.querySelectorAll('[data-analysis-loading]').forEach((link) => {
+      link.addEventListener('click', function () {
+        overlay.classList.add('is-visible');
+        overlay.setAttribute('aria-hidden', 'false');
+      });
+    });
+
+    window.addEventListener('pageshow', function () {
+      overlay.classList.remove('is-visible');
+      overlay.setAttribute('aria-hidden', 'true');
+    });
+  })();
+</script>
 {% endblock %}

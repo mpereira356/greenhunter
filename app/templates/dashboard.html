@@ -7,12 +7,48 @@
     <p class="page-subtitle">Bem-vindo de volta! Aqui esta o resumo da sua operacao.</p>
   </div>
   <div class="page-actions">
+    <div class="btn-group me-2" role="group" aria-label="Modo do dashboard">
+      <a class="btn btn-sm {% if dashboard_view == 'rules' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('main.dashboard', view='rules') }}">Resultado das regras</a>
+      <a class="btn btn-sm {% if dashboard_view == 'finance' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('main.dashboard', view='finance') }}">Resultado financeiro</a>
+    </div>
     <a class="btn btn-primary shadow-sm" href="{{ url_for('rules.create_rule') }}">
       <span class="me-1">+</span> Nova Regra
     </a>
   </div>
 </div>
 
+{% if dashboard_view == 'finance' %}
+<div class="stat-grid">
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Lucro/Prejuizo 7 dias</span>
+      <span class="stat-chip">Financeiro</span>
+    </div>
+    <span class="stat-value {% if financial_profit >= 0 %}text-success{% else %}text-danger{% endif %}">R$ {{ "%.2f"|format(financial_profit) }}</span>
+  </div>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Resultado Hoje</span>
+      <span class="stat-chip">Hoje</span>
+    </div>
+    <span class="stat-value {% if financial_profit_today >= 0 %}text-success{% else %}text-danger{% endif %}">R$ {{ "%.2f"|format(financial_profit_today) }}</span>
+  </div>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Total Apostado</span>
+      <span class="stat-chip">7 dias</span>
+    </div>
+    <span class="stat-value">R$ {{ "%.2f"|format(financial_staked) }}</span>
+  </div>
+  <div class="stat-card stat-card-kpi">
+    <div class="stat-head">
+      <span class="stat-label">Apostas Registradas</span>
+      <span class="stat-chip">Com $</span>
+    </div>
+    <span class="stat-value">{{ financial_bets }}</span>
+  </div>
+</div>
+{% else %}
 <div class="stat-grid">
   <div class="stat-card stat-card-kpi">
     <div class="stat-head">
@@ -69,20 +105,37 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <div class="row g-4">
   <div class="col-lg-8">
     <div class="card border-0 shadow-sm">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-4">
-          <h5 class="card-title mb-0">Desempenho Semanal</h5>
+          <h5 class="card-title mb-0">{% if dashboard_view == 'finance' %}Resultado Financeiro Semanal{% else %}Desempenho Semanal{% endif %}</h5>
           <div class="d-flex gap-3 small fw-bold">
+            {% if dashboard_view == 'finance' %}
+            <span class="text-success">● Lucro</span>
+            <span class="text-danger">● Prejuizo</span>
+            {% else %}
             <span class="text-success">● Green</span>
             <span class="text-danger">● Red</span>
             <span class="text-warning">● Pendente</span>
+            {% endif %}
           </div>
         </div>
         <div class="weekly-chart">
+          {% if dashboard_view == 'finance' %}
+          {% for item in finance_days %}
+          {% set profit_h = (item.profit|abs / max_finance_abs * 100) if max_finance_abs > 0 else 0 %}
+          <div class="week-col">
+            <div class="chart-bar">
+              <div class="bar {% if item.profit >= 0 %}bg-success{% else %}bg-danger{% endif %}" style="height: {{ [profit_h, 8]|max }}%" title="Resultado: R$ {{ '%.2f'|format(item.profit) }}"></div>
+            </div>
+            <div class="small text-muted mt-2 fw-bold">{{ item.day }}</div>
+          </div>
+          {% endfor %}
+          {% else %}
           {% for item in chart_days %}
           {% set green_h = (item.counts.green / max_count * 100) if max_count > 0 else 0 %}
           {% set red_h = (item.counts.red / max_count * 100) if max_count > 0 else 0 %}
@@ -96,6 +149,7 @@
             <div class="small text-muted mt-2 fw-bold">{{ item.day }}</div>
           </div>
           {% endfor %}
+          {% endif %}
         </div>
       </div>
     </div>
@@ -128,6 +182,10 @@
                   {% if alert.status == 'GREEN' %}
                     <span class="badge-status badge-on">GREEN</span>
                   {% elif alert.status == 'RED' %}
+                    <span class="badge-status badge-off">RED</span>
+                  {% elif alert.status == 'green' %}
+                    <span class="badge-status badge-on">GREEN</span>
+                  {% elif alert.status == 'red' %}
                     <span class="badge-status badge-off">RED</span>
                   {% else %}
                     <span class="badge-status badge-wait">{{ alert.status }}</span>

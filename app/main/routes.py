@@ -1,22 +1,92 @@
+import json
 from datetime import datetime, timedelta
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 
 from ..extensions import db
-from ..models import MatchAlert, Rule
+from ..models import LiveGameState, MatchAlert, Rule
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
 from ..utils.time import now_sp
-from ..services.scraper import fetch_live_games, fetch_match_stats, make_session
 
 main_bp = Blueprint("main", __name__)
+
+
+def _safe_json_dict(raw):
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _live_match_from_state(state):
+    stats = _safe_json_dict(state.stats_json)
+    stats_list = []
+    for key, value in sorted(stats.items()):
+        if not isinstance(value, dict):
+            continue
+        stats_list.append(
+            {
+                "key": key,
+                "home": value.get("home", "-") or "-",
+                "away": value.get("away", "-") or "-",
+            }
+        )
+    minute = f"{state.minute}'" if isinstance(state.minute, int) else (state.time_text or "-")
+    return {
+        "league": state.league or "",
+        "home_team": state.home_team or "",
+        "away_team": state.away_team or "",
+        "minute": minute,
+        "score": state.score or "0 x 0",
+        "url": state.url or "#",
+        "on_target_home": stats.get("On Target", {}).get("home", "-"),
+        "on_target_away": stats.get("On Target", {}).get("away", "-"),
+        "corners_home": stats.get("Corners", {}).get("home", "-"),
+        "corners_away": stats.get("Corners", {}).get("away", "-"),
+        "dangerous_home": stats.get("Dangerous Attacks", {}).get("home", "-"),
+        "dangerous_away": stats.get("Dangerous Attacks", {}).get("away", "-"),
+        "stats_list": stats_list,
+    }
+
+
+def _parse_score_pair(text: str) -> tuple[int, int]:
+    try:
+        left, right = str(text or "0 x 0").replace("-", "x").replace(":", "x").split("x", 1)
+        return int(left.strip()), int(right.strip())
+    except Exception:
+        return 0, 0
+
+
+def _favorite_live_leagues() -> list[str]:
+    try:
+        data = json.loads(current_user.favorite_live_leagues_json or "[]")
+    except Exception:
+        data = []
+    return [str(item) for item in data if str(item).strip()]
+
+
+def _alert_profit(alert) -> float:
+    if alert.stake_amount is None or alert.stake_odd is None:
+        return 0.0
+    if alert.status == "green":
+        return float(alert.stake_amount) * (float(alert.stake_odd) - 1)
+    if alert.status == "red":
+        return -float(alert.stake_amount)
+    return 0.0
 
 
 @main_bp.route("/")
 def dashboard():
     if not current_user.is_authenticated:
         return render_template("landing.html")
+    dashboard_view = request.args.get("view", "rules")
+    if dashboard_view not in {"rules", "finance"}:
+        dashboard_view = "rules"
     now = now_sp()
     start_day = datetime(now.year, now.month, now.day)
     end_day = start_day + timedelta(days=1)
@@ -86,6 +156,36 @@ def dashboard():
         max_count = max(max_count, total)
         chart_days.append({"day": day[5:], "counts": counts, "total": total})
 
+    finance_alerts = [
+        alert
+        for alert in recent_all
+        if alert.stake_amount is not None and alert.stake_odd is not None
+    ]
+    finance_today_alerts = [
+        alert
+        for alert in finance_alerts
+        if start_day <= alert.created_at < end_day
+    ]
+    financial_profit = round(sum(_alert_profit(alert) for alert in finance_alerts), 2)
+    financial_profit_today = round(sum(_alert_profit(alert) for alert in finance_today_alerts), 2)
+    financial_staked = round(sum(float(alert.stake_amount or 0) for alert in finance_alerts), 2)
+    financial_bets = len(finance_alerts)
+    finance_daily = {}
+    for alert in finance_alerts:
+        key = alert.created_at.strftime("%Y-%m-%d")
+        finance_daily.setdefault(key, {"profit": 0.0, "staked": 0.0, "bets": 0})
+        finance_daily[key]["profit"] += _alert_profit(alert)
+        finance_daily[key]["staked"] += float(alert.stake_amount or 0)
+        finance_daily[key]["bets"] += 1
+    finance_days = []
+    max_finance_abs = 1
+    for i in range(6, -1, -1):
+        day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        row = finance_daily.get(day, {"profit": 0.0, "staked": 0.0, "bets": 0})
+        row = {**row, "day": day[5:], "profit": round(row["profit"], 2), "staked": round(row["staked"], 2)}
+        max_finance_abs = max(max_finance_abs, abs(row["profit"]))
+        finance_days.append(row)
+
     rule_stats = {}
     for alert in recent_all:
         rule_stats.setdefault(alert.rule_id, {"rule": alert.rule, "green": 0, "red": 0})
@@ -119,6 +219,13 @@ def dashboard():
         max_count=max_count,
         top_rules=top_rules,
         worker_status=get_api_status(),
+        dashboard_view=dashboard_view,
+        financial_profit=financial_profit,
+        financial_profit_today=financial_profit_today,
+        financial_staked=financial_staked,
+        financial_bets=financial_bets,
+        finance_days=finance_days,
+        max_finance_abs=max_finance_abs,
     )
 
 
@@ -140,96 +247,82 @@ def undo_action(token):
 @login_required
 def live():
     query = (request.args.get("q") or "").strip().lower()
+    score_filter = (request.args.get("score") or "").strip()
+    min_minute = request.args.get("min_minute", type=int)
+    max_minute = request.args.get("max_minute", type=int)
+    favorites_only = request.args.get("favorites") == "1"
     page = max(request.args.get("page", 1, type=int), 1)
     per_page = 24
     start_index = (page - 1) * per_page
-    session = make_session()
-    games, status_code = fetch_live_games(session)
-    matches = []
-    has_next = False
-    qualified_count = 0
-    if status_code != 200:
-        return render_template(
-            "live/list.html",
-            matches=[],
-            query=query,
-            status_code=status_code,
-            page=page,
-            has_prev=page > 1,
-            has_next=False,
-        )
+    favorite_leagues = _favorite_live_leagues()
+    favorite_set = {league.casefold() for league in favorite_leagues}
 
-    def minute_label_from(source_game, stats_payload):
-        minute = None
-        if stats_payload:
-            minute = stats_payload.get("minute")
-        if minute is None:
-            minute = source_game.get("minute")
-        if isinstance(minute, int):
-            return f"{minute}'"
-        time_text = source_game.get("time_text")
-        return time_text or "-"
-
-    for game in games:
-        stats_payload = fetch_match_stats(session, game["url"])
-        league = (stats_payload or {}).get("league") or game.get("league") or ""
-        home_team = (stats_payload or {}).get("home_team") or game.get("home_team") or ""
-        away_team = (stats_payload or {}).get("away_team") or game.get("away_team") or ""
-        score = (stats_payload or {}).get("score") or game.get("score") or "0 x 0"
+    recent_cutoff = now_sp() - timedelta(minutes=8)
+    live_states = (
+        LiveGameState.query.filter(LiveGameState.updated_at >= recent_cutoff)
+        .order_by(LiveGameState.minute.desc(), LiveGameState.updated_at.desc())
+        .limit(600)
+        .all()
+    )
+    filtered_states = []
+    for state in live_states:
+        state_minute = state.minute if isinstance(state.minute, int) else None
+        if min_minute is not None and (state_minute is None or state_minute < min_minute):
+            continue
+        if max_minute is not None and (state_minute is None or state_minute > max_minute):
+            continue
+        if score_filter and (state.score or "") != score_filter:
+            continue
+        if favorites_only and (state.league or "").casefold() not in favorite_set:
+            continue
         hay = " ".join(
             [
-                league,
-                home_team,
-                away_team,
+                state.league or "",
+                state.home_team or "",
+                state.away_team or "",
             ]
         ).lower()
         if query and query not in hay:
             continue
-        if qualified_count < start_index:
-            qualified_count += 1
-            continue
-        if len(matches) >= per_page:
-            has_next = True
-            break
-        stats = (stats_payload or {}).get("stats", {})
-        raw_stats = (stats_payload or {}).get("raw_stats", {})
-        raw_dangerous = raw_stats.get("Dangerous Attacks", ("-", "-"))
-        raw_on_target = raw_stats.get("On Target", ("-", "-"))
-        raw_corners = raw_stats.get("Corners", ("-", "-"))
-        stats_list = []
-        for key, values in sorted(raw_stats.items()):
-            home_val, away_val = values
-            stats_list.append(
-                {
-                    "key": key,
-                    "home": home_val or "-",
-                    "away": away_val or "-",
-                }
-            )
-        matches.append(
-            {
-                "league": league,
-                "home_team": home_team,
-                "away_team": away_team,
-                "minute": minute_label_from(game, stats_payload),
-                "score": score,
-                "url": game["url"],
-                "on_target_home": stats.get("On Target", {}).get("home", raw_on_target[0] or "-"),
-                "on_target_away": stats.get("On Target", {}).get("away", raw_on_target[1] or "-"),
-                "corners_home": stats.get("Corners", {}).get("home", raw_corners[0] or "-"),
-                "corners_away": stats.get("Corners", {}).get("away", raw_corners[1] or "-"),
-                "dangerous_home": stats.get("Dangerous Attacks", {}).get("home", raw_dangerous[0] or "-"),
-                "dangerous_away": stats.get("Dangerous Attacks", {}).get("away", raw_dangerous[1] or "-"),
-                "stats_list": stats_list,
-            }
-        )
-        qualified_count += 1
+        filtered_states.append(state)
+
+    page_states = filtered_states[start_index : start_index + per_page]
+    available_leagues = sorted({state.league for state in live_states if state.league})
+    query_args = request.args.to_dict()
+    query_args.pop("page", None)
     return render_template(
         "live/list.html",
-        matches=matches,
+        matches=[_live_match_from_state(state) for state in page_states],
         query=query,
+        score_filter=score_filter,
+        min_minute=min_minute,
+        max_minute=max_minute,
+        favorites_only=favorites_only,
+        favorite_leagues=favorite_leagues,
+        available_leagues=available_leagues,
+        query_args=query_args,
         status_code=200,
         page=page,
         has_prev=page > 1,
-        has_next=has_next,
+        has_next=len(filtered_states) > start_index + per_page,
     )
+
+
+@main_bp.route("/live/favorite-league", methods=["POST"])
+@login_required
+def toggle_live_favorite_league():
+    league = (request.form.get("league") or "").strip()
+    if not league:
+        return redirect(url_for("main.live", **request.args.to_dict()))
+    favorites = _favorite_live_leagues()
+    favorite_map = {item.casefold(): item for item in favorites}
+    key = league.casefold()
+    if key in favorite_map:
+        favorites = [item for item in favorites if item.casefold() != key]
+        flash("Liga removida dos favoritos.", "success")
+    else:
+        favorites.append(league)
+        flash("Liga adicionada aos favoritos.", "success")
+    current_user.favorite_live_leagues_json = json.dumps(sorted(favorites), ensure_ascii=False)
+    db.session.commit()
+    return redirect(url_for("main.live", **request.args.to_dict()))

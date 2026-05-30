@@ -31,6 +31,8 @@
     {% for rule in rules %}
     {% set greens_count = rule_stats.get(rule.id, {}).get("green", 0) %}
     {% set reds_count = rule_stats.get(rule.id, {}).get("red", 0) %}
+    {% set resolved_count = greens_count + reds_count %}
+    {% set win_pct = ((greens_count * 100) / resolved_count)|round(1) if resolved_count > 0 else 0 %}
     <article class="rule-card">
       <div class="rule-card-top">
         <div class="rule-main">
@@ -52,12 +54,13 @@
       <div class="rule-card-stats">
         <span class="rule-pill rule-pill-green">Greens: {{ greens_count }}</span>
         <span class="rule-pill rule-pill-red">Reds: {{ reds_count }}</span>
+        <span class="rule-pill rule-pill-win">Acerto: {{ win_pct }}%</span>
         <span class="rule-last">{{ rule.last_alert_at.strftime('%d/%m %H:%M') if rule.last_alert_at else 'Nenhum alerta' }}</span>
       </div>
 
       <div class="rule-card-actions">
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
-        <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="modal" data-bs-target="#ruleMore{{ rule.id }}">Ver mais</button>
+        <button class="btn btn-sm rule-more-btn" type="button" data-bs-toggle="modal" data-bs-target="#ruleMore{{ rule.id }}">Ver mais</button>
         <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
           <button class="btn btn-sm btn-outline-secondary">
             {% if rule.is_active %}Pausar{% else %}Ativar{% endif %}
@@ -83,40 +86,80 @@
               <div class="col-md-6">
                 <h6 class="fw-bold">Campeonatos</h6>
                 <div class="mb-2"><span class="badge bg-success">Greens</span></div>
-                <ul class="list-group mb-3">
-                  {% for item in (rk.get('leagues', {}).get('green', []) or []) %}
+                {% set green_leagues = rk.get('leagues', {}).get('green', []) or [] %}
+                <ul class="list-group rule-rank-list mb-3">
+                  {% for item in green_leagues[:5] %}
                     <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
                   {% else %}
                     <li class="list-group-item text-muted">Sem dados</li>
                   {% endfor %}
                 </ul>
+                {% if green_leagues|length > 5 %}
+                <details class="rule-rank-more mb-3"><summary>Ver todos</summary>
+                  <ul class="list-group rule-rank-list mt-2">
+                    {% for item in green_leagues[5:] %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
                 <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
-                <ul class="list-group">
-                  {% for item in (rk.get('leagues', {}).get('red', []) or []) %}
+                {% set red_leagues = rk.get('leagues', {}).get('red', []) or [] %}
+                <ul class="list-group rule-rank-list">
+                  {% for item in red_leagues[:5] %}
                     <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
                   {% else %}
                     <li class="list-group-item text-muted">Sem dados</li>
                   {% endfor %}
                 </ul>
+                {% if red_leagues|length > 5 %}
+                <details class="rule-rank-more mt-2"><summary>Ver todos</summary>
+                  <ul class="list-group rule-rank-list mt-2">
+                    {% for item in red_leagues[5:] %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
               </div>
               <div class="col-md-6">
                 <h6 class="fw-bold">Times</h6>
                 <div class="mb-2"><span class="badge bg-success">Greens</span></div>
-                <ul class="list-group mb-3">
-                  {% for item in (rk.get('teams', {}).get('green', []) or []) %}
+                {% set green_teams = rk.get('teams', {}).get('green', []) or [] %}
+                <ul class="list-group rule-rank-list mb-3">
+                  {% for item in green_teams[:5] %}
                     <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
                   {% else %}
                     <li class="list-group-item text-muted">Sem dados</li>
                   {% endfor %}
                 </ul>
+                {% if green_teams|length > 5 %}
+                <details class="rule-rank-more mb-3"><summary>Ver todos</summary>
+                  <ul class="list-group rule-rank-list mt-2">
+                    {% for item in green_teams[5:] %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
                 <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
-                <ul class="list-group">
-                  {% for item in (rk.get('teams', {}).get('red', []) or []) %}
+                {% set red_teams = rk.get('teams', {}).get('red', []) or [] %}
+                <ul class="list-group rule-rank-list">
+                  {% for item in red_teams[:5] %}
                     <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
                   {% else %}
                     <li class="list-group-item text-muted">Sem dados</li>
                   {% endfor %}
                 </ul>
+                {% if red_teams|length > 5 %}
+                <details class="rule-rank-more mt-2"><summary>Ver todos</summary>
+                  <ul class="list-group rule-rank-list mt-2">
+                    {% for item in red_teams[5:] %}
+                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
+                    {% endfor %}
+                  </ul>
+                </details>
+                {% endif %}
               </div>
             </div>
           </div>

@@ -226,6 +226,11 @@ def _ensure_user_columns():
         "email": "VARCHAR(120)",
         "is_admin": "BOOLEAN DEFAULT 0",
         "telegram_verified": "BOOLEAN DEFAULT 0",
+        "subscription_plan": "VARCHAR(20) DEFAULT 'starter'",
+        "rule_limit": "INTEGER DEFAULT 2",
+        "paid_until": "DATETIME",
+        "trial_until": "DATETIME",
+        "favorite_live_leagues_json": "TEXT",
     }
 
     with db.engine.connect() as conn:
@@ -271,6 +276,10 @@ def _ensure_alert_columns():
         "ft_event_metrics_json": "TEXT",
         "telegram_entry_message_id": "INTEGER",
         "telegram_entry_enriched": "BOOLEAN DEFAULT 0",
+        "stake_amount": "FLOAT",
+        "stake_odd": "FLOAT",
+        "bet_note": "TEXT",
+        "bet_recorded_at": "DATETIME",
     }
 
     with db.engine.connect() as conn:

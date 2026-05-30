@@ -1,42 +1,45 @@
 {% extends "base.html" %}
 {% block title %}Login | GreenHunter{% endblock %}
+{% block main_class %}auth-shell ghx-auth-shell{% endblock %}
 {% block content %}
-<div class="card border-0 shadow-lg">
-  <div class="card-body p-5">
-    <div class="text-center mb-5">
-      <div class="brand-icon mx-auto mb-3 d-flex align-items-center justify-content-center"
-     style="width: 140px; height: 140px; background: transparent; border-radius: 0;">
-     
-    <img src="{{ url_for('static', filename='img/greenhunter.png') }}"
-         alt="Green Hunter"
-         style="max-width: 100%; max-height: 100%; object-fit: contain;">
+<div class="ghx-auth-card">
+  <div class="ghx-auth-glow" aria-hidden="true"></div>
+  <div class="ghx-auth-header">
+    <a class="ghx-auth-brand" href="{{ url_for('main.dashboard') }}" aria-label="GreenHunter">
+      <span>GH</span>
+      <strong>GreenHunter</strong>
+    </a>
+    <div class="ghx-auth-kicker">AI Signal Engine</div>
+  </div>
+
+  <div class="ghx-auth-body">
+    <div class="text-center mb-4">
+      <div class="ghx-auth-logo mx-auto mb-3">
+        <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="GreenHunter">
       </div>
-      <h2 class="fw-800 mb-1">Bem-vindo</h2>
-      <p class="text-muted">Acesse sua conta para gerenciar seus bots.</p>
+      <h2>Bem-vindo de volta</h2>
+      <p>Acesse sua central de sinais inteligentes em tempo real.</p>
     </div>
     
     <form method="post">
       <div class="mb-4">
-        <label class="form-label">Usuário</label>
-        <div class="input-group">
-          <input class="form-control form-control-lg" name="username" placeholder="Seu usuário" required>
-        </div>
+        <label class="form-label">Usuario</label>
+        <input class="form-control form-control-lg ghx-auth-input" name="username" placeholder="Seu usuario" required>
       </div>
       
       <div class="mb-4">
         <label class="form-label">Senha</label>
-        <div class="input-group">
-          <input type="password" class="form-control form-control-lg" name="password" placeholder="Sua senha" required>
-        </div>
+        <input type="password" class="form-control form-control-lg ghx-auth-input" name="password" placeholder="Sua senha" required>
       </div>
       
       <div class="d-grid gap-2 mt-5">
-        <button class="btn btn-primary btn-lg shadow-sm" type="submit">Entrar na Plataforma</button>
+        <button class="ghx-auth-submit" type="submit">Entrar na plataforma</button>
       </div>
     </form>
     
-    <div class="mt-4 text-center">
-      <p class="text-muted small">Ainda não tem uma conta? <a href="{{ url_for('auth.register') }}" class="fw-bold">Criar conta agora</a></p>
+    <div class="ghx-auth-footer">
+      Ainda nao tem uma conta?
+      <a href="{{ url_for('auth.register') }}">Criar conta agora</a>
     </div>
   </div>
 </div>
