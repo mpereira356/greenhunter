@@ -34,7 +34,7 @@ def alert_analysis(alert_id):
         analysis = build_alert_analysis(
             alert,
             force_refresh=request.args.get("refresh") == "1",
-            include_details=request.args.get("details") == "1",
+            include_details=request.args.get("details", "1") != "0",
         )
     except Exception as exc:
         analysis = None

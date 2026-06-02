@@ -16,9 +16,9 @@ from app.services.scraper import (
 )
 
 DETAIL_LIMITS = {
-    "h2h": int(os.environ.get("ANALYSIS_H2H_DETAIL_LIMIT", "0")),
-    "home": int(os.environ.get("ANALYSIS_HOME_DETAIL_LIMIT", "0")),
-    "away": int(os.environ.get("ANALYSIS_AWAY_DETAIL_LIMIT", "0")),
+    "h2h": int(os.environ.get("ANALYSIS_H2H_DETAIL_LIMIT", "2")),
+    "home": int(os.environ.get("ANALYSIS_HOME_DETAIL_LIMIT", "1")),
+    "away": int(os.environ.get("ANALYSIS_AWAY_DETAIL_LIMIT", "1")),
 }
 HISTORY_LIMITS = {
     "h2h": int(os.environ.get("ANALYSIS_H2H_LIMIT", "8")),
@@ -227,18 +227,18 @@ def _current_snapshot(alert, session):
     }
 
 
-def build_alert_analysis(alert, force_refresh: bool = False, include_details: bool = False) -> dict:
+def build_alert_analysis(alert, force_refresh: bool = False, include_details: bool = True) -> dict:
     if not force_refresh:
         cached = _load_cached_analysis(alert)
         if cached:
             return cached
 
-    session = make_session() if include_details else _make_quick_session()
+    session = make_session()
     history_data = fetch_match_history(
         session,
         alert.url,
         limits=HISTORY_LIMITS,
-        use_fallback=include_details,
+        use_fallback=True,
         timeout=ANALYSIS_HISTORY_TIMEOUT_SECONDS,
     )
     if include_details and any((limit or 0) > 0 for limit in DETAIL_LIMITS.values()):
