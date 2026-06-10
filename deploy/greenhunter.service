@@ -1,0 +1,18 @@
+[Unit]
+Description=GreenHunter Gunicorn App
+After=network.target
+
+[Service]
+User=viny
+WorkingDirectory=/home/viny/greenhunter
+EnvironmentFile=/home/viny/greenhunter/.env
+ExecStart=/home/viny/greenhunter/venv/bin/gunicorn --workers 1 --threads 4 --timeout 120 --bind 127.0.0.1:7777 wsgi:app
+Restart=always
+RestartSec=3
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/home/viny/greenhunter/data /home/viny/greenhunter/backup /tmp
+
+[Install]
+WantedBy=multi-user.target

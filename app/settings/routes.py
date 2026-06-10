@@ -45,6 +45,9 @@ def settings():
                 if not current_password or not current_user.check_password(current_password):
                     flash("Senha atual incorreta.", "warning")
                     return redirect(url_for("settings.settings"))
+                if len(new_password) < 10:
+                    flash("A nova senha deve possuir pelo menos 10 caracteres.", "warning")
+                    return redirect(url_for("settings.settings"))
                 if new_password != confirm_password:
                     flash("As senhas nao conferem.", "warning")
                     return redirect(url_for("settings.settings"))

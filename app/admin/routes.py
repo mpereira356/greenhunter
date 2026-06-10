@@ -12,6 +12,7 @@ from sqlalchemy.engine.url import make_url
 
 from ..extensions import db
 from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..security import safe_redirect_target
 from ..services.scraper import is_first_half_extra_time
 from ..services.telegram import send_message
 from ..services.worker import get_api_status
@@ -686,7 +687,7 @@ def toggle_rule(rule_id):
     rule.is_active = not rule.is_active
     db.session.commit()
     flash("Status da regra atualizado.", "success")
-    return redirect(request.referrer or url_for("admin.dashboard"))
+    return redirect(safe_redirect_target(request.referrer, url_for("admin.dashboard")))
 
 
 @admin_bp.route("/broadcast", methods=["POST"])

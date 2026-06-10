@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
@@ -8,6 +9,7 @@ from ..extensions import db
 from ..models import LiveGameState, MatchAlert, Rule
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
+from ..security import safe_redirect_target
 from ..utils.time import now_sp
 
 main_bp = Blueprint("main", __name__)
@@ -21,6 +23,18 @@ def _safe_json_dict(raw):
     except (TypeError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _safe_match_url(raw):
+    try:
+        parsed = urlparse(str(raw or ""))
+    except ValueError:
+        return "#"
+    if parsed.scheme not in {"http", "https"}:
+        return "#"
+    if parsed.hostname not in {"betsapi.com", "pt.betsapi.com", "www.betsapi.com"}:
+        return "#"
+    return parsed.geturl()
 
 
 def _live_match_from_state(state):
@@ -43,7 +57,7 @@ def _live_match_from_state(state):
         "away_team": state.away_team or "",
         "minute": minute,
         "score": state.score or "0 x 0",
-        "url": state.url or "#",
+        "url": _safe_match_url(state.url),
         "on_target_home": stats.get("On Target", {}).get("home", "-"),
         "on_target_away": stats.get("On Target", {}).get("away", "-"),
         "corners_home": stats.get("Corners", {}).get("home", "-"),
@@ -230,6 +244,7 @@ def dashboard():
 
 
 @main_bp.route("/api/status")
+@login_required
 def api_status():
     return jsonify(get_api_status())
 
@@ -237,7 +252,10 @@ def api_status():
 @main_bp.route("/undo/<token>", methods=["GET"])
 @login_required
 def undo_action(token):
-    next_url = request.args.get("next") or request.referrer or url_for("main.dashboard")
+    next_url = safe_redirect_target(
+        request.args.get("next") or request.referrer,
+        url_for("main.dashboard"),
+    )
     ok, message = apply_undo(token, current_user.id)
     flash(message, "success" if ok else "warning")
     return redirect(next_url)

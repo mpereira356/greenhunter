@@ -11,6 +11,7 @@ from flask_login import current_user
 from app.extensions import db, login_manager
 from app.models import AdminBroadcast, AdminBroadcastView, User
 from app.services.worker import start_worker
+from app.security import init_security
 from app.utils.db import commit_with_retry
 
 
@@ -46,7 +47,34 @@ def create_app():
     # =========================
     # Configurações principais
     # =========================
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
+    secret_key = os.environ.get("SECRET_KEY", "")
+    if len(secret_key) < 32 or secret_key in {"change-me", "dev-secret"}:
+        raise RuntimeError("SECRET_KEY deve ser aleatoria e possuir pelo menos 32 caracteres.")
+    app.config["SECRET_KEY"] = secret_key
+    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", str(160 * 1024 * 1024)))
+    app.config["DEFAULT_REQUEST_CONTENT_LENGTH"] = int(
+        os.environ.get("DEFAULT_REQUEST_CONTENT_LENGTH", str(1024 * 1024))
+    )
+    app.config["LOGIN_MAX_CONTENT_LENGTH"] = int(os.environ.get("LOGIN_MAX_CONTENT_LENGTH", str(64 * 1024)))
+    app.config["LOGIN_MAX_ATTEMPTS"] = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "8"))
+    app.config["LOGIN_WINDOW_SECONDS"] = int(os.environ.get("LOGIN_WINDOW_SECONDS", "300"))
+    app.config["LOGIN_BLOCK_SECONDS"] = int(os.environ.get("LOGIN_BLOCK_SECONDS", "900"))
+    app.config["TRUSTED_PROXY_IPS"] = {
+        value.strip()
+        for value in os.environ.get("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
+        if value.strip()
+    }
+    app.config["GLOBAL_RATE_LIMIT"] = int(os.environ.get("GLOBAL_RATE_LIMIT", "240"))
+    app.config["GLOBAL_RATE_WINDOW_SECONDS"] = int(os.environ.get("GLOBAL_RATE_WINDOW_SECONDS", "60"))
+    app.config["ALLOWED_HOSTS"] = {
+        value.strip().lower()
+        for value in os.environ.get("ALLOWED_HOSTS", "").split(",")
+        if value.strip()
+    }
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
+    app.config["PERMANENT_SESSION_LIFETIME"] = int(os.environ.get("SESSION_LIFETIME_SECONDS", "43200"))
 
     # Diretório base do projeto (Windows e Linux)
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -87,6 +115,8 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+    login_manager.session_protection = "strong"
+    init_security(app)
 
     # =========================
     # Blueprints
@@ -116,6 +146,7 @@ def create_app():
         _ensure_rule_outcome_condition_columns()
         _ensure_alert_columns()
         _ensure_live_game_state_columns()
+        _ensure_login_attempt_indexes()
 
     # =========================
     # Worker (opcional)
@@ -308,4 +339,13 @@ def _ensure_live_game_state_columns():
             if col not in existing:
                 conn.execute(text(f"ALTER TABLE live_game_state ADD COLUMN {col} {col_type}"))
 
+        conn.commit()
+
+
+def _ensure_login_attempt_indexes():
+    with db.engine.connect() as conn:
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_login_attempt_ip_success_created "
+            "ON login_attempt (ip_address, success, created_at)"
+        ))
         conn.commit()

@@ -248,6 +248,10 @@ class LoginAttempt(db.Model):
     success = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
+    __table_args__ = (
+        db.Index("ix_login_attempt_ip_success_created", "ip_address", "success", "created_at"),
+    )
+
 
 class AdminBroadcast(db.Model):
     id = db.Column(db.Integer, primary_key=True)

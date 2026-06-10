@@ -1107,7 +1107,13 @@
         const data = await response.json();
         if (!response.ok || !data.ok) {
           const msg = (data && data.message) ? data.message : 'Falha ao gerar sugestao.';
-          if (aiHintResult) aiHintResult.innerHTML = `<div class="text-danger">${msg}</div>`;
+          if (aiHintResult) {
+            aiHintResult.innerHTML = '';
+            const message = document.createElement('div');
+            message.className = 'text-danger';
+            message.textContent = msg;
+            aiHintResult.appendChild(message);
+          }
           return;
         }
         lastAiHint = data.hint || null;
