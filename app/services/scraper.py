@@ -232,17 +232,52 @@ def _cf_mode() -> str:
 
 
 def _cf_alert_cooldown_seconds() -> int:
-    raw = os.environ.get("BETSAPI_CF_ALERT_COOLDOWN_SECONDS", "300").strip()
+    raw = (
+        os.environ.get("BETSAPI_CF_ALERT_COOLDOWN_SECONDS")
+        or os.environ.get("BETSAPI_CF_COOLDOWN_SECONDS")
+        or "300"
+    ).strip()
     try:
         return max(0, int(raw))
     except ValueError:
         return 300
 
 
-def _send_cf_telegram_alert(url: str):
+def _cf_alert_credentials():
     token = (os.environ.get("BETSAPI_CF_ALERT_TELEGRAM_TOKEN") or "").strip()
     chat_id = (os.environ.get("BETSAPI_CF_ALERT_TELEGRAM_CHAT_ID") or "").strip()
+    if token and chat_id:
+        return token, chat_id
+
+    db_path = (os.environ.get("GREENHUNTER_DB_PATH") or "data/app.db").strip()
+    if not db_path or not os.path.exists(db_path):
+        return None, None
+    try:
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute(
+                """
+                select telegram_token, telegram_chat_id
+                  from user
+                 where telegram_verified = 1
+                   and telegram_token is not null
+                   and telegram_token <> ''
+                   and telegram_chat_id is not null
+                   and telegram_chat_id <> ''
+                 order by case when lower(username) = 'admin' then 0 else 1 end, id
+                 limit 1
+                """
+            ).fetchone()
+    except sqlite3.Error:
+        return None, None
+    if not row:
+        return None, None
+    return (row[0] or "").strip(), (row[1] or "").strip()
+
+
+def _send_cf_telegram_alert(url: str):
+    token, chat_id = _cf_alert_credentials()
     if not token or not chat_id:
+        print("[scraper] alerta Cloudflare nao enviado: Telegram nao configurado.")
         return
 
     global _CF_ALERT_LAST_SENT_AT
@@ -253,7 +288,8 @@ def _send_cf_telegram_alert(url: str):
 
     text = (
         "GreenHunter: Cloudflare pediu verificacao humana novamente.\n"
-        "Abra o navegador do bot e resolva o challenge para continuar.\n"
+        "O bot tentou clicar automaticamente no checkbox. Se nao liberar, abra o RDP do servidor, "
+        "encontre a janela do Chrome do bot e clique em 'Verify you are human'.\n"
         f"URL: {url}"
     )
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -675,6 +711,96 @@ def _cdp_recv_result(ws, command_id: int, timeout_seconds: float = 15.0):
     raise TimeoutError(f"timeout aguardando resposta do CDP para id={command_id}")
 
 
+def _cdp_eval(ws, command_id: int, expression: str, timeout_seconds: float = 15.0):
+    ws.send(json.dumps({
+        "id": command_id,
+        "method": "Runtime.evaluate",
+        "params": {"expression": expression, "returnByValue": True},
+    }))
+    return _cdp_recv_result(ws, command_id, timeout_seconds).get("result", {}).get("value")
+
+
+def _cf_auto_click_enabled() -> bool:
+    raw = (os.environ.get("BETSAPI_CF_AUTO_CLICK") or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def _dispatch_cdp_click(ws, command_id: int, x: float, y: float):
+    for offset, event_type in enumerate(("mouseMoved", "mousePressed", "mouseReleased")):
+        params = {
+            "type": event_type,
+            "x": x,
+            "y": y,
+            "button": "left",
+            "clickCount": 1,
+        }
+        if event_type == "mouseMoved":
+            params.pop("button")
+            params.pop("clickCount")
+        ws.send(json.dumps({
+            "id": command_id + offset,
+            "method": "Input.dispatchMouseEvent",
+            "params": params,
+        }))
+        _cdp_recv_result(ws, command_id + offset, timeout_seconds=5)
+
+
+def _try_click_cloudflare_turnstile(ws) -> bool:
+    try:
+        ws.send(json.dumps({"id": 5000, "method": "Page.bringToFront"}))
+        _cdp_recv_result(ws, 5000, timeout_seconds=5)
+    except Exception:
+        pass
+
+    frame_info = _cdp_eval(ws, 5001, """
+(() => {
+  const frames = Array.from(document.querySelectorAll('iframe')).map((frame) => {
+    const rect = frame.getBoundingClientRect();
+    return {
+      src: frame.src || '',
+      title: frame.title || '',
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      visible: rect.width > 0 && rect.height > 0
+    };
+  });
+  const candidates = frames.filter((frame) => {
+    const text = `${frame.src} ${frame.title}`.toLowerCase();
+    return frame.visible && (
+      text.includes('challenges.cloudflare.com') ||
+      text.includes('turnstile') ||
+      text.includes('challenge')
+    );
+  });
+  return {
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    frames: candidates.length ? candidates : frames.filter((frame) => frame.visible)
+  };
+})()
+""", timeout_seconds=5) or {}
+
+    frames = frame_info.get("frames") or []
+    target = frames[0] if frames else None
+    if target:
+        left = float(target.get("left") or 0)
+        top = float(target.get("top") or 0)
+        width = max(1.0, float(target.get("width") or 1))
+        height = max(1.0, float(target.get("height") or 1))
+        x = left + min(35.0, max(12.0, width * 0.12))
+        y = top + (height / 2.0)
+    else:
+        inner_width = float(frame_info.get("innerWidth") or 1280)
+        inner_height = float(frame_info.get("innerHeight") or 720)
+        x = min(max(45.0, inner_width * 0.035), inner_width - 20.0)
+        y = min(max(335.0, inner_height * 0.46), inner_height - 20.0)
+
+    _dispatch_cdp_click(ws, 5010, x, y)
+    return True
+
+
 def _cdp_get_page_target(url: str):
     urllib = __import__("urllib.request", fromlist=["request"])
     global _BROWSER_TARGET_ID
@@ -765,11 +891,26 @@ def _browser_fetch(url: str):
             cookies = _cdp_recv_result(ws, 14).get("cookies", [])
 
             if _is_cloudflare_content(title) or (_is_cloudflare_content(html) and not _has_cf_clearance_cookie(cookies)):
-                print("[scraper] Cloudflare detectado. Resolva manualmente no navegador...")
+                print("[scraper] Cloudflare detectado. Tentando clicar no checkbox automaticamente...")
+                auto_click = _cf_auto_click_enabled()
+                last_click_at = 0.0
+                if auto_click:
+                    try:
+                        if _try_click_cloudflare_turnstile(ws):
+                            last_click_at = time.time()
+                    except Exception as exc:
+                        print(f"[scraper] clique automatico no Cloudflare falhou: {exc}")
                 _send_cf_telegram_alert(url)
                 deadline = time.time() + wait_seconds
                 while time.time() < deadline:
                     time.sleep(2)
+                    if auto_click and (time.time() - last_click_at) >= 8:
+                        try:
+                            if _try_click_cloudflare_turnstile(ws):
+                                last_click_at = time.time()
+                        except Exception as exc:
+                            print(f"[scraper] nova tentativa de clique Cloudflare falhou: {exc}")
+                            last_click_at = time.time()
                     ws.send(json.dumps({"id": 15, "method": "Runtime.evaluate", "params": {"expression": "document.documentElement.outerHTML", "returnByValue": True}}))
                     html = _cdp_recv_result(ws, 15).get("result", {}).get("value") or ""
                     ws.send(json.dumps({"id": 16, "method": "Runtime.evaluate", "params": {"expression": "document.title", "returnByValue": True}}))
@@ -1304,6 +1445,67 @@ def _extract_match_events(soup, home_team: str, away_team: str) -> list[dict]:
     return fallback_items
 
 
+def _event_timeline_snapshot(events, home_team: str, away_team: str):
+    max_minute = None
+    home_norm = _normalize_team_name(home_team)
+    away_norm = _normalize_team_name(away_team)
+    event_stats = {}
+    kind_to_stat = {
+        "goal": "Goals",
+        "corner": "Corners",
+        "yellow_card": "Yellow Card",
+        "red_card": "Red Card",
+    }
+    for event in events or []:
+        minute = event.get("minute")
+        if isinstance(minute, int):
+            max_minute = minute if max_minute is None else max(max_minute, minute)
+        stat_key = kind_to_stat.get(event.get("kind"))
+        if not stat_key:
+            continue
+        values = event_stats.setdefault(stat_key, {"home": 0, "away": 0, "total": 0})
+        team_norm = _normalize_team_name(event.get("team"))
+        if team_norm and team_norm == home_norm:
+            values["home"] += 1
+        elif team_norm and team_norm == away_norm:
+            values["away"] += 1
+        values["total"] = values["home"] + values["away"]
+
+    goals = event_stats.get("Goals", {"home": 0, "away": 0, "total": 0})
+    return {
+        "score": f"{goals['home']} x {goals['away']}",
+        "minute": max_minute,
+        "stats": event_stats,
+    }
+
+
+def _archived_full_time_snapshot(events, home_team: str, away_team: str):
+    final_score = None
+    for event in events or []:
+        if event.get("kind") != "score_after_ft":
+            continue
+        match = re.search(
+            r"score after full time\s*-\s*(\d+)\s*[-:x]\s*(\d+)",
+            _to_ascii(event.get("text") or "").lower(),
+        )
+        if match:
+            final_score = (int(match.group(1)), int(match.group(2)))
+
+    if final_score is None:
+        return None
+
+    snapshot = _event_timeline_snapshot(events, home_team, away_team)
+    snapshot["score"] = f"{final_score[0]} x {final_score[1]}"
+    snapshot["minute"] = 90
+    snapshot["time_text"] = "FT"
+    snapshot["stats"]["Goals"] = {
+        "home": final_score[0],
+        "away": final_score[1],
+        "total": sum(final_score),
+    }
+    return snapshot
+
+
 def is_first_half_extra_time(time_text: str) -> bool:
     if not time_text:
         return False
@@ -1541,6 +1743,30 @@ def fetch_match_stats(session, url):
     score_home, score_away = _parse_score_pair(score)
     if sum(best_goals) > (score_home + score_away):
         score = f"{best_goals[0]} x {best_goals[1]}"
+    archived_snapshot = _archived_full_time_snapshot(events, home_team, away_team)
+    if archived_snapshot:
+        score = archived_snapshot["score"]
+        time_text = archived_snapshot["time_text"]
+        minute_value = archived_snapshot["minute"]
+        for key, values in archived_snapshot["stats"].items():
+            stats[key] = values
+        stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
+    else:
+        timeline = _event_timeline_snapshot(events, home_team, away_team)
+        if isinstance(timeline["minute"], int) and (
+            minute_value is None or timeline["minute"] > minute_value
+        ):
+            minute_value = timeline["minute"]
+            time_text = time_text or f"{minute_value}'"
+            stats["Minute"] = {"home": minute_value, "away": minute_value, "total": minute_value}
+        for key, values in timeline["stats"].items():
+            current = stats.get(key)
+            if not isinstance(current, dict) or values["total"] >= (current.get("total") or 0):
+                stats[key] = values
+        timeline_home, timeline_away = _parse_score_pair(timeline["score"])
+        score_home, score_away = _parse_score_pair(score)
+        if timeline_home + timeline_away >= score_home + score_away:
+            score = timeline["score"]
     return {
         "league": league,
         "home_team": home_team,

@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import resource
 import threading
 import time
 import unicodedata
@@ -103,11 +102,13 @@ RED_NOTIFICATION_PENDING = {}
 ENTRY_GROUP_WINDOW_SECONDS = max(0, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "0")))
 REALTIME_ENTRY_ALERTS = os.environ.get("REALTIME_ENTRY_ALERTS", "1").strip().lower() in ("1", "true", "yes")
 REALTIME_SKIP_ENTRY_HISTORY = os.environ.get("REALTIME_SKIP_ENTRY_HISTORY", "1").strip().lower() in ("1", "true", "yes")
-ENTRY_ENRICHMENT_ENABLED = os.environ.get("ENTRY_ENRICHMENT_ENABLED", "0").strip().lower() in ("1", "true", "yes")
+ENTRY_ENRICHMENT_ENABLED = os.environ.get("ENTRY_ENRICHMENT_ENABLED", "1").strip().lower() in ("1", "true", "yes")
+ENTRY_ENRICHMENT_BACKFILL_HOURS = max(1, int(os.environ.get("ENTRY_ENRICHMENT_BACKFILL_HOURS", "24")))
 ML_AUTOTRAIN_ENABLED = os.environ.get("ML_AUTOTRAIN_ENABLED", "0").strip().lower() in ("1", "true", "yes")
 ENTRY_NOTIFICATION_PENDING = {}
 ENTRY_ENRICHMENT_QUEUE = deque()
 ENTRY_ENRICHMENT_QUEUED = set()
+ENTRY_ENRICHMENT_ATTEMPTED = set()
 ENTRY_ENRICHMENT_LOCK = threading.Lock()
 LIVE_GAME_CURSOR = 0
 
@@ -671,6 +672,81 @@ def parse_score(score_text: str):
     if not score_text: return 0, 0
     nums = re.findall(r"\d+", score_text)
     return (int(nums[0]), int(nums[1])) if len(nums) >= 2 else (0, 0)
+
+
+def _is_exact_score_rule(rule, alert=None) -> bool:
+    rule_name = (getattr(rule, "name", "") or "").lower()
+    return (
+        "placar correto" in rule_name
+        or "placar exato" in rule_name
+        or "correct score" in rule_name
+        or (getattr(alert, "market_key", None) == "exact_score")
+        or _exact_score_target_from_outcomes(rule) is not None
+    )
+
+
+def _exact_score_target_from_outcomes(rule):
+    if not rule:
+        return None
+    grouped = {}
+    for cond in (getattr(rule, "outcome_conditions", None) or []):
+        if getattr(cond, "outcome_type", "") != "green":
+            continue
+        gid = getattr(cond, "group_id", 0)
+        if gid is None:
+            gid = 0
+        grouped.setdefault(gid, []).append(cond)
+
+    exact_pairs = set()
+    for conds in grouped.values():
+        pair = {}
+        invalid = False
+        for cond in conds:
+            key = normalize_stat_key(getattr(cond, "stat_key", ""))
+            side = getattr(cond, "side", "")
+            if key == "Minute":
+                continue
+            if key != "Goals" or side not in ("home", "away") or getattr(cond, "operator", "") != "==":
+                invalid = True
+                break
+            try:
+                pair[side] = int(getattr(cond, "value"))
+            except Exception:
+                invalid = True
+                break
+        if not invalid and set(pair) == {"home", "away"}:
+            exact_pairs.add((pair["home"], pair["away"]))
+
+    if not exact_pairs:
+        return None
+    for home_goals, away_goals in exact_pairs:
+        if (away_goals, home_goals) in exact_pairs:
+            return home_goals, away_goals
+    if len(exact_pairs) == 1:
+        return next(iter(exact_pairs))
+    return None
+
+
+def _exact_score_target(rule, alert=None):
+    rule_name = getattr(rule, "name", "") or ""
+    has_exact_hint = _is_exact_score_rule(rule, alert)
+    match = re.search(r"(?<!\d)(\d+)\s*[x×-]\s*(\d+)(?!\d)", rule_name, re.IGNORECASE)
+    if not match:
+        return _exact_score_target_from_outcomes(rule) if has_exact_hint else None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _is_confirmed_full_time(time_text: str) -> bool:
+    text = (time_text or "").strip().lower()
+    return any(token in text for token in ("ft", "full time", "finished", "ended", "fim", "encerrado", "final"))
+
+
+def _exact_score_matches(rule, score: str, alert=None) -> bool:
+    target = _exact_score_target(rule, alert)
+    if target is None:
+        return False
+    actual = parse_score(score)
+    return actual == target or actual == target[::-1]
 
 
 def _events_to_json(events) -> str | None:
@@ -1238,6 +1314,26 @@ def _finish_entry_enrichment_id(alert_id: int | None):
         return
     with ENTRY_ENRICHMENT_LOCK:
         ENTRY_ENRICHMENT_QUEUED.discard(alert_id)
+
+
+def _next_pending_entry_enrichment_id():
+    cutoff = now_sp() - timedelta(hours=ENTRY_ENRICHMENT_BACKFILL_HOURS)
+    rows = (
+        MatchAlert.query
+        .filter(MatchAlert.telegram_entry_message_id.isnot(None))
+        .filter(MatchAlert.telegram_entry_enriched.is_(False))
+        .filter(MatchAlert.created_at >= cutoff)
+        .order_by(MatchAlert.id.desc())
+        .limit(25)
+        .all()
+    )
+    with ENTRY_ENRICHMENT_LOCK:
+        for alert in rows:
+            if alert.id in ENTRY_ENRICHMENT_QUEUED or alert.id in ENTRY_ENRICHMENT_ATTEMPTED:
+                continue
+            ENTRY_ENRICHMENT_ATTEMPTED.add(alert.id)
+            return alert.id
+    return None
 
 
 def _build_history_meta(session, rule, url: str):
@@ -1841,11 +1937,6 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
         maybe_notify_penalty(alert, stats, minute, score, time_text=time_text)
 
 def start_worker(app):
-    # Limite de memória para threads do worker
-    mem_limit = 1024 * 1024 * 1024
-    _, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
-    soft_limit = min(mem_limit, hard_limit) if hard_limit != resource.RLIM_INFINITY else mem_limit
-    resource.setrlimit(resource.RLIMIT_AS, (soft_limit, hard_limit))
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
     if ENTRY_ENRICHMENT_ENABLED:
@@ -1899,6 +1990,8 @@ def run_entry_enrichment_worker(app):
         session = make_session()
         while True:
             alert_id = _pop_entry_enrichment_id()
+            if not alert_id:
+                alert_id = _next_pending_entry_enrichment_id()
             if not alert_id:
                 time.sleep(1)
                 continue
@@ -2542,6 +2635,9 @@ def evaluate_outcome_conditions(conditions, stats: dict) -> bool:
 def _close_pending_without_live_payload(alert, rule) -> bool:
     if alert.status != "pending" or not rule:
         return False
+    # Exact-score markets can only be settled from a confirmed final score.
+    if _is_exact_score_rule(rule, alert):
+        return False
     fallback_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
     last_update_at = _last_live_update_at(alert.game_id)
     if not should_time_red(rule, alert, fallback_minute, last_update_at=last_update_at, allow_wall_clock=True):
@@ -2575,14 +2671,7 @@ def _close_pending_without_live_payload(alert, rule) -> bool:
 def _looks_like_stale_exact_score(rule, alert, minute, score, stats) -> bool:
     if not rule or not alert:
         return False
-    rule_name = (getattr(rule, "name", "") or "").lower()
-    is_exact_score = (
-        "placar correto" in rule_name
-        or "placar exato" in rule_name
-        or "correct score" in rule_name
-        or (getattr(alert, "market_key", None) == "exact_score")
-    )
-    if not is_exact_score:
+    if not _is_exact_score_rule(rule, alert):
         return False
     if not isinstance(minute, int) or minute < 85:
         return False
@@ -2638,6 +2727,34 @@ def follow_alerts(session):
         if minute <= 0:
             _close_pending_without_live_payload(alert, rule)
             continue
+
+        exact_target = _exact_score_target(rule, alert)
+        if exact_target:
+            if alert.status != "pending":
+                continue
+            # Reaching minute 90 is not enough: stoppage-time goals can still
+            # change an exact-score result. Wait for an explicit final marker.
+            if not _is_confirmed_full_time(stats_payload.get("time_text", "")):
+                continue
+            exact_score_green = _exact_score_matches(rule, current_score, alert)
+            alert.ft_score = current_score
+            alert.ft_stats_json = stats_to_json(stats)
+            alert.ft_events_json = _events_to_json(stats_payload.get("events"))
+            alert.ft_event_metrics_json = _event_metrics_json(stats_payload.get("events"), alert.alert_minute)
+            alert.ft_completed = True
+            update_alert_status(
+                alert,
+                "green" if exact_score_green else "red",
+                minute,
+                current_score,
+                stats,
+                "✅ GREEN - placar exato confirmado no fim do jogo"
+                if exact_score_green
+                else "❌ RED - placar final diferente do placar exato",
+                events=stats_payload.get("events"),
+            )
+            continue
+
         prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
         if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
             if current_score and current_score == (alert.last_score or alert.initial_score):

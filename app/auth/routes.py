@@ -68,6 +68,8 @@ def login():
         if user and user.check_password(password):
             login_user(user)
             login_rate_limiter.reset(ip_address)
+            if (user.password_hash or "").startswith("scrypt:"):
+                user.set_password(password)
             _record_login_attempt(username_normalized, ip_address, True, user)
             return redirect(url_for("main.dashboard"))
         _record_login_attempt(username_normalized, ip_address, False, user)

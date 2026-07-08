@@ -137,6 +137,7 @@
             <th>Jogo</th>
             <th>Status</th>
             <th>Min alerta</th>
+            <th>Min resultado</th>
             <th>HT</th>
             <th>FT</th>
             <th>Aposta</th>
@@ -182,6 +183,13 @@
             </td>
 
             <td><span class="history-mono">{{ alert.alert_minute }}'</span></td>
+            <td>
+              {% if alert.result_minute is not none %}
+                <span class="history-mono">{{ alert.result_minute }}'</span>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
             {% set display_score = alert.ft_score if alert.ft_completed and alert.ft_score else alert.last_score or alert.ft_score or '-' %}
             <td><span class="history-mono">{{ alert.ht_score or '-' }}</span></td>
             <td><span class="history-mono">{{ display_score }}</span></td>

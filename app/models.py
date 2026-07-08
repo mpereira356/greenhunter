@@ -27,10 +27,13 @@ class User(UserMixin, db.Model):
     alerts = db.relationship("MatchAlert", backref="user", cascade="all, delete-orphan")
 
     def set_password(self, password: str) -> None:
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(password, method="pbkdf2:sha256", salt_length=16)
 
     def check_password(self, password: str) -> bool:
-        return check_password_hash(self.password_hash, password)
+        try:
+            return check_password_hash(self.password_hash, password)
+        except ValueError:
+            return False
 
     @property
     def is_admin_user(self) -> bool:
