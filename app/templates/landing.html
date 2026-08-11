@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {% block title %}GreenHunter | IA para Sinais de Apostas em Tempo Real{% endblock %}
+{% block meta_description %}GreenHunter usa IA para monitorar jogos ao vivo, analisar estatisticas em tempo real e enviar sinais de apostas esportivas pelo Telegram.{% endblock %}
 {% block main_class %}ghx-landing{% endblock %}
 
 {% block content %}
 <nav class="ghx-nav">
   <a class="ghx-brand" href="#top" aria-label="GreenHunter">
     <span class="ghx-brand-mark">
-      <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="">
+      <img src="{{ url_for('static', filename='img/greenhunter.png') }}" alt="GreenHunter">
     </span>
     <span>
       <strong>GreenHunter</strong>
@@ -36,7 +37,7 @@
         IA para sinais de apostas ao vivo
       </div>
       <h1>
-        Sinais <em>INTELIGENTES</em> em <em>TEMPO REAL</em> com <em>IA.</em>
+        Sinais de apostas <em>INTELIGENTES</em> em <em>TEMPO REAL</em> com <em>IA.</em>
       </h1>
       <p>
         GreenHunter monitora jogos ao vivo, cruza estatisticas, placar, pressao e padroes historicos para entregar alertas limpos no momento em que a oportunidade nasce.
@@ -315,6 +316,7 @@
   <span class="ghx-eyebrow">Entre antes do mercado perceber</span>
   <h2>Transforme jogos ao vivo em sinais inteligentes.</h2>
   <p>Crie sua conta e coloque a IA do GreenHunter para monitorar oportunidades em tempo real.</p>
+  <p>Apostas envolvem risco. Jogue com responsabilidade. Maiores de 18 anos.</p>
   <a class="ghx-primary-btn" href="{{ url_for('auth.register') }}">Comecar agora</a>
 </section>
 {% endblock %}

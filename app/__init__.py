@@ -6,6 +6,7 @@ from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
 from flask import Flask
 from flask_login import current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.extensions import db, login_manager
 from app.models import AdminBroadcast, AdminBroadcastView, User
@@ -33,6 +34,7 @@ def create_app():
     load_dotenv()
 
     app = Flask(__name__)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     # =========================
     # Configurações principais
@@ -61,6 +63,9 @@ def create_app():
         for value in os.environ.get("ALLOWED_HOSTS", "").split(",")
         if value.strip()
     }
+    app.config["SITE_URL"] = os.environ.get("SITE_URL", "https://greenhunter.com.br").rstrip("/")
+    app.config["GA_MEASUREMENT_ID"] = os.environ.get("GA_MEASUREMENT_ID", "").strip()
+    app.config["PREFERRED_URL_SCHEME"] = os.environ.get("PREFERRED_URL_SCHEME", "https")
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"

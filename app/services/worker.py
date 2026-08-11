@@ -1920,8 +1920,6 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
     score = stats_payload.get("score")
     stats = stats_payload.get("stats", {})
     time_text = stats_payload.get("time_text", "")
-    home_team = stats_payload.get("home_team", "")
-    away_team = stats_payload.get("away_team", "")
     # Keep behavior aligned with rule flow: only alerts that were triggered and are still pending.
     alerts = MatchAlert.query.filter(
         MatchAlert.game_id == game_id,
@@ -1930,10 +1928,6 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
     for alert in alerts:
         if not _is_recent_game_update(game_id):
             continue
-        if home_team:
-            alert.home_team = home_team
-        if away_team:
-            alert.away_team = away_team
         maybe_notify_penalty(alert, stats, minute, score, time_text=time_text)
 
 def start_worker(app):
@@ -1966,6 +1960,10 @@ def run_worker(app):
             except Exception as exc:
                 db.session.rollback()
                 print(f"[worker] erro: {exc}")
+            finally:
+                # Never carry a SQLite transaction into the next network-heavy cycle.
+                db.session.rollback()
+                db.session.remove()
             API_STATUS["last_cycle"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
             time.sleep(POLL_INTERVAL)
 
@@ -1980,6 +1978,9 @@ def run_alerts_worker(app):
             except Exception as exc:
                 db.session.rollback()
                 print(f"[alerts] erro: {exc}")
+            finally:
+                db.session.rollback()
+                db.session.remove()
             time.sleep(ALERTS_POLL_INTERVAL)
 
 
@@ -1993,6 +1994,8 @@ def run_entry_enrichment_worker(app):
             if not alert_id:
                 alert_id = _next_pending_entry_enrichment_id()
             if not alert_id:
+                db.session.rollback()
+                db.session.remove()
                 time.sleep(1)
                 continue
             try:
@@ -2002,6 +2005,8 @@ def run_entry_enrichment_worker(app):
                 print(f"[entry_enrich] erro alert_id={alert_id}: {exc}")
             finally:
                 _finish_entry_enrichment_id(alert_id)
+                db.session.rollback()
+                db.session.remove()
 
 def _game_key(game: dict) -> str:
     return str(game.get("game_id") or game.get("url") or "")

@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 
 from ..extensions import db
@@ -13,6 +13,11 @@ from ..security import safe_redirect_target
 from ..utils.time import now_sp
 
 main_bp = Blueprint("main", __name__)
+
+
+def _site_url(path: str = "") -> str:
+    base = (current_app.config.get("SITE_URL") or "https://greenhunter.com.br").rstrip("/")
+    return f"{base}{path}"
 
 
 def _safe_json_dict(raw):
@@ -241,6 +246,55 @@ def dashboard():
         finance_days=finance_days,
         max_finance_abs=max_finance_abs,
     )
+
+
+@main_bp.route("/robots.txt")
+def robots_txt():
+    body = "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "",
+            "Disallow: /admin",
+            "Disallow: /dashboard",
+            "Disallow: /auth/login",
+            "Disallow: /logout",
+            "Disallow: /api",
+            "Disallow: /__pycache__/",
+            "Disallow: /static/uploads/",
+            "",
+            "Sitemap: https://greenhunter.com.br/sitemap.xml",
+            "",
+        ]
+    )
+    return Response(body, mimetype="text/plain")
+
+
+@main_bp.route("/sitemap.xml")
+def sitemap_xml():
+    now_iso = now_sp().date().isoformat()
+    site_url = "https://greenhunter.com.br"
+    urls = [
+        {"loc": f"{site_url}/", "priority": "1.0", "changefreq": "daily"},
+        {"loc": f"{site_url}/auth/register", "priority": "0.8", "changefreq": "weekly"},
+    ]
+    entries = []
+    for item in urls:
+        entries.append(
+            "  <url>\n"
+            f"    <loc>{item['loc']}</loc>\n"
+            f"    <lastmod>{now_iso}</lastmod>\n"
+            f"    <changefreq>{item['changefreq']}</changefreq>\n"
+            f"    <priority>{item['priority']}</priority>\n"
+            "  </url>"
+        )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(entries)
+        + "\n</urlset>\n"
+    )
+    return Response(body, mimetype="application/xml")
 
 
 @main_bp.route("/api/status")

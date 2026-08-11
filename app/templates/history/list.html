@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Historico{% endblock %}
+{% block title %}Historico | GreenHunter{% endblock %}
+{% block meta_description %}Historico GreenHunter com alertas enviados, resultados green ou red, pendencias e desempenho das suas regras.{% endblock %}
 {% block content %}
 {% set resolved = green_count + red_count %}
 {% set green_pct = ((green_count * 100) // resolved) if resolved > 0 else 0 %}

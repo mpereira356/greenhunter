@@ -10,6 +10,7 @@ import sqlite3
 import ctypes
 import subprocess
 import resource
+import signal
 from urllib.parse import urljoin, urlparse
 import tempfile
 from urllib.parse import unquote
@@ -30,6 +31,8 @@ CF_CHALLENGE_MARKERS = (
 _CF_LOCK = threading.Lock()
 _CF_LAST_SOLVED_AT = 0.0
 _CF_ALERT_LAST_SENT_AT = 0.0
+_CF_CONSECUTIVE_CHALLENGES = 0
+_CF_RESTART_SCHEDULED = False
 _BROWSER_DRIVER = None
 _BROWSER_PROFILE_DIR = None
 _PROFILE_LAST_CLEANUP_AT = 0.0
@@ -38,6 +41,8 @@ _PROFILE_COOKIES_LOADED = False
 _PROFILE_COOKIES_LAST_ERROR_AT = 0.0
 _BROWSER_LAST_LAUNCHED_AT = 0.0
 _BROWSER_TARGET_ID = None
+_BROWSER_SESSION_COOKIES = []
+_BROWSER_SESSION_USER_AGENT = None
 
 
 def make_session():
@@ -288,8 +293,8 @@ def _send_cf_telegram_alert(url: str):
 
     text = (
         "GreenHunter: Cloudflare pediu verificacao humana novamente.\n"
-        "O bot tentou clicar automaticamente no checkbox. Se nao liberar, abra o RDP do servidor, "
-        "encontre a janela do Chrome do bot e clique em 'Verify you are human'.\n"
+        "O bot esta tentando liberar o checkbox automaticamente. Se o desafio continuar preso, "
+        "o Chrome e o worker serao reciclados sem intervencao manual.\n"
         f"URL: {url}"
     )
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -300,6 +305,103 @@ def _send_cf_telegram_alert(url: str):
             _CF_ALERT_LAST_SENT_AT = now
     except requests.RequestException:
         pass
+
+
+def _cf_auto_restart_threshold() -> int:
+    raw = (os.environ.get("BETSAPI_CF_AUTO_RESTART_AFTER") or "3").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 3
+
+
+def _send_cf_recovery_alert(url: str, count: int):
+    token, chat_id = _cf_alert_credentials()
+    if not token or not chat_id:
+        return
+    text = (
+        f"GreenHunter: Cloudflare apareceu {count} vezes seguidas.\n"
+        "Recuperacao automatica acionada: o worker e o Chrome serao reiniciados agora.\n"
+        f"URL: {url}"
+    )
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+            timeout=10,
+        )
+    except requests.RequestException:
+        pass
+
+
+def _schedule_worker_restart(delay_seconds: float):
+    """Close the stale Chrome and let the Gunicorn master replace this worker."""
+    def _restart():
+        time.sleep(max(0.0, delay_seconds))
+        _close_debug_browser()
+        os.kill(os.getpid(), signal.SIGKILL)
+
+    threading.Thread(target=_restart, name="cf-auto-restart", daemon=True).start()
+
+
+def _close_debug_browser():
+    try:
+        urllib = __import__("urllib.request", fromlist=["request"])
+        version = json.load(urllib.urlopen(f"{_browser_debug_base()}/json/version", timeout=3))
+        ws_url = version.get("webSocketDebuggerUrl")
+        if not ws_url:
+            return
+        ws = _cdp_connect(ws_url)
+        try:
+            ws.send(json.dumps({"id": 9000, "method": "Browser.close"}))
+        finally:
+            ws.close()
+    except Exception as exc:
+        print(f"[scraper] Chrome nao respondeu ao fechamento automatico: {exc}")
+
+
+def _record_cf_challenge(url: str) -> bool:
+    """Return True once when repeated challenges require a full clean restart."""
+    global _CF_CONSECUTIVE_CHALLENGES, _CF_RESTART_SCHEDULED
+    _CF_CONSECUTIVE_CHALLENGES += 1
+    threshold = _cf_auto_restart_threshold()
+    if threshold <= 0 or _CF_CONSECUTIVE_CHALLENGES < threshold or _CF_RESTART_SCHEDULED:
+        return False
+
+    _CF_RESTART_SCHEDULED = True
+    count = _CF_CONSECUTIVE_CHALLENGES
+    print(f"[scraper] Cloudflare recorrente ({count}x); reinicio automatico do worker agendado.")
+    _send_cf_recovery_alert(url, count)
+    delay = float(os.environ.get("BETSAPI_CF_AUTO_RESTART_DELAY_SECONDS", "2"))
+    _schedule_worker_restart(delay)
+    return True
+
+
+def _force_cf_timeout_recovery(url: str) -> bool:
+    """Recycle a worker after one challenge stays blocked beyond the safe wait."""
+    global _CF_RESTART_SCHEDULED
+    if _CF_RESTART_SCHEDULED:
+        return False
+    raw = (os.environ.get("BETSAPI_CF_RECYCLE_ON_TIMEOUT") or "1").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+
+    _CF_RESTART_SCHEDULED = True
+    count = max(1, _CF_CONSECUTIVE_CHALLENGES)
+    print("[scraper] Cloudflare permaneceu bloqueado; reciclando Chrome e worker automaticamente.")
+    _send_cf_recovery_alert(url, count)
+    delay = float(os.environ.get("BETSAPI_CF_AUTO_RESTART_DELAY_SECONDS", "2"))
+    _schedule_worker_restart(delay)
+    return True
+
+
+def _cf_auto_recovery_timeout_seconds(wait_seconds: int) -> int:
+    raw = (os.environ.get("BETSAPI_CF_AUTO_RECOVERY_TIMEOUT_SECONDS") or "45").strip()
+    try:
+        configured = max(10, int(raw))
+    except ValueError:
+        configured = 45
+    return min(wait_seconds, configured)
 
 
 class _SimpleResponse:
@@ -346,6 +448,22 @@ def _apply_cookies_to_session(session, cookies):
             domain=cookie.get("domain") or ".betsapi.com",
             path=cookie.get("path") or "/",
         )
+
+
+def _remember_browser_session(cookies, user_agent=None):
+    """Share a browser-renewed session with every scraper Session in this process."""
+    global _BROWSER_SESSION_COOKIES, _BROWSER_SESSION_USER_AGENT
+    if cookies:
+        _BROWSER_SESSION_COOKIES = [dict(cookie) for cookie in cookies]
+    if user_agent:
+        _BROWSER_SESSION_USER_AGENT = user_agent
+
+
+def _apply_remembered_browser_session(session):
+    if _BROWSER_SESSION_COOKIES:
+        _apply_cookies_to_session(session, _BROWSER_SESSION_COOKIES)
+    if _BROWSER_SESSION_USER_AGENT:
+        session.headers["User-Agent"] = _BROWSER_SESSION_USER_AGENT
 
 
 def _build_browser_driver():
@@ -833,7 +951,14 @@ def _browser_fetch(url: str):
     wait_seconds = int(os.environ.get("BETSAPI_CF_WAIT_SECONDS", "180"))
     urllib = __import__("urllib.request", fromlist=["request"])
 
-    with _CF_LOCK:
+    # Only one request may drive the shared Chrome window. Previously every
+    # caller queued here for up to BETSAPI_CF_WAIT_SECONDS. Once the challenge
+    # was released, the backlog resumed at once and caused SQLite lock storms.
+    lock_wait_seconds = float(os.environ.get("BETSAPI_CF_LOCK_WAIT_SECONDS", "1"))
+    if not _CF_LOCK.acquire(timeout=max(0.0, lock_wait_seconds)):
+        print("[scraper] recuperacao Cloudflare ja em andamento; tentativa adiada.")
+        return None, None, None
+    try:
         if not _browser_debug_running():
             recently_launched = _BROWSER_LAST_LAUNCHED_AT and (time.time() - _BROWSER_LAST_LAUNCHED_AT) < 20
             if recently_launched:
@@ -901,7 +1026,9 @@ def _browser_fetch(url: str):
                     except Exception as exc:
                         print(f"[scraper] clique automatico no Cloudflare falhou: {exc}")
                 _send_cf_telegram_alert(url)
-                deadline = time.time() + wait_seconds
+                if _record_cf_challenge(url):
+                    return None, None, None
+                deadline = time.time() + _cf_auto_recovery_timeout_seconds(wait_seconds)
                 while time.time() < deadline:
                     time.sleep(2)
                     if auto_click and (time.time() - last_click_at) >= 8:
@@ -921,9 +1048,11 @@ def _browser_fetch(url: str):
                         break
                 else:
                     print("[scraper] timeout ao aguardar liberacao do challenge.")
+                    _force_cf_timeout_recovery(url)
                     return None, None, None
 
             print("[scraper] Challenge liberado. Sessao persistente ativa.")
+            _remember_browser_session(cookies, user_agent)
             return _SimpleResponse(url, 200, html), cookies, user_agent
         except Exception as exc:
             print(f"[scraper] erro no navegador de desafio: {exc}")
@@ -933,6 +1062,8 @@ def _browser_fetch(url: str):
                 ws.close()
             except Exception:
                 pass
+    finally:
+        _CF_LOCK.release()
 
 
 def _browser_fallback_enabled() -> bool:
@@ -956,6 +1087,10 @@ def get_with_fallback(session, url):
     alt_url = _swap_base(url)
     if alt_url != url:
         candidates.append(alt_url)
+
+    # A clearance obtained by either worker is immediately reused by the
+    # others instead of waiting for each Session to hit Cloudflare itself.
+    _apply_remembered_browser_session(session)
 
     for candidate in candidates:
         try:
@@ -991,6 +1126,7 @@ def get_with_fallback(session, url):
             _apply_cookies_to_session(session, cookies)
             if user_agent:
                 session.headers["User-Agent"] = user_agent
+            _remember_browser_session(cookies, user_agent)
             return browser_resp
 
     if last_resp is not None:
@@ -1177,6 +1313,50 @@ def _extract_match_score(soup, rows) -> str | None:
         if title_score:
             return title_score
     return None
+
+
+def _select_current_stats_table(soup):
+    """Select the live/full-match stats table, never the half/history tables."""
+    if not soup:
+        return None
+
+    candidates = soup.select("table.table.table-sm") or soup.find_all("table")
+    best_table = None
+    best_score = -1
+    stat_keys = {
+        "Goals",
+        "Corners",
+        "On Target",
+        "Possession",
+        "Dangerous Attacks",
+        "Attacks",
+        "Yellow Card",
+        "Red Card",
+        "Penalties",
+        "Substitutions",
+    }
+    for position, table in enumerate(candidates):
+        score = 0
+        for row_index, row in enumerate(table.find_all("tr")):
+            cols = row.find_all("td", recursive=False)
+            if len(cols) != 3:
+                continue
+            middle = cols[1].get_text(" ", strip=True)
+            middle_norm = _to_ascii(middle).strip().lower().rstrip(".")
+            if row_index == 0 or not middle.strip():
+                if middle_norm in {"stat", "stats", "estat", "estatistica", "estatisticas"}:
+                    score += 100
+                elif middle_norm in {"half", "ht", "tempo", "intervalo"}:
+                    score -= 100
+            if normalize_stat_key(middle) in stat_keys:
+                score += 1
+
+        # Keep document order as the tie-breaker; BetsAPI renders current stats first.
+        score = (score * 1000) - position
+        if score > best_score:
+            best_score = score
+            best_table = table
+    return best_table
 
 
 def _clean_team_name(name: str) -> str:
@@ -1618,12 +1798,11 @@ def fetch_match_stats(session, url):
 
     time_text = _extract_match_time_text(soup)
 
-    tables = soup.find_all("table", class_="table table-sm")
-    stat_tables = tables if tables else soup.find_all("table")
-    if not stat_tables:
+    stat_table = _select_current_stats_table(soup)
+    if not stat_table:
         return None
 
-    rows = stat_tables[0].find_all("tr")
+    rows = stat_table.find_all("tr")
     home_team = ""
     away_team = ""
     header_score = None
@@ -1663,9 +1842,9 @@ def fetch_match_stats(session, url):
     score = header_score or "0 x 0"
     best_goals = (0, 0)
 
-    all_rows = []
-    for table in stat_tables:
-        all_rows.extend(table.find_all("tr"))
+    # Only the current/full-match table is authoritative. The page also contains
+    # a "Half" snapshot and historical averages with the same stat labels.
+    all_rows = rows
 
     def _is_missing_pair(values):
         if not values:

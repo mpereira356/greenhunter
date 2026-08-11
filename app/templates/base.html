@@ -4,7 +4,54 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}GreenHunter{% endblock %}</title>
+    {% set site_origin = "https://greenhunter.com.br" %}
+    {% set canonical_default = site_origin ~ (request.path if request.path != "/" else "/") %}
+    {% set seo_title %}{% block title %}GreenHunter | IA para Sinais de Apostas em Tempo Real{% endblock %}{% endset %}
+    {% set seo_description %}{% block meta_description %}GreenHunter monitora jogos ao vivo com IA, estatisticas em tempo real e alertas no Telegram para operadores de apostas esportivas.{% endblock %}{% endset %}
+    {% set canonical_url %}{% block canonical_url %}{{ canonical_default }}{% endblock %}{% endset %}
+    {% set og_image = site_origin ~ url_for('static', filename='img/greenhunter.png') %}
+    <title>{{ seo_title|striptags|trim }}</title>
+    <meta name="description" content="{{ seo_description|striptags|trim }}">
+    <link rel="canonical" href="{{ canonical_url|trim }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="GreenHunter">
+    <meta property="og:title" content="{{ seo_title|striptags|trim }}">
+    <meta property="og:description" content="{{ seo_description|striptags|trim }}">
+    <meta property="og:url" content="{{ canonical_url|trim }}">
+    <meta property="og:image" content="{{ og_image }}">
+    <meta property="og:locale" content="pt_BR">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ seo_title|striptags|trim }}">
+    <meta name="twitter:description" content="{{ seo_description|striptags|trim }}">
+    <meta name="twitter:image" content="{{ og_image }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/greenhunter.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/greenhunter.png') }}">
+    {% set organization_schema = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "GreenHunter",
+      "url": site_origin ~ "/",
+      "logo": og_image
+    } %}
+    {% set website_schema = {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "GreenHunter",
+      "url": site_origin ~ "/",
+      "description": seo_description|striptags|trim,
+      "inLanguage": "pt-BR"
+    } %}
+    <script type="application/ld+json">{{ organization_schema|tojson }}</script>
+    <script type="application/ld+json">{{ website_schema|tojson }}</script>
+    {% if config.GA_MEASUREMENT_ID %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GA_MEASUREMENT_ID }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "{{ config.GA_MEASUREMENT_ID }}");
+    </script>
+    {% endif %}
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
