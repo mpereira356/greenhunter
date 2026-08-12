@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ match.home_team }} x {{ match.away_team }} | GreenHunter{% endblock %}
+{% block page_title %}Análise Pré-jogo{% endblock %}
+{% block content %}
+<section class="analysis-page matchday-analysis">
+  <div class="analysis-hero">
+    <div>
+      <div class="analysis-kicker">{{ match.league or "Jogo do dia" }} · {{ analysis.scheduled_time or match.time }}</div>
+      <h1>{{ match.home_team }} <span>vs</span> {{ match.away_team }}</h1>
+      <p>Frequências observadas no histórico disponível. Confira sempre a quantidade de jogos da amostra.</p>
+    </div>
+    <div class="analysis-status">
+      <form class="matchday-page-sample" method="get">
+        <input type="hidden" name="day" value="{{ day }}">
+        <label for="matchday-analysis-limit">Amostras</label>
+        <select id="matchday-analysis-limit" name="limit" aria-label="Quantidade de jogos por amostra" onchange="this.form.submit()">
+          {% for number in range(1, 11) %}
+          <option value="{{ number }}"{% if number == sample_limit %} selected{% endif %}>{{ number }} jogos</option>
+          {% endfor %}
+        </select>
+      </form>
+      <a href="{{ url_for('main.matchday', day=day) }}">Voltar à agenda</a>
+      <a href="{{ url_for('main.matchday_analysis', game_id=match.game_id, day=day, limit=sample_limit, refresh=1) }}">Recalcular</a>
+      <a href="{{ match.url }}" target="_blank" rel="noopener noreferrer">Abrir BetsAPI</a>
+    </div>
+  </div>
+
+  {% if analysis and analysis.groups %}
+  <div class="analysis-summary-grid">
+    {% for group in analysis.groups %}
+    <article class="analysis-group-card">
+      <div class="analysis-card-head"><h2>{{ group.key }}</h2><span>{{ group.count }} jogos</span></div>
+      <div class="analysis-metrics">
+        <div><span>+1,5 gols</span><strong>{{ ((group.over15 / group.count * 100)|round|int) if group.count else 0 }}%</strong><small>{{ group.over15 }}/{{ group.count }}</small></div>
+        <div><span>+2,5 gols</span><strong>{{ ((group.over25 / group.count * 100)|round|int) if group.count else 0 }}%</strong><small>{{ group.over25 }}/{{ group.count }}</small></div>
+        <div><span>Ambas marcam</span><strong>{{ ((group.btts / group.count * 100)|round|int) if group.count else 0 }}%</strong><small>{{ group.btts }}/{{ group.count }}</small></div>
+        <div><span>Média gols</span><strong>{{ group.avg_goals if group.avg_goals is not none else "-" }}</strong></div>
+      </div>
+      <div class="matchday-final-scores">
+        <div class="matchday-market-title">Placares finais da amostra</div>
+        {% if group['items'] %}
+        <div class="matchday-score-list" aria-label="Placares finais de {{ group.key }}">
+          {% for item in group['items'] %}
+          <span><small>J{{ loop.index }}</small><strong>{{ item.home }} x {{ item.away }}</strong></span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="matchday-unavailable">Nenhum placar final disponível nesta base.</div>
+        {% endif %}
+      </div>
+      <div class="analysis-phase-row">
+        <div><span>Gol HT</span><strong>{{ group.phase.goal_1h_pct }}%</strong><small>{{ group.phase.goal_1h_games }}/{{ group.phase.samples }} detalhados</small></div>
+        <div><span>Gol 2º tempo</span><strong>{{ group.phase.goal_2h_pct }}%</strong><small>{{ group.phase.goal_2h_games }}/{{ group.phase.samples }} detalhados</small></div>
+      </div>
+      <div class="analysis-mini-table">
+        <div><span>Média escanteios 1T / 2T</span><strong>{{ group.phase.avg_corners_1h if group.phase.avg_corners_1h is not none else "-" }} / {{ group.phase.avg_corners_2h if group.phase.avg_corners_2h is not none else "-" }}</strong></div>
+        <div><span>+4,5 escanteios</span><strong>{{ group.phase.corner_lines.get('4.5', 0) }}%</strong></div>
+        <div><span>+7,5 escanteios</span><strong>{{ group.phase.corner_lines.get('7.5', 0) }}%</strong></div>
+        <div><span>+8,5 / +9,5 escanteios</span><strong>{{ group.phase.corner_lines.get('8.5', 0) }}% / {{ group.phase.corner_lines.get('9.5', 0) }}%</strong></div>
+      </div>
+      <div class="matchday-market-title">Cartões</div>
+      <div class="analysis-mini-table">
+        <div><span>Média cartões 1T / 2T</span><strong>{{ group.phase.avg_cards_1h if group.phase.avg_cards_1h is not none else "-" }} / {{ group.phase.avg_cards_2h if group.phase.avg_cards_2h is not none else "-" }}</strong></div>
+        <div><span>Média total</span><strong>{{ group.phase.avg_cards_total if group.phase.avg_cards_total is not none else "-" }}</strong></div>
+        <div><span>+2,5 / +3,5 cartões</span><strong>{{ group.phase.card_lines.get('2.5', 0) }}% / {{ group.phase.card_lines.get('3.5', 0) }}%</strong></div>
+        <div><span>+4,5 / +5,5 cartões</span><strong>{{ group.phase.card_lines.get('4.5', 0) }}% / {{ group.phase.card_lines.get('5.5', 0) }}%</strong></div>
+      </div>
+      <div class="matchday-market-title">Laterais</div>
+      {% if group.phase.throw_ins_samples %}
+      <div class="analysis-mini-table">
+        <div><span>Média total</span><strong>{{ group.phase.avg_throw_ins }}</strong><small>{{ group.phase.throw_ins_samples }} jogos</small></div>
+        <div><span>+29,5 laterais</span><strong>{{ group.phase.throw_in_lines.get('29.5', 0) }}%</strong></div>
+        <div><span>+34,5 laterais</span><strong>{{ group.phase.throw_in_lines.get('34.5', 0) }}%</strong></div>
+        <div><span>+39,5 laterais</span><strong>{{ group.phase.throw_in_lines.get('39.5', 0) }}%</strong></div>
+      </div>
+      {% else %}
+      <div class="matchday-unavailable">O BetsAPI não forneceu dados de laterais nesta amostra.</div>
+      {% endif %}
+      {% if group.phase.samples < 5 %}<div class="matchday-caution">Amostra detalhada pequena; interprete com cautela.</div>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  <section class="analysis-panel matchday-reading">
+    <div class="analysis-card-head"><h2>Leitura rápida</h2><span>{{ analysis.best_signal.key }}</span></div>
+    {% set best = analysis.best_signal %}
+    {% if best.phase.samples %}
+      <p>A melhor base detalhada disponível é <strong>{{ best.key }}</strong>, com {{ best.phase.samples }} jogos: gol no primeiro tempo em <strong>{{ best.phase.goal_1h_pct }}%</strong> e no segundo tempo em <strong>{{ best.phase.goal_2h_pct }}%</strong>.</p>
+    {% else %}
+      <p>Não houve histórico detalhado suficiente para calcular gol por tempo e escanteios. Os indicadores FT acima continuam disponíveis.</p>
+    {% endif %}
+    <small>“Melhor base” significa maior amostra disponível; não representa indicação automática de aposta.</small>
+  </section>
+  {% else %}
+    <div class="analysis-empty">Não foi possível obter histórico suficiente para esta partida.</div>
+  {% endif %}
+</section>
+{% endblock %}

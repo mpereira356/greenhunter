@@ -136,17 +136,36 @@ def _phase_metrics(items: list[dict]) -> dict:
             "avg_on_target_2h": None,
             "avg_cards_1h": None,
             "avg_cards_2h": None,
+            "corner_lines": {},
+            "corners_samples": 0,
+            "avg_cards_total": None,
+            "card_lines": {},
+            "cards_samples": 0,
+            "throw_ins_samples": 0,
+            "avg_throw_ins": None,
+            "throw_in_lines": {},
+            "offsides_samples": 0,
+            "avg_offsides": None,
         }
     goal_1h = sum(1 for item in detailed if int(item.get("goals_ht") or 0) > 0)
     goal_2h = sum(1 for item in detailed if int(item.get("goals_2h") or 0) > 0)
+    card_detailed = [item for item in detailed if item.get("yellow_cards_ht") is not None]
+    corner_detailed = [item for item in detailed if item.get("corners_ht") is not None]
     cards_1h = [
         int(item.get("yellow_cards_ht") or 0) + int(item.get("red_cards_ht") or 0)
-        for item in detailed
+        for item in card_detailed
     ]
     cards_2h = [
         int(item.get("yellow_cards_2h") or 0) + int(item.get("red_cards_2h") or 0)
-        for item in detailed
+        for item in card_detailed
     ]
+    corner_totals = [
+        int(item.get("corners_ht") or 0) + int(item.get("corners_2h") or 0)
+        for item in corner_detailed
+    ]
+    card_totals = [cards_1h[index] + cards_2h[index] for index in range(len(card_detailed))]
+    throw_ins = [int(item["throw_ins_total"]) for item in detailed if item.get("throw_ins_total") is not None]
+    offsides = [int(item["offsides_total"]) for item in detailed if item.get("offsides_total") is not None]
     return {
         "samples": total,
         "goal_1h_games": goal_1h,
@@ -155,12 +174,31 @@ def _phase_metrics(items: list[dict]) -> dict:
         "goal_2h_pct": _pct(goal_2h, total),
         "avg_goals_1h": _avg(detailed, "goals_ht"),
         "avg_goals_2h": _avg(detailed, "goals_2h"),
-        "avg_corners_1h": _avg(detailed, "corners_ht"),
-        "avg_corners_2h": _avg(detailed, "corners_2h"),
+        "avg_corners_1h": _avg(corner_detailed, "corners_ht"),
+        "avg_corners_2h": _avg(corner_detailed, "corners_2h"),
         "avg_on_target_1h": _avg(detailed, "on_target_events_ht"),
         "avg_on_target_2h": _avg(detailed, "on_target_events_2h"),
-        "avg_cards_1h": round(mean(cards_1h), 2),
-        "avg_cards_2h": round(mean(cards_2h), 2),
+        "avg_cards_1h": round(mean(cards_1h), 2) if cards_1h else None,
+        "avg_cards_2h": round(mean(cards_2h), 2) if cards_2h else None,
+        "avg_cards_total": round(mean(card_totals), 2) if card_totals else None,
+        "cards_samples": len(card_detailed),
+        "card_lines": {
+            str(line): _pct(sum(1 for total_cards in card_totals if total_cards > line), len(card_totals))
+            for line in (2.5, 3.5, 4.5, 5.5)
+        },
+        "corner_lines": {
+            str(line): _pct(sum(1 for total_corners in corner_totals if total_corners > line), len(corner_totals))
+            for line in (4.5, 7.5, 8.5, 9.5)
+        },
+        "corners_samples": len(corner_detailed),
+        "throw_ins_samples": len(throw_ins),
+        "avg_throw_ins": round(mean(throw_ins), 2) if throw_ins else None,
+        "throw_in_lines": {
+            str(line): _pct(sum(1 for total_throw_ins in throw_ins if total_throw_ins > line), len(throw_ins))
+            for line in (29.5, 34.5, 39.5)
+        } if throw_ins else {},
+        "offsides_samples": len(offsides),
+        "avg_offsides": round(mean(offsides), 2) if offsides else None,
     }
 
 
@@ -227,7 +265,13 @@ def _current_snapshot(alert, session):
     }
 
 
-def build_alert_analysis(alert, force_refresh: bool = False, include_details: bool = True) -> dict:
+def build_alert_analysis(
+    alert,
+    force_refresh: bool = False,
+    include_details: bool = True,
+    detail_limits: dict | None = None,
+    history_limits: dict | None = None,
+) -> dict:
     if not force_refresh:
         cached = _load_cached_analysis(alert)
         if cached:
@@ -237,12 +281,13 @@ def build_alert_analysis(alert, force_refresh: bool = False, include_details: bo
     history_data = fetch_match_history(
         session,
         alert.url,
-        limits=HISTORY_LIMITS,
+        limits=history_limits or HISTORY_LIMITS,
         use_fallback=True,
         timeout=ANALYSIS_HISTORY_TIMEOUT_SECONDS,
     )
-    if include_details and any((limit or 0) > 0 for limit in DETAIL_LIMITS.values()):
-        history_data = enrich_history_with_ht_goals(session, history_data, DETAIL_LIMITS)
+    selected_detail_limits = detail_limits or DETAIL_LIMITS
+    if include_details and any((limit or 0) > 0 for limit in selected_detail_limits.values()):
+        history_data = enrich_history_with_ht_goals(session, history_data, selected_detail_limits)
     groups = [
         _group_analysis("H2H", history_data.get("h2h", [])),
         _group_analysis("Mandante", history_data.get("home", [])),
@@ -262,6 +307,7 @@ def build_alert_analysis(alert, force_refresh: bool = False, include_details: bo
         "current": current,
         "groups": groups,
         "best_signal": best_signal,
+        "scheduled_time": history_data.get("scheduled_time"),
         "cached": False,
     }
     _save_cached_analysis(alert, analysis)

@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+{% block title %}Jogos do Dia | GreenHunter{% endblock %}
+{% block meta_description %}Agenda diária de futebol com análise estatística de gols, primeiro tempo e escanteios.{% endblock %}
+{% block page_title %}Jogos do Dia{% endblock %}
+{% block content %}
+<section class="matchday-page">
+  <div class="matchday-hero">
+    <div>
+      <span class="analysis-kicker">Pré-jogo</span>
+      <h1>Agenda e tendências do dia</h1>
+      <p>Abra uma partida para comparar H2H, mandante e visitante. As porcentagens são frequências históricas, não garantias.</p>
+    </div>
+    <div class="matchday-hero-actions">
+      <div class="matchday-help">
+        <button class="matchday-help-trigger" type="button" aria-label="Entenda os indicadores" aria-describedby="matchday-help-legend">i</button>
+        <div class="matchday-help-popover" id="matchday-help-legend" role="tooltip">
+          <strong>Como ler os indicadores</strong>
+          <dl>
+            <div><dt>H2H</dt><dd>Últimos confrontos diretos entre as duas equipes.</dd></div>
+            <div><dt>Casa</dt><dd>Últimos jogos disponíveis do time mandante.</dd></div>
+            <div><dt>Fora</dt><dd>Últimos jogos disponíveis do time visitante.</dd></div>
+            <div><dt>Gol HT</dt><dd>Percentual com pelo menos um gol no primeiro tempo.</dd></div>
+            <div><dt>+1,5 / +2,5</dt><dd>Percentual com 2+ ou 3+ gols no placar final.</dd></div>
+            <div><dt>Média esc.</dt><dd>Média total de escanteios por partida.</dd></div>
+            <div><dt>Média cartões</dt><dd>Média total de cartões amarelos e vermelhos.</dd></div>
+            <div><dt>Média imped.</dt><dd>Média total de impedimentos por partida, quando disponível.</dd></div>
+            <div><dt>Amostra</dt><dd>Quantidade de jogos analisados por coluna; padrão 6, ajustável entre 1 e 10 em cada card.</dd></div>
+          </dl>
+          <small>As porcentagens representam frequência histórica, não garantia de resultado.</small>
+        </div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.matchday', day=day, refresh=1) }}">Atualizar agenda</a>
+    </div>
+  </div>
+
+  <form class="matchday-filters" method="get">
+    <label class="matchday-select-field matchday-date-field">
+      <span>Data</span>
+      <input class="form-control" type="date" name="day" value="{{ day }}" aria-label="Data da agenda" onchange="this.form.submit()">
+    </label>
+    <div class="matchday-select-field">
+      <span>Campeonato</span>
+      <div class="matchday-filter-picker matchday-multi-picker" data-filter-picker="league">
+        <button class="matchday-combo-trigger" type="button" data-combo-trigger aria-expanded="false">
+          <span data-picker-summary>Todos os campeonatos</span><span class="matchday-combo-arrow" aria-hidden="true">▾</span>
+        </button>
+        <div class="matchday-picker-panel" data-combo-panel hidden>
+          <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar campeonato" autocomplete="off">
+          <div class="matchday-option-list">
+            <label class="matchday-all-option">
+              <input class="form-check-input" type="checkbox" data-select-all checked>
+              <span>Todos os campeonatos</span>
+            </label>
+            {% for league in available_leagues %}
+            <label data-option-text="{{ league|lower }}">
+              <input class="form-check-input" type="checkbox" name="league" value="{{ league }}" {% if league in selected_leagues %}checked{% endif %}>
+              <span>{{ league }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="matchday-select-field">
+      <span>Time</span>
+      <div class="matchday-filter-picker matchday-multi-picker" data-filter-picker="team">
+        <button class="matchday-combo-trigger" type="button" data-combo-trigger aria-expanded="false">
+          <span data-picker-summary>Todos os times</span><span class="matchday-combo-arrow" aria-hidden="true">▾</span>
+        </button>
+        <div class="matchday-picker-panel" data-combo-panel hidden>
+          <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar time" autocomplete="off">
+          <div class="matchday-option-list">
+            <label class="matchday-all-option">
+              <input class="form-check-input" type="checkbox" data-select-all checked>
+              <span>Todos os times</span>
+            </label>
+            {% for team in available_teams %}
+            <label data-option-text="{{ team|lower }}" data-team-leagues="{{ team_leagues[team]|tojson|forceescape }}">
+              <input class="form-check-input" type="checkbox" name="team" value="{{ team }}" {% if team in selected_teams %}checked{% endif %}>
+              <span>{{ team }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="matchday-no-options" hidden>Nenhum time disponível para os campeonatos selecionados.</div>
+        </div>
+      </div>
+    </div>
+    <label class="matchday-live-toggle">
+      <input class="form-check-input" type="checkbox" name="live" value="1" {% if include_live %}checked{% endif %}>
+      <span>Ao vivo</span>
+    </label>
+    <button class="btn btn-primary matchday-filter-submit" type="submit">Filtrar</button>
+    {% if selected_leagues or selected_teams or include_live %}<a class="btn btn-outline-secondary" href="{{ url_for('main.matchday', day=day) }}">Limpar</a>{% endif %}
+  </form>
+
+  <form class="matchday-trend-filter{% if trend_active %} is-active{% endif %}" method="get" data-trend-filter data-trend-active="{{ 'true' if trend_active else 'false' }}">
+    <input type="hidden" name="day" value="{{ day }}">
+    {% for league in selected_leagues %}<input type="hidden" name="league" value="{{ league }}">{% endfor %}
+    {% for team in selected_teams %}<input type="hidden" name="team" value="{{ team }}">{% endfor %}
+    {% if include_live %}<input type="hidden" name="live" value="1">{% endif %}
+    <div class="matchday-trend-filter-title">
+      <span class="matchday-trend-icon" aria-hidden="true">%</span>
+      <div><strong>Filtro de tendências</strong>
+      <small>Analisa todos os jogos da data e exige a quantidade de amostras escolhida.</small></div>
+    </div>
+    <label><span>Indicador</span>
+      <select class="form-select" name="trend_market" data-trend-market required>
+        <option value=""{% if not trend_market %} selected{% endif %} disabled>Escolha o indicador</option>
+        <option value="over15"{% if trend_market == 'over15' %} selected{% endif %}>Mais de 1,5 gols</option>
+        <option value="over25"{% if trend_market == 'over25' %} selected{% endif %}>Mais de 2,5 gols</option>
+        <option value="goal_ht"{% if trend_market == 'goal_ht' %} selected{% endif %}>Gol no 1º tempo</option>
+      </select>
+    </label>
+    <label><span>Base</span>
+      <select class="form-select" name="trend_group" data-trend-group>
+        <option value="best"{% if trend_group == 'best' %} selected{% endif %}>Maior percentual</option>
+        <option value="H2H"{% if trend_group == 'H2H' %} selected{% endif %}>H2H</option>
+        <option value="Mandante"{% if trend_group == 'Mandante' %} selected{% endif %}>Casa</option>
+        <option value="Visitante"{% if trend_group == 'Visitante' %} selected{% endif %}>Fora</option>
+      </select>
+    </label>
+    <label class="matchday-trend-samples"><span>Amostras</span>
+      <select class="form-select" name="trend_limit">
+        {% for number in range(4, 11) %}
+        <option value="{{ number }}"{% if trend_limit == number %} selected{% endif %}>{{ number }} jogos</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="matchday-percent-field"><span>Mínimo</span><input class="form-control" name="trend_min" data-trend-min type="text" inputmode="numeric" pattern="(?:100|[0-9]{1,2})" maxlength="3" value="{{ trend_min }}" aria-label="Porcentagem mínima"><b>%</b></label>
+    <label class="matchday-percent-field"><span>Máximo</span><input class="form-control" name="trend_max" data-trend-max type="text" inputmode="numeric" pattern="(?:100|[0-9]{1,2})" maxlength="3" value="{{ trend_max }}" aria-label="Porcentagem máxima"><b>%</b></label>
+    <button class="btn btn-primary matchday-loading-button" type="submit" data-trend-apply>
+      <span class="matchday-button-idle">Pesquisar no dia</span>
+      <span class="matchday-button-loading" hidden><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Filtrando jogos...</span>
+    </button>
+    {% if trend_active %}<a class="btn btn-outline-secondary" href="{{ url_for('main.matchday', **trend_clear_args) }}">Limpar</a>{% endif %}
+    <span class="matchday-trend-result" data-trend-result></span>
+  </form>
+
+  <div class="matchday-meta">
+    <span>{% if trend_active %}Analisando os {{ total_matches }} jogos disponíveis nesta pesquisa{% else %}{{ total_matches }} jogos encontrados{% endif %}</span>
+  </div>
+
+  {% if payload.error %}<div class="alert alert-warning">{{ payload.error }}</div>{% endif %}
+  {% if matches %}
+  <div class="matchday-grid">
+    {% for match in matches %}
+    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-sample-limit="{{ trend_limit if trend_active else 6 }}"{% if trend_active %} hidden{% endif %}>
+      <div class="matchday-card-head">
+        <span class="{% if match.is_live %}is-live{% endif %}" data-game-time data-live-prefix="{% if match.is_live %}AO VIVO · {% endif %}">{% if match.is_live %}AO VIVO · {% endif %}{{ match.time }}</span>
+        <small>{{ match.league or "Liga não informada" }}</small>
+      </div>
+      <div class="matchday-teams">
+        <strong>{{ match.home_team }}</strong>
+        <span>vs</span>
+        <strong>{{ match.away_team }}</strong>
+        {% if match.is_live %}<div class="matchday-live-score">{{ match.score }}</div>{% endif %}
+      </div>
+      <div class="matchday-card-summary" aria-live="polite">
+        <div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Calculando tendências...</div>
+      </div>
+      <a class="btn btn-primary w-100 matchday-loading-button" href="{{ url_for('main.matchday_analysis_loading', game_id=match.game_id, day=day, limit=(trend_limit if trend_active else 6)) }}" target="_blank" rel="noopener noreferrer" data-analysis-link>
+        <span class="matchday-button-idle">Analisar jogo</span>
+        <span class="matchday-button-loading" hidden><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Abrindo análise...</span>
+      </a>
+    </article>
+    {% endfor %}
+  </div>
+  {% elif not payload.error %}
+    <div class="analysis-empty">Nenhum jogo encontrado para este filtro.</div>
+  {% endif %}
+  {% if not trend_active and (has_prev or has_next) %}
+  <nav class="matchday-pagination" aria-label="Páginas da agenda">
+    {% if has_prev %}<a class="btn btn-outline-secondary" href="{{ url_for('main.matchday', **prev_args) }}">Anterior</a>{% endif %}
+    <span>Página {{ page }}</span>
+    {% if has_next %}<a class="btn btn-outline-secondary" href="{{ url_for('main.matchday', **next_args) }}">Próxima</a>{% endif %}
+  </nav>
+  {% endif %}
+  <button class="matchday-bet-ticket-launcher" type="button" data-ticket-launcher hidden>Bilhete <span data-ticket-launcher-count>0</span></button>
+  <aside class="matchday-bet-ticket" data-bet-ticket hidden aria-label="Bilhete de seleções">
+    <header class="matchday-ticket-head" data-ticket-drag>
+      <div><span>Meu bilhete</span><small data-ticket-count>0 seleções</small></div>
+      <button type="button" data-ticket-close aria-label="Fechar bilhete">×</button>
+    </header>
+    <div class="matchday-ticket-body" data-ticket-items></div>
+    <footer>
+      <button class="matchday-ticket-clear" type="button" data-ticket-clear>Limpar bilhete</button>
+    </footer>
+  </aside>
+</section>
+<script>
+(function () {
+  const leaguePicker = document.querySelector('[data-filter-picker="league"]');
+  const teamPicker = document.querySelector('[data-filter-picker="team"]');
+  const pickers = Array.from(document.querySelectorAll('[data-filter-picker]'));
+
+  function checkedValues(picker) {
+    return Array.from(picker.querySelectorAll('input[type="checkbox"][name]:checked')).map((input) => input.value);
+  }
+
+  function updateSummary(picker) {
+    const values = checkedValues(picker);
+    picker.querySelector('[data-select-all]').checked = values.length === 0;
+    const summary = picker.querySelector('[data-picker-summary]');
+    const fallback = picker.dataset.filterPicker === 'league' ? 'Todos os campeonatos' : 'Todos os times';
+    summary.textContent = values.length === 0 ? fallback : (values.length === 1 ? values[0] : `${values.length} selecionados`);
+  }
+
+  function applyTextSearch(picker) {
+    const term = picker.querySelector('.matchday-option-search').value.trim().toLocaleLowerCase('pt-BR');
+    picker.querySelectorAll('[data-option-text]').forEach((option) => {
+      const leagueVisible = option.dataset.leagueVisible !== 'false';
+      option.hidden = !leagueVisible || Boolean(term && !option.dataset.optionText.includes(term));
+    });
+  }
+
+  function updateTeamsForLeagues() {
+    const selected = new Set(checkedValues(leaguePicker));
+    let visible = 0;
+    teamPicker.querySelectorAll('[data-team-leagues]').forEach((option) => {
+      const leagues = JSON.parse(option.dataset.teamLeagues || '[]');
+      const show = selected.size === 0 || leagues.some((league) => selected.has(league));
+      option.dataset.leagueVisible = show ? 'true' : 'false';
+      if (!show) option.querySelector('input').checked = false;
+      if (show) visible += 1;
+    });
+    teamPicker.querySelector('.matchday-no-options').hidden = visible !== 0;
+    applyTextSearch(teamPicker);
+    updateSummary(teamPicker);
+  }
+
+  pickers.forEach((picker) => {
+    picker.querySelector('.matchday-option-search').addEventListener('input', () => applyTextSearch(picker));
+    picker.querySelector('[data-select-all]').addEventListener('change', (event) => {
+      if (!event.target.checked) {
+        event.target.checked = checkedValues(picker).length === 0;
+        return;
+      }
+      picker.querySelectorAll('input[type="checkbox"][name]').forEach((input) => { input.checked = false; });
+      picker.querySelector('.matchday-option-search').value = '';
+      applyTextSearch(picker);
+      updateSummary(picker);
+      if (picker === leaguePicker) updateTeamsForLeagues();
+    });
+    picker.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
+      input.addEventListener('change', () => {
+        updateSummary(picker);
+        if (picker === leaguePicker) updateTeamsForLeagues();
+      });
+    });
+    const trigger = picker.querySelector('[data-combo-trigger]');
+    const panel = picker.querySelector('[data-combo-panel]');
+    trigger.addEventListener('click', () => {
+      const willOpen = panel.hidden;
+      pickers.filter((other) => other !== picker).forEach((other) => {
+        other.querySelector('[data-combo-panel]').hidden = true;
+        other.querySelector('[data-combo-trigger]').setAttribute('aria-expanded', 'false');
+      });
+      panel.hidden = !willOpen;
+      trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) picker.querySelector('.matchday-option-search').focus();
+    });
+    updateSummary(picker);
+  });
+  updateTeamsForLeagues();
+
+  document.addEventListener('click', (event) => {
+    pickers.forEach((picker) => {
+      if (picker.contains(event.target)) return;
+      picker.querySelector('[data-combo-panel]').hidden = true;
+      picker.querySelector('[data-combo-trigger]').setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  const cards = Array.from(document.querySelectorAll('[data-matchday-summary]'));
+  const trendFilter = document.querySelector('[data-trend-filter]');
+  let trendActive = trendFilter && trendFilter.dataset.trendActive === 'true';
+  const selectedTrendLimit = trendActive ? Number(trendFilter.querySelector('[name="trend_limit"]').value || 6) : 4;
+  const ticket = document.querySelector('[data-bet-ticket]');
+  const ticketLauncher = document.querySelector('[data-ticket-launcher]');
+  const ticketStorageKey = 'greenhunter-matchday-ticket-v1';
+  let ticketItems = [];
+
+  try { ticketItems = JSON.parse(localStorage.getItem(ticketStorageKey) || '[]'); } catch (_) { ticketItems = []; }
+  if (!Array.isArray(ticketItems)) ticketItems = [];
+
+  const marketLabels = {goal_ht: 'Gol no 1º tempo', over15: 'Mais de 1,5 gols', over25: 'Mais de 2,5 gols', corners_avg: 'Média de escanteios', cards_avg: 'Média de cartões'};
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character]));
+  function saveTicket() {
+    localStorage.setItem(ticketStorageKey, JSON.stringify(ticketItems));
+  }
+
+  function renderTicket(openWhenPopulated) {
+    const itemsBox = ticket.querySelector('[data-ticket-items]');
+    ticket.querySelector('[data-ticket-count]').textContent = `${ticketItems.length} ${ticketItems.length === 1 ? 'seleção' : 'seleções'}`;
+    ticketLauncher.querySelector('[data-ticket-launcher-count]').textContent = ticketItems.length;
+    const games = [];
+    ticketItems.forEach((item) => {
+      const gameKey = `${item.day}:${item.gameId}`;
+      let game = games.find((entry) => entry.key === gameKey);
+      if (!game) {
+        game = {key: gameKey, item, selections: []};
+        games.push(game);
+      }
+      game.selections.push(item);
+    });
+    itemsBox.innerHTML = games.length ? games.map((game) => `
+      <article class="matchday-ticket-item">
+        <header>
+          <small>${escapeHtml(game.item.day)} · ${escapeHtml(game.item.time)} · ${escapeHtml(game.item.league || 'Liga não informada')}</small>
+          <strong>${escapeHtml(game.item.home)} <em>vs</em> ${escapeHtml(game.item.away)}</strong>
+        </header>
+        <div class="matchday-ticket-selections">
+          ${game.selections.map((item) => `
+          <div class="matchday-ticket-selection">
+            <div><span>${escapeHtml(item.market)}</span><b>${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b></div>
+            <small>${escapeHtml(item.group)} · ${escapeHtml(item.samples)} jogos</small>
+            <button type="button" data-ticket-remove="${escapeHtml(item.id)}" aria-label="Remover ${escapeHtml(item.market)}">×</button>
+          </div>`).join('')}
+        </div>
+      </article>`).join('') : '<div class="matchday-ticket-empty">Clique em uma linha de mercado nos resultados filtrados para montar seu bilhete.</div>';
+    itemsBox.querySelectorAll('[data-ticket-remove]').forEach((button) => button.addEventListener('click', () => {
+      ticketItems = ticketItems.filter((item) => item.id !== button.dataset.ticketRemove);
+      saveTicket();
+      renderTicket(false);
+    }));
+    if (openWhenPopulated && ticketItems.length) ticket.hidden = false;
+    ticketLauncher.hidden = !ticket.hidden || ticketItems.length === 0;
+  }
+
+  function selectedTrendForCard(card, market, exactGroup) {
+    const groups = card._trendGroups || {};
+    const requestedGroup = exactGroup || trendFilter.querySelector('[data-trend-group]').value;
+    const candidates = requestedGroup === 'best' ? ['H2H', 'Mandante', 'Visitante'] : [requestedGroup];
+    return candidates.map((key) => {
+      const source = groups[key] || {};
+      const samples = market === 'corners_avg' ? Number(source.corners_samples || 0)
+        : market === 'cards_avg' ? Number(source.cards_samples || 0)
+        : market === 'goal_ht' ? Number(source.samples || 0)
+        : Number(source.count || 0);
+      return {key, samples, value: source[market]};
+    }).filter((item) => item.samples >= selectedTrendLimit && item.value !== null && item.value !== undefined)
+      .sort((a, b) => Number(b.value) - Number(a.value))[0] || null;
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-ticket-market], [data-ticket-cell]');
+    if (!target || !trendActive) return;
+    const card = target.closest('[data-matchday-summary]');
+    const market = target.dataset.ticketMarket || target.dataset.ticketCell;
+    const exactGroup = target.dataset.ticketGroup || '';
+    const selection = selectedTrendForCard(card, market, exactGroup);
+    if (!selection) return;
+    const id = `${card.dataset.gameId}:${market}:${selection.key}`;
+    const clock = card.querySelector('[data-game-time]').textContent.replace('AO VIVO · ', '').trim();
+    const groupLabel = selection.key === 'Mandante' ? 'Casa' : selection.key === 'Visitante' ? 'Fora' : (['corners_avg', 'cards_avg'].includes(market) ? 'Total (H2H)' : selection.key);
+    const item = {id, gameId: card.dataset.gameId, day: card.dataset.gameDay, time: clock, league: card.dataset.league, home: card.dataset.homeTeam, away: card.dataset.awayTeam, market: marketLabels[market], group: groupLabel, value: selection.value, unit: ['corners_avg', 'cards_avg'].includes(market) ? '' : '%', samples: selection.samples};
+    const existing = ticketItems.findIndex((saved) => saved.id === id);
+    if (existing >= 0) ticketItems[existing] = item; else ticketItems.push(item);
+    saveTicket();
+    renderTicket(true);
+  });
+
+  ticket.querySelector('[data-ticket-close]').addEventListener('click', () => { ticket.hidden = true; renderTicket(false); });
+  ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => { ticketItems = []; saveTicket(); ticket.hidden = true; renderTicket(false); });
+  ticketLauncher.addEventListener('click', () => { ticket.hidden = false; renderTicket(false); });
+
+  let dragState = null;
+  ticket.querySelector('[data-ticket-drag]').addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button')) return;
+    const rect = ticket.getBoundingClientRect();
+    dragState = {x: event.clientX - rect.left, y: event.clientY - rect.top};
+    ticket.setPointerCapture(event.pointerId);
+  });
+  ticket.addEventListener('pointermove', (event) => {
+    if (!dragState) return;
+    const left = Math.max(8, Math.min(window.innerWidth - ticket.offsetWidth - 8, event.clientX - dragState.x));
+    const top = Math.max(8, Math.min(window.innerHeight - ticket.offsetHeight - 8, event.clientY - dragState.y));
+    Object.assign(ticket.style, {left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto'});
+  });
+  ticket.addEventListener('pointerup', () => { dragState = null; });
+  renderTicket(false);
+
+  if (trendFilter) {
+    trendFilter.querySelectorAll('[data-trend-min], [data-trend-max]').forEach((input) => {
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 3);
+        if (Number(input.value) > 100) input.value = '100';
+      });
+    });
+    trendFilter.addEventListener('submit', (event) => {
+      if (!trendFilter.checkValidity()) return;
+      const button = trendFilter.querySelector('[data-trend-apply]');
+      if (button.dataset.loading === 'true') {
+        event.preventDefault();
+        return;
+      }
+      button.dataset.loading = 'true';
+      button.disabled = true;
+      button.querySelector('.matchday-button-idle').hidden = true;
+      button.querySelector('.matchday-button-loading').hidden = false;
+    });
+  }
+
+  document.querySelectorAll('[data-analysis-link]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      if (link.dataset.loading === 'true') {
+        event.preventDefault();
+        return;
+      }
+      link.dataset.loading = 'true';
+      link.setAttribute('aria-disabled', 'true');
+      link.querySelector('.matchday-button-idle').hidden = true;
+      link.querySelector('.matchday-button-loading').hidden = false;
+      window.setTimeout(() => {
+        link.dataset.loading = 'false';
+        link.removeAttribute('aria-disabled');
+        link.querySelector('.matchday-button-idle').hidden = false;
+        link.querySelector('.matchday-button-loading').hidden = true;
+      }, 4000);
+    });
+  });
+
+  function applyTrendFilter() {
+    if (!trendFilter || !trendActive) return;
+    const market = trendFilter.querySelector('[data-trend-market]').value;
+    const group = trendFilter.querySelector('[data-trend-group]').value;
+    const minimumRaw = Number(trendFilter.querySelector('[data-trend-min]').value);
+    const maximumRaw = Number(trendFilter.querySelector('[data-trend-max]').value);
+    const minimum = Math.max(0, Math.min(100, Number.isFinite(minimumRaw) ? minimumRaw : 0));
+    const maximum = Math.max(minimum, Math.min(100, Number.isFinite(maximumRaw) ? maximumRaw : 100));
+    let shown = 0;
+    let pending = 0;
+    let failed = 0;
+    cards.forEach((card) => {
+      if (!card._trendGroups) {
+        card.hidden = trendActive;
+        pending += 1;
+        return;
+      }
+      const groups = card._trendGroups;
+      if (card._trendFailed) failed += 1;
+      const eligibleValue = (key) => {
+        const source = groups[key];
+        if (!source) return null;
+        const sampleCount = market === 'goal_ht' ? Number(source.samples || 0) : Number(source.count || 0);
+        const value = source[market];
+        return sampleCount >= selectedTrendLimit && value !== null && value !== undefined ? value : null;
+      };
+      const values = group === 'best'
+        ? ['H2H', 'Mandante', 'Visitante'].map(eligibleValue).filter((value) => value !== null)
+        : [eligibleValue(group)].filter((value) => value !== null);
+      const match = values.some((value) => Number(value) >= minimum && Number(value) <= maximum);
+      card.hidden = !match;
+      if (match) shown += 1;
+    });
+    trendFilter.querySelector('[data-trend-result]').textContent = `${shown} encontrados${pending ? ` · ${pending} calculando` : ''}${failed ? ` · ${failed} indisponíveis` : ''}`;
+  }
+
+  if (trendActive) applyTrendFilter();
+
+  async function loadCard(card) {
+    const box = card.querySelector('.matchday-card-summary');
+    card._trendFailed = false;
+    const limit = Number(card.dataset.sampleLimit || 6);
+    box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Calculando tendências...</div>';
+    try {
+      const summaryUrl = new URL(card.dataset.matchdaySummary, window.location.origin);
+      summaryUrl.searchParams.set('limit', String(limit));
+      const response = await fetch(summaryUrl, {headers: {'Accept': 'application/json'}});
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 429 && data.busy) {
+        box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Na fila de análise...</div>';
+        const retrySeconds = Math.max(2, Number(response.headers.get('Retry-After')) || 3);
+        await new Promise((resolve) => window.setTimeout(resolve, retrySeconds * 1000 + Math.random() * 800));
+        return loadCard(card);
+      }
+      if (!response.ok) throw new Error(data.error || 'Falha temporária ao consultar o histórico.');
+      if (!data.ok) throw new Error(data.error || 'Sem dados');
+      if (data.scheduled_time) {
+        const clock = card.querySelector('[data-game-time]');
+        if (clock && !card.querySelector('[data-game-time].is-live')) clock.textContent = `${clock.dataset.livePrefix || ''}${data.scheduled_time}`;
+      }
+      if (data.status === 'empty') {
+        card._trendGroups = {};
+        box.innerHTML = `<div class="matchday-summary-state">
+          <strong>Histórico não encontrado</strong>
+          <span>${data.message || 'Não há partidas anteriores disponíveis na fonte.'}</span>
+          <button type="button" class="matchday-summary-retry">Tentar novamente</button>
+        </div>`;
+        box.querySelector('.matchday-summary-retry').addEventListener('click', () => loadCard(card));
+        applyTrendFilter();
+        return;
+      }
+      const value = (item, suffix) => item === null || item === undefined ? '-' : `${item}${suffix || ''}`;
+      const h2h = data.groups.H2H || {};
+      const home = data.groups.Mandante || {};
+      const away = data.groups.Visitante || {};
+      card._trendGroups = data.groups;
+      const cells = (key, suffix, selectable) => `
+        <td ${selectable && Number(h2h[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && h2h[key] !== null && h2h[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="H2H" title="Adicionar Total (H2H) ao bilhete"` : ''}>${value(h2h[key], suffix)}</td>
+        <td ${selectable && Number(home[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && home[key] !== null && home[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="Mandante" title="Adicionar Casa ao bilhete"` : ''}>${value(home[key], suffix)}</td>
+        <td ${selectable && Number(away[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && away[key] !== null && away[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="Visitante" title="Adicionar Fora ao bilhete"` : ''}>${value(away[key], suffix)}</td>`;
+      const firstSample = trendActive ? 4 : 1;
+      const sampleOptions = Array.from({length: 11 - firstSample}, (_, index) => index + firstSample)
+        .map((number) => `<option value="${number}" ${number === limit ? 'selected' : ''}>${number}</option>`)
+        .join('');
+      box.innerHTML = `
+        <table class="matchday-mini-table matchday-compare-table">
+          <thead><tr><th>Mercado</th><th>H2H</th><th>Casa</th><th>Fora</th></tr></thead>
+          <tbody>
+            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="goal_ht" title="Adicionar Gol HT ao bilhete"' : ''}><td>Gol HT</td>${cells('goal_ht', '%')}</tr>
+            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="over15" title="Adicionar Mais de 1,5 ao bilhete"' : ''}><td>Mais de 1,5</td>${cells('over15', '%')}</tr>
+            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="over25" title="Adicionar Mais de 2,5 ao bilhete"' : ''}><td>Mais de 2,5</td>${cells('over25', '%')}</tr>
+            <tr><td>Média esc.</td>${cells('corners_avg', '', trendActive)}</tr>
+            <tr><td>Média cartões</td>${cells('cards_avg', '', trendActive)}</tr>
+            <tr><td>Média imped.</td>${cells('offsides_avg', '')}</tr>
+            <tr class="matchday-sample-row">
+              <td><label class="matchday-sample-control"><span>Amostra</span><select aria-label="Quantidade de jogos da amostra">${sampleOptions}</select></label></td>
+              <td>${value(h2h.samples)}j</td><td>${value(home.samples)}j</td><td>${value(away.samples)}j</td>
+            </tr>
+          </tbody>
+        </table>`;
+      box.querySelector('.matchday-sample-control select').addEventListener('change', (event) => {
+        const nextLimit = Math.max(1, Math.min(10, Number(event.target.value) || 6));
+        card.dataset.sampleLimit = String(nextLimit);
+        loadCard(card);
+      });
+      applyTrendFilter();
+    } catch (error) {
+      card._trendGroups = {};
+      card._trendFailed = true;
+      box.innerHTML = `<div class="matchday-summary-state is-error">
+        <strong>Não foi possível carregar agora</strong>
+        <span>${error.message || 'Falha temporária na coleta.'}</span>
+        <button type="button" class="matchday-summary-retry">Tentar novamente</button>
+      </div>`;
+      box.querySelector('.matchday-summary-retry').addEventListener('click', () => loadCard(card));
+      applyTrendFilter();
+    }
+  }
+
+  async function loadWorker() {
+    while (cards.some((card) => !card.dataset.summaryStarted)) {
+      const card = cards.find((item) => !item.dataset.summaryStarted);
+      if (!card) return;
+      card.dataset.summaryStarted = 'true';
+      await loadCard(card);
+    }
+  }
+  const workers = Math.min(2, cards.length);
+  for (let index = 0; index < workers; index += 1) loadWorker();
+})();
+</script>
+{% endblock %}

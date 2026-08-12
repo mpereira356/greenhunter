@@ -1149,7 +1149,32 @@ def _to_ascii(text: str) -> str:
 
 
 def _normalize_team_name(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", _to_ascii(name).lower())
+    ascii_name = _to_ascii(name).lower()
+    # A origem alterna nomes em inglês e português conforme o domínio.
+    aliases = {
+        "reserva": "reserves",
+        "reservas": "reserves",
+        "f": "women",
+        "w": "women",
+        "fem": "women",
+        "feminina": "women",
+        "feminino": "women",
+        "mulheres": "women",
+    }
+    tokens = [aliases.get(token, token) for token in re.split(r"[^a-z0-9]+", ascii_name) if token]
+    return "".join(tokens)
+
+
+def _team_identity_name(name: str) -> str:
+    ascii_name = _to_ascii(name).lower()
+    aliases = {
+        "reserva": "reserves", "reservas": "reserves",
+        "f": "women", "w": "women", "fem": "women",
+        "feminina": "women", "feminino": "women", "mulheres": "women",
+    }
+    ignored = {"fc", "cf", "sc", "ac", "afc", "ca", "club", "de", "da", "do", "del"}
+    tokens = [aliases.get(token, token) for token in re.split(r"[^a-z0-9]+", ascii_name) if token]
+    return "".join(token for token in tokens if token not in ignored)
 
 
 def _team_names_match(a: str, b: str) -> bool:
@@ -1157,7 +1182,44 @@ def _team_names_match(a: str, b: str) -> bool:
     nb = _normalize_team_name(b)
     if not na or not nb:
         return False
-    return na in nb or nb in na
+    if na in nb or nb in na:
+        return True
+    ia = _team_identity_name(a)
+    ib = _team_identity_name(b)
+    return bool(ia and ib and (ia in ib or ib in ia))
+
+
+def _team_name_in_text(team_name: str, text: str) -> bool:
+    if not team_name or not text:
+        return False
+    ascii_name = _to_ascii(team_name).lower()
+    tokens = [token for token in re.split(r"[^a-z0-9]+", ascii_name) if token]
+    if not tokens:
+        return False
+    club_markers = {"fc", "cf", "sc", "ac", "afc", "club"}
+    variants = {_normalize_team_name(team_name)}
+    if tokens and tokens[0] in club_markers:
+        variants.add("".join(tokens[1:]))
+    if tokens and tokens[-1] in club_markers:
+        variants.add("".join(tokens[:-1]))
+    if len(tokens) >= 2 and tokens[-2:] == ["football", "club"]:
+        variants.add("".join(tokens[:-2]))
+    text_norm = _normalize_team_name(text)
+    if any(len(variant) >= 4 and variant in text_norm for variant in variants):
+        return True
+    identity_name = _team_identity_name(team_name)
+    identity_text = _team_identity_name(text)
+    if len(identity_name) >= 4 and identity_name in identity_text:
+        return True
+    # Siglas reais como CRB, ABC e PSG precisam de correspondência por
+    # palavra completa; procurar apenas na string concatenada geraria falsos
+    # positivos dentro de nomes maiores.
+    text_tokens = {
+        _normalize_team_name(token)
+        for token in re.split(r"[^a-zA-Z0-9À-ÿ]+", text)
+        if token
+    }
+    return any(len(variant) == 3 and variant in text_tokens for variant in variants)
 
 
 def _split_team_text(text: str):
@@ -1837,6 +1899,21 @@ def fetch_match_stats(session, url):
     away_team = _clean_team_name(away_team)
     events = _extract_match_events(soup, home_team, away_team)
 
+    archived_ht_goals = None
+    for table in soup.find_all("table"):
+        table_rows = table.find_all("tr")
+        if not table_rows or "ht" not in _to_ascii(table_rows[0].get_text(" ", strip=True)).lower():
+            continue
+        half_scores = []
+        for table_row in table_rows[1:]:
+            values = [parse_int(cell.get_text(" ", strip=True)) for cell in table_row.find_all(["td", "th"])]
+            values = [value for value in values if value is not None]
+            if values:
+                half_scores.append(values[0])
+        if len(half_scores) >= 2:
+            archived_ht_goals = half_scores[0] + half_scores[1]
+            break
+
     stats = {}
     raw_stats = {}
     score = header_score or "0 x 0"
@@ -1956,6 +2033,7 @@ def fetch_match_stats(session, url):
         "stats": stats,
         "raw_stats": raw_stats,
         "events": events,
+        "archived_ht_goals": archived_ht_goals,
     }
 
 
@@ -1965,6 +2043,7 @@ HISTORY_LABELS = {
     "h2h": "h2h",
     "historico h2h": "h2h",
     "historico de confrontos": "h2h",
+    "confronto direto": "h2h",
     "confrontos diretos": "h2h",
     "head-to-head": "h2h",
     "home history": "home",
@@ -1990,7 +2069,7 @@ def _normalize_heading(text: str) -> str:
     return " ".join(_to_ascii(text).lower().split())
 
 
-def _find_history_tables(soup):
+def _find_history_tables(soup, home_team: str = "", away_team: str = ""):
     tables = {}
     used = set()
     headings = soup.find_all(["h2", "h3", "h4", "h5", "h6", "div", "span", "strong"])
@@ -2001,24 +2080,74 @@ def _find_history_tables(soup):
         norm = _normalize_heading(text)
         for label, key in HISTORY_LABELS.items():
             if label in norm and key not in tables:
-                table = None
-                parent = tag.parent
-                if parent:
-                    table = parent.find("table")
-                if not table:
-                    table = tag.find_next("table")
-                if table and id(table) in used:
+                # O título e sua tabela são irmãos em diversas versões
+                # do BetsAPI. Buscar no parent devolvia sempre a primeira
+                # tabela da página e misturava H2H/Casa/Fora.
+                table = tag.find_next("table")
+                while table and id(table) in used:
                     table = table.find_next("table")
                 if table:
                     tables[key] = table
                     used.add(id(table))
-    if len(tables) < 3:
-        scored_tables = []
-        for table in soup.find_all("table"):
-            parsed = _parse_history_table(table)
-            if parsed:
-                scored_tables.append((table, len(parsed)))
-        scored_tables.sort(key=lambda item: item[1], reverse=True)
+    scored_tables = []
+    for table in soup.find_all("table"):
+        parsed = _parse_history_table(table)
+        if parsed:
+            scored_tables.append((table, len(parsed)))
+    scored_tables.sort(key=lambda item: item[1], reverse=True)
+
+    home_norm = _normalize_team_name(home_team)
+    away_norm = _normalize_team_name(away_team)
+    team_aliases = {"home": [home_team], "away": [away_team]}
+    # A página pode usar o nome completo na URL (UNAM Pumas) e um nome
+    # curto no texto (Pumas). O link oficial do clube permite relacionar as
+    # duas formas sem manter uma lista manual de apelidos.
+    for link in soup.find_all("a", href=True):
+        href = unquote((link.get("href") or "").strip())
+        match = re.search(r"/soccer/t/\d+/([^/?#]+)", href, flags=re.IGNORECASE)
+        if not match:
+            continue
+        slug_name = match.group(1).replace("-", " ")
+        visible_name = re.sub(r"^\s*\[\d+\]\s*|\s*\[\d+\]\s*$", "", link.get_text(" ", strip=True)).strip()
+        if not visible_name:
+            continue
+        if home_team and _team_names_match(slug_name, home_team):
+            team_aliases["home"].append(visible_name)
+        if away_team and _team_names_match(slug_name, away_team):
+            team_aliases["away"].append(visible_name)
+    if home_norm and away_norm and len(tables) < 3:
+        team_scores = []
+        for table, parsed_count in scored_tables:
+            home_rows = 0
+            away_rows = 0
+            direct_rows = 0
+            for row in table.find_all("tr"):
+                if _history_match_url(row) is None:
+                    continue
+                row_text = row.get_text(" ", strip=True)
+                has_home = any(_team_name_in_text(alias, row_text) for alias in team_aliases["home"])
+                has_away = any(_team_name_in_text(alias, row_text) for alias in team_aliases["away"])
+                home_rows += int(has_home)
+                away_rows += int(has_away)
+                direct_rows += int(has_home and has_away)
+            team_scores.append((table, parsed_count, home_rows, away_rows, direct_rows))
+
+        direct_candidates = [item for item in team_scores if item[4] and item[4] / max(item[1], 1) >= 0.5]
+        if direct_candidates and "h2h" not in tables:
+            direct_table = max(direct_candidates, key=lambda item: (item[4] / max(item[1], 1), item[4]))[0]
+            tables["h2h"] = direct_table
+            used.add(id(direct_table))
+
+        for key, score_index in (("home", 2), ("away", 3)):
+            if key in tables:
+                continue
+            candidates = [item for item in team_scores if id(item[0]) not in used and item[score_index] > 0]
+            if candidates:
+                selected = max(candidates, key=lambda item: (item[score_index], item[score_index] / max(item[1], 1)))[0]
+                tables[key] = selected
+                used.add(id(selected))
+
+    if len(tables) < 3 and not (home_norm and away_norm):
         remaining_keys = [key for key in ("h2h", "home", "away") if key not in tables]
         for key in remaining_keys:
             for table, _ in scored_tables:
@@ -2065,6 +2194,19 @@ def _parse_history_table(table):
     return items
 
 
+def _scheduled_time_from_history_page(soup) -> str | None:
+    if not soup:
+        return None
+    # Datas das partidas anteriores não são o horário do evento atual.
+    # Considere apenas o cabeçalho/conteúdo fora das tabelas de histórico.
+    header_soup = BeautifulSoup(str(soup), "html.parser")
+    for table in header_soup.find_all("table"):
+        table.decompose()
+    page_text = header_soup.get_text(" ", strip=True)
+    scheduled = re.search(r"\b\d{4}/\d{1,2}/\d{1,2}\s+([01]?\d|2[0-3]):([0-5]\d)\b", page_text)
+    return f"{int(scheduled.group(1)):02d}:{scheduled.group(2)}" if scheduled else None
+
+
 def _extract_history_score(row):
     if not row:
         return None, None
@@ -2099,20 +2241,36 @@ def _extract_history_score(row):
 def fetch_match_history(session, match_url: str, limits=None, use_fallback: bool = True, timeout: int = 15):
     history_url = history_url_from_match(match_url)
     if not history_url:
-        return {"h2h": [], "home": [], "away": []}
+        return {"h2h": [], "home": [], "away": [], "scheduled_time": None}
     if use_fallback:
         resp = get_with_fallback(session, history_url)
     else:
         try:
             resp = session.get(history_url, timeout=timeout)
         except Exception:
-            return {"h2h": [], "home": [], "away": []}
+            return {"h2h": [], "home": [], "away": [], "scheduled_time": None}
     if resp.status_code != 200:
-        return {"h2h": [], "home": [], "away": []}
+        return {"h2h": [], "home": [], "away": [], "scheduled_time": None}
     soup = BeautifulSoup(resp.text, "html.parser")
-    tables = _find_history_tables(soup)
+    home_team, away_team = _teams_from_url(match_url)
+    tables = _find_history_tables(soup, home_team=home_team, away_team=away_team)
     limits = limits or HISTORY_LIMITS
-    result = {"h2h": [], "home": [], "away": []}
+    # A agenda e a página do evento podem divergir apó uma remarcação.
+    # A hora exibida no cabeçalho do próprio evento é a referência final.
+    scheduled_time = _scheduled_time_from_history_page(soup)
+    if not scheduled_time and match_url and match_url != history_url:
+        try:
+            event_resp = get_with_fallback(session, match_url) if use_fallback else session.get(match_url, timeout=timeout)
+            if event_resp.status_code == 200:
+                scheduled_time = _scheduled_time_from_history_page(BeautifulSoup(event_resp.text, "html.parser"))
+        except Exception:
+            scheduled_time = None
+    result = {
+        "h2h": [],
+        "home": [],
+        "away": [],
+        "scheduled_time": scheduled_time,
+    }
     for key in ("h2h", "home", "away"):
         items = _parse_history_table(tables.get(key))
         limit = limits.get(key) if isinstance(limits, dict) else None
@@ -2160,9 +2318,34 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             if url in seen_urls:
                 item.update(seen_urls[url])
                 continue
-            payload = fetch_match_stats(session, url)
+            # Uma partida arquivada indisponível não deve derrubar o
+            # histórico inteiro do card.
+            try:
+                payload = fetch_match_stats(session, url)
+            except Exception:
+                payload = None
             events = (payload or {}).get("events") or []
+            match_stats = (payload or {}).get("stats") or {}
             if not events and int(item.get("total") or 0) > 0:
+                archived_ht_goals = (payload or {}).get("archived_ht_goals")
+                if archived_ht_goals is None:
+                    continue
+                total_goals = int(item.get("total") or 0)
+                item.update({
+                    "goals_ht": int(archived_ht_goals),
+                    "goals_2h": max(0, total_goals - int(archived_ht_goals)),
+                    "goals_ft_events": total_goals,
+                    "goal_before_ht": int(archived_ht_goals) > 0,
+                    "goal_after_ht": total_goals - int(archived_ht_goals) > 0,
+                    "corners_ht": None,
+                    "corners_2h": None,
+                    "yellow_cards_ht": None,
+                    "yellow_cards_2h": None,
+                    "red_cards_ht": None,
+                    "red_cards_2h": None,
+                    "throw_ins_total": None,
+                    "offsides_total": None,
+                })
                 continue
             ht_events = [
                 event
@@ -2178,6 +2361,29 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             goals_ht = sum(1 for event in ht_events if event.get("kind") == "goal")
             goals_2h = sum(1 for event in sh_events if event.get("kind") == "goal")
             goals_ft = sum(1 for event in ft_events if event.get("kind") == "goal")
+            throw_ins_total = None
+            offsides_total = None
+            for stat_name, stat_values in match_stats.items():
+                normalized_stat = _to_ascii(str(stat_name or "").lower()).replace("-", " ")
+                is_throw_in = normalized_stat in {"throw in", "throw ins", "throwin", "throwins", "laterais", "lateral"}
+                is_offside = normalized_stat in {"offside", "offsides", "impedimento", "impedimentos"}
+                if not is_throw_in and not is_offside:
+                    continue
+                if isinstance(stat_values, dict):
+                    raw_total = stat_values.get("total")
+                    if raw_total is None:
+                        try:
+                            raw_total = int(stat_values.get("home") or 0) + int(stat_values.get("away") or 0)
+                        except (TypeError, ValueError):
+                            raw_total = None
+                    try:
+                        parsed_total = int(raw_total) if raw_total is not None else None
+                    except (TypeError, ValueError):
+                        parsed_total = None
+                    if is_throw_in:
+                        throw_ins_total = parsed_total
+                    if is_offside:
+                        offsides_total = parsed_total
             detail = {
                 "goals_ht": goals_ht,
                 "goals_2h": goals_2h,
@@ -2199,6 +2405,8 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 "off_target_events_ht": sum(1 for event in ht_events if event.get("kind") == "off_target"),
                 "off_target_events_2h": sum(1 for event in sh_events if event.get("kind") == "off_target"),
                 "off_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "off_target"),
+                "throw_ins_total": throw_ins_total,
+                "offsides_total": offsides_total,
             }
             seen_urls[url] = detail
             item.update(detail)

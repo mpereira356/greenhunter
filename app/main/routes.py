@@ -1,4 +1,5 @@
 import json
+import threading
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -9,10 +10,12 @@ from ..extensions import db
 from ..models import LiveGameState, MatchAlert, Rule
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
+from ..services.matchday import _is_excluded_youth_match, analyze_upcoming_match, find_match, get_matchday
 from ..security import safe_redirect_target
 from ..utils.time import now_sp
 
 main_bp = Blueprint("main", __name__)
+_matchday_analysis_slots = threading.BoundedSemaphore(2)
 
 
 def _site_url(path: str = "") -> str:
@@ -97,6 +100,48 @@ def _alert_profit(alert) -> float:
     if alert.status == "red":
         return -float(alert.stake_amount)
     return 0.0
+
+
+def _current_matchday_live_matches() -> list[dict]:
+    cutoff = now_sp() - timedelta(minutes=15)
+    states = (
+        LiveGameState.query.filter(LiveGameState.updated_at >= cutoff)
+        .order_by(LiveGameState.updated_at.desc())
+        .limit(600)
+        .all()
+    )
+    matches = {}
+    for state in states:
+        time_text = (state.time_text or "").strip()
+        if time_text.casefold() in {"ft", "finished", "ended", "encerrado"}:
+            continue
+        if _is_excluded_youth_match(state.league, state.home_team, state.away_team):
+            continue
+        match = {
+            "game_id": str(state.game_id),
+            "url": _safe_match_url(state.url),
+            "time": time_text or (f"{state.minute}'" if state.minute is not None else "Ao vivo"),
+            "day": now_sp().strftime("%Y-%m-%d"),
+            "league": state.league or "",
+            "home_team": state.home_team or "",
+            "away_team": state.away_team or "",
+            "is_live": True,
+            "score": state.score or "0 x 0",
+        }
+        matches[match["game_id"]] = match
+    return list(matches.values())
+
+
+def _find_matchday_match(day: str, game_id: str):
+    match = find_match(day, game_id)
+    if match:
+        return match
+    if day == now_sp().strftime("%Y-%m-%d"):
+        return next(
+            (item for item in _current_matchday_live_matches() if item["game_id"] == str(game_id)),
+            None,
+        )
+    return None
 
 
 @main_bp.route("/")
@@ -377,6 +422,216 @@ def live():
         page=page,
         has_prev=page > 1,
         has_next=len(filtered_states) > start_index + per_page,
+    )
+
+
+@main_bp.route("/jogos-do-dia")
+@login_required
+def matchday():
+    day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        day = now_sp().strftime("%Y-%m-%d")
+    payload = get_matchday(day, force_refresh=request.args.get("refresh") == "1")
+    include_live = request.args.get("live") == "1"
+    all_matches = list(payload["matches"])
+    if include_live and day == now_sp().strftime("%Y-%m-%d"):
+        merged = {match["game_id"]: dict(match) for match in all_matches}
+        for live_match in _current_matchday_live_matches():
+            merged[live_match["game_id"]] = live_match
+        all_matches = sorted(
+            merged.values(),
+            key=lambda match: (not match.get("is_live", False), match.get("time") or "", match.get("league") or ""),
+        )
+    available_leagues = list(
+        dict.fromkeys(match["league"] for match in all_matches if match.get("league"))
+    )
+    team_leagues = {}
+    for match in all_matches:
+        league = match.get("league") or ""
+        for team in (match.get("home_team"), match.get("away_team")):
+            if team:
+                team_leagues.setdefault(team, set()).add(league)
+    available_teams = list(team_leagues)
+    selected_leagues = [value for value in request.args.getlist("league") if value in available_leagues]
+    selected_teams = [value for value in request.args.getlist("team") if value in available_teams]
+    selected_league_keys = {value.casefold() for value in selected_leagues}
+    selected_team_keys = {value.casefold() for value in selected_teams}
+    matches = all_matches
+    if selected_league_keys:
+        matches = [match for match in matches if (match.get("league") or "").casefold() in selected_league_keys]
+    if selected_team_keys:
+        matches = [
+            match for match in matches
+            if (match.get("home_team") or "").casefold() in selected_team_keys
+            or (match.get("away_team") or "").casefold() in selected_team_keys
+        ]
+    trend_market = (request.args.get("trend_market") or "").strip()
+    if trend_market not in {"goal_ht", "over15", "over25"}:
+        trend_market = ""
+    trend_group = (request.args.get("trend_group") or "best").strip()
+    if trend_group not in {"best", "H2H", "Mandante", "Visitante"}:
+        trend_group = "best"
+    trend_min = max(0, min(100, request.args.get("trend_min", 0, type=int)))
+    trend_max = max(trend_min, min(100, request.args.get("trend_max", 100, type=int)))
+    trend_limit = max(4, min(10, request.args.get("trend_limit", 6, type=int)))
+    trend_active = bool(trend_market)
+    page = max(request.args.get("page", 1, type=int), 1)
+    per_page = 12
+    start = (page - 1) * per_page
+    total_matches = len(matches)
+    # O filtro estatístico precisa avaliar a agenda completa da data, não
+    # apenas os 12 cards da paginação comum.
+    if not trend_active:
+        matches = matches[start : start + per_page]
+    pagination_args = request.args.to_dict(flat=False)
+    pagination_args.pop("page", None)
+    trend_clear_args = request.args.to_dict(flat=False)
+    for key in ("trend_market", "trend_group", "trend_min", "trend_max", "trend_limit", "page"):
+        trend_clear_args.pop(key, None)
+    prev_args = {**pagination_args, "page": page - 1}
+    next_args = {**pagination_args, "page": page + 1}
+    return render_template(
+        "matchday/list.html",
+        payload=payload,
+        matches=matches,
+        total_matches=total_matches,
+        available_leagues=available_leagues,
+        available_teams=available_teams,
+        team_leagues={
+            team: [league for league in available_leagues if league in leagues]
+            for team, leagues in team_leagues.items()
+        },
+        selected_leagues=selected_leagues,
+        selected_teams=selected_teams,
+        include_live=include_live,
+        trend_active=trend_active,
+        trend_market=trend_market,
+        trend_group=trend_group,
+        trend_min=trend_min,
+        trend_max=trend_max,
+        trend_limit=trend_limit,
+        day=day,
+        page=page,
+        has_prev=not trend_active and page > 1,
+        has_next=not trend_active and total_matches > start + per_page,
+        prev_args=prev_args,
+        next_args=next_args,
+        trend_clear_args=trend_clear_args,
+    )
+
+
+@main_bp.route("/jogos-do-dia/<game_id>")
+@login_required
+def matchday_analysis(game_id):
+    day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
+    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    match = _find_matchday_match(day, game_id)
+    if not match:
+        flash("Jogo não encontrado na agenda selecionada.", "warning")
+        return redirect(url_for("main.matchday", day=day))
+    analysis = analyze_upcoming_match(
+        match,
+        force_refresh=request.args.get("refresh") == "1",
+        detail_limit=sample_limit,
+        cache_variant=f"detail-v16-archived-halftime-{sample_limit}",
+    )
+    return render_template(
+        "matchday/analysis.html",
+        match=match,
+        analysis=analysis,
+        day=day,
+        sample_limit=sample_limit,
+    )
+
+
+@main_bp.route("/jogos-do-dia/<game_id>/carregando")
+@login_required
+def matchday_analysis_loading(game_id):
+    day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
+    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    match = _find_matchday_match(day, game_id)
+    if not match:
+        flash("Jogo não encontrado na agenda selecionada.", "warning")
+        return redirect(url_for("main.matchday", day=day))
+    analysis_url = url_for(
+        "main.matchday_analysis",
+        game_id=game_id,
+        day=day,
+        limit=sample_limit,
+    )
+    return render_template(
+        "matchday/loading.html",
+        match=match,
+        analysis_url=analysis_url,
+    )
+
+
+@main_bp.route("/jogos-do-dia/<game_id>/resumo")
+@login_required
+def matchday_summary(game_id):
+    day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
+    match = _find_matchday_match(day, game_id)
+    if not match:
+        return jsonify({"ok": False, "error": "Jogo não encontrado."}), 404
+    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    if not _matchday_analysis_slots.acquire(blocking=False):
+        response = jsonify({"ok": False, "busy": True, "error": "Análises em processamento. Aguarde."})
+        response.status_code = 429
+        response.headers["Retry-After"] = "3"
+        return response
+    try:
+        try:
+            analysis = analyze_upcoming_match(
+                match,
+                detail_limit=sample_limit,
+                cache_variant=f"card-v16-archived-halftime-{sample_limit}",
+            )
+        except Exception:
+            current_app.logger.exception("Falha ao montar resumo pré-jogo %s", game_id)
+            return jsonify({"ok": False, "error": "Análise indisponível."}), 503
+    finally:
+        _matchday_analysis_slots.release()
+    groups = analysis.get("groups") or []
+    usable = [group for group in groups if int(group.get("count") or 0) > 0]
+    if not usable:
+        return jsonify({
+            "ok": True,
+            "status": "empty",
+            "scheduled_time": analysis.get("scheduled_time"),
+            "message": "O BetsAPI não disponibilizou partidas anteriores para este confronto.",
+            "groups": {},
+        })
+    summaries = {}
+    for group in groups:
+        phase = group.get("phase") or {}
+        count = int(group.get("count") or 0)
+        corners_1h = phase.get("avg_corners_1h")
+        corners_2h = phase.get("avg_corners_2h")
+        corners_avg = None
+        if corners_1h is not None and corners_2h is not None:
+            corners_avg = round(float(corners_1h) + float(corners_2h), 2)
+        summaries[str(group.get("key") or "")] = {
+            "count": count,
+            "samples": phase.get("samples") or 0,
+            "goal_ht": phase.get("goal_1h_pct") if phase.get("samples") else None,
+            "over15": round((int(group.get("over15") or 0) / count) * 100) if count else None,
+            "over25": round((int(group.get("over25") or 0) / count) * 100) if count else None,
+            "corners_avg": corners_avg,
+            "corners_samples": phase.get("corners_samples") or 0,
+            "cards_avg": phase.get("avg_cards_total"),
+            "cards_samples": phase.get("cards_samples") or 0,
+            "offsides_avg": phase.get("avg_offsides"),
+        }
+    return jsonify(
+        {
+            "ok": True,
+            "status": "ready",
+            "scheduled_time": analysis.get("scheduled_time"),
+            "sample_limit": sample_limit,
+            "groups": summaries,
+        }
     )
 
 
