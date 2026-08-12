@@ -7,7 +7,7 @@
   <div class="matchday-hero">
     <div>
       <span class="analysis-kicker">Pré-jogo</span>
-      <h1>Agenda e tendências do dia</h1>
+      <h1>Jogos e estatísticas do dia</h1>
       <p>Abra uma partida para comparar H2H, mandante e visitante. As porcentagens são frequências históricas, não garantias.</p>
     </div>
     <div class="matchday-hero-actions">
@@ -144,7 +144,7 @@
   {% if matches %}
   <div class="matchday-grid">
     {% for match in matches %}
-    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-sample-limit="{{ trend_limit if trend_active else 6 }}"{% if trend_active %} hidden{% endif %}>
+    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-sample-limit="{{ trend_limit if trend_active else 6 }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}>
       <div class="matchday-card-head">
         <span class="{% if match.is_live %}is-live{% endif %}" data-game-time data-live-prefix="{% if match.is_live %}AO VIVO · {% endif %}">{% if match.is_live %}AO VIVO · {% endif %}{{ match.time }}</span>
         <small>{{ match.league or "Liga não informada" }}</small>
@@ -272,6 +272,10 @@
   });
 
   const cards = Array.from(document.querySelectorAll('[data-matchday-summary]'));
+  cards.forEach((card) => {
+    if (!card.dataset.trendPrefetch) return;
+    try { card._trendGroups = JSON.parse(card.dataset.trendPrefetch); } catch (_) { card._trendGroups = null; }
+  });
   const trendFilter = document.querySelector('[data-trend-filter]');
   let trendActive = trendFilter && trendFilter.dataset.trendActive === 'true';
   const selectedTrendLimit = trendActive ? Number(trendFilter.querySelector('[name="trend_limit"]').value || 6) : 4;

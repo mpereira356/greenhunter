@@ -1,0 +1,10 @@
+[Unit]
+Description=Agenda o pré-processamento diário do GreenHunter
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Sao_Paulo
+AccuracySec=1min
+Unit=greenhunter-matchday-prewarm.service
+
+[Install]
+WantedBy=timers.target

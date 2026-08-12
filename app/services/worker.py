@@ -1936,6 +1936,112 @@ def start_worker(app):
     if ENTRY_ENRICHMENT_ENABLED:
         threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
 
+
+def run_matchday_prewarm_worker(app):
+    """Build the shared six-game matchday cache before users apply trend filters."""
+    from app.services.matchday import analyze_upcoming_match, get_matchday
+
+    sample_limit = 6
+    startup_delay = max(10, int(os.environ.get("MATCHDAY_PREWARM_STARTUP_DELAY", "30")))
+    game_delay = max(0.5, float(os.environ.get("MATCHDAY_PREWARM_GAME_DELAY", "2")))
+    retry_delay = max(300, int(os.environ.get("MATCHDAY_PREWARM_RETRY_SECONDS", "900")))
+    state_path = os.environ.get("MATCHDAY_PREWARM_STATE_PATH", "data/matchday_cache/prewarm-state.json")
+    time.sleep(startup_delay)
+
+    def load_state():
+        try:
+            with open(state_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def save_state(data):
+        try:
+            os.makedirs(os.path.dirname(state_path) or ".", exist_ok=True)
+            temp_path = f"{state_path}.tmp"
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, ensure_ascii=False)
+            os.replace(temp_path, state_path)
+        except OSError:
+            pass
+
+    startup_pending = True
+    next_retry_at = 0.0
+    while True:
+        now = now_sp()
+        state = load_state()
+        schedule_key = now.strftime("%Y-%m-%d")
+        scheduled = now.hour == 3 and state.get("scheduled_refresh") != schedule_key
+        should_run = scheduled or startup_pending or time.time() >= next_retry_at
+        if not should_run:
+            time.sleep(60)
+            continue
+        startup_pending = False
+        had_failures = False
+        for offset in (0, 1):
+            target = (now + timedelta(days=offset)).strftime("%Y-%m-%d")
+            target_state = (state.get("days") or {}).get(target) or {}
+            if not scheduled and target_state.get("complete") and int(target_state.get("sample_limit") or 0) == sample_limit:
+                continue
+            try:
+                payload = get_matchday(target, force_refresh=scheduled)
+                matches = list(payload.get("matches") or [])
+            except Exception as exc:
+                print(f"[matchday_prewarm] agenda {target} falhou: {exc}")
+                had_failures = True
+                continue
+            completed = 0
+            failed = 0
+            state.setdefault("days", {})[target] = {
+                "complete": False,
+                "processing": True,
+                "sample_limit": sample_limit,
+                "matches": len(matches),
+                "completed": 0,
+                "failed": 0,
+                "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            save_state(state)
+            print(f"[matchday_prewarm] iniciando {target}: {len(matches)} jogos")
+            for index, match in enumerate(matches, start=1):
+                try:
+                    analyze_upcoming_match(
+                        match,
+                        detail_limit=sample_limit,
+                        cache_variant=f"card-v18-exact-sample-{sample_limit}",
+                    )
+                    completed += 1
+                except Exception as exc:
+                    failed += 1
+                    print(f"[matchday_prewarm] jogo {match.get('game_id')} falhou: {type(exc).__name__}")
+                if index % 10 == 0:
+                    state["days"][target].update({
+                        "completed": completed,
+                        "failed": failed,
+                        "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+                    })
+                    save_state(state)
+                time.sleep(game_delay)
+            had_failures = had_failures or failed > 0
+            state.setdefault("days", {})[target] = {
+                "complete": failed == 0,
+                "processing": False,
+                "sample_limit": sample_limit,
+                "matches": len(matches),
+                "completed": completed,
+                "failed": failed,
+                "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            save_state(state)
+            print(f"[matchday_prewarm] {target} pronto={completed} falhas={failed}")
+        if scheduled:
+            state["scheduled_refresh"] = schedule_key
+            save_state(state)
+        next_retry_at = time.time() + (retry_delay if had_failures else 6 * 60 * 60)
+        db.session.remove()
+        time.sleep(60)
+
 def run_worker(app):
     with app.app_context():
         global BOT_STARTED_AT

@@ -11,7 +11,14 @@ from ..extensions import db
 from ..models import LiveGameState, MatchAlert, Rule
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
-from ..services.matchday import _is_excluded_youth_match, analyze_upcoming_match, find_match, get_matchday
+from ..services.matchday import (
+    _is_excluded_youth_match,
+    analyze_upcoming_match,
+    find_match,
+    get_matchday,
+    load_matchday_trend_index,
+    trend_groups_for_match,
+)
 from ..security import safe_redirect_target
 from ..utils.time import now_sp
 
@@ -488,6 +495,24 @@ def matchday():
     trend_max = max(trend_min, min(100, request.args.get("trend_max", 100, type=int)))
     trend_limit = max(4, min(10, request.args.get("trend_limit", 6, type=int)))
     trend_active = bool(trend_market)
+    trend_prefetch = {}
+    if trend_active and trend_market in {"over15", "over25"}:
+        trend_index = load_matchday_trend_index(day)
+        if trend_index.get("complete"):
+            qualifying = []
+            for match in matches:
+                groups = trend_groups_for_match(trend_index, match.get("game_id"), trend_limit)
+                candidates = ("H2H", "Mandante", "Visitante") if trend_group == "best" else (trend_group,)
+                values = [
+                    groups[key].get(trend_market)
+                    for key in candidates
+                    if int(groups[key].get("count") or 0) >= trend_limit
+                    and groups[key].get(trend_market) is not None
+                ]
+                if any(trend_min <= int(value) <= trend_max for value in values):
+                    qualifying.append(match)
+                    trend_prefetch[str(match.get("game_id"))] = groups
+            matches = qualifying
     page = max(request.args.get("page", 1, type=int), 1)
     per_page = 12
     start = (page - 1) * per_page
@@ -523,6 +548,7 @@ def matchday():
         trend_min=trend_min,
         trend_max=trend_max,
         trend_limit=trend_limit,
+        trend_prefetch=trend_prefetch,
         day=day,
         page=page,
         has_prev=not trend_active and page > 1,

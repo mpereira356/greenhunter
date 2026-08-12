@@ -12,6 +12,7 @@ from app.services.match_analysis import build_alert_analysis
 from app.services.scraper import (
     BASE_URLS,
     _extract_row_teams,
+    fetch_match_history,
     get_with_fallback,
     make_session,
 )
@@ -21,6 +22,7 @@ from app.utils.time import now_sp
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
 MATCHDAY_CACHE_VERSION = 4
+MATCHDAY_TREND_INDEX_VERSION = 1
 
 
 def _is_excluded_youth_match(*values: str) -> bool:
@@ -62,6 +64,105 @@ def _save_cache(day: str, payload: dict) -> None:
             json.dump(payload, handle, ensure_ascii=False)
     except OSError:
         pass
+
+
+def _trend_index_path(day: str) -> str:
+    return os.path.join(MATCHDAY_CACHE_DIR, f"trends-{day}-v{MATCHDAY_TREND_INDEX_VERSION}.json")
+
+
+def load_matchday_trend_index(day: str) -> dict:
+    try:
+        with open(_trend_index_path(day), "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("version") != MATCHDAY_TREND_INDEX_VERSION:
+        return {}
+    return payload
+
+
+def _save_matchday_trend_index(day: str, payload: dict) -> None:
+    try:
+        os.makedirs(MATCHDAY_CACHE_DIR, exist_ok=True)
+        path = _trend_index_path(day)
+        temp_path = f"{path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        os.replace(temp_path, path)
+    except OSError:
+        pass
+
+
+def build_matchday_trend_index(day: str, force_refresh: bool = True, progress_callback=None) -> dict:
+    """Collect score-only history once, enough for fast Over 1.5/2.5 filters."""
+    agenda = get_matchday(day, force_refresh=force_refresh)
+    matches = list(agenda.get("matches") or [])
+    existing = load_matchday_trend_index(day)
+    entries = {} if force_refresh else dict(existing.get("entries") or {})
+    payload = {
+        "version": MATCHDAY_TREND_INDEX_VERSION,
+        "day": day,
+        "complete": False,
+        "total": len(matches),
+        "entries": entries,
+        "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    session = make_session()
+    failures = 0
+    for index, match in enumerate(matches, start=1):
+        game_id = str(match.get("game_id") or "")
+        if not game_id:
+            continue
+        if game_id in entries and not force_refresh:
+            continue
+        try:
+            history = fetch_match_history(
+                session,
+                match.get("url") or "",
+                limits={"h2h": 10, "home": 10, "away": 10},
+                use_fallback=True,
+                timeout=8,
+            )
+            entries[game_id] = {
+                key: [
+                    {"home": int(item.get("home") or 0), "away": int(item.get("away") or 0), "total": int(item.get("total") or 0)}
+                    for item in history.get(source, [])[:10]
+                ]
+                for key, source in (("H2H", "h2h"), ("Mandante", "home"), ("Visitante", "away"))
+            }
+        except Exception:
+            failures += 1
+        if index % 10 == 0:
+            payload["updated_at"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
+            payload["processed"] = index
+            payload["failures"] = failures
+            _save_matchday_trend_index(day, payload)
+            if progress_callback:
+                progress_callback(index, len(matches), failures)
+        time.sleep(1)
+    payload.update({
+        "complete": failures == 0 and all(str(match.get("game_id") or "") in entries for match in matches),
+        "processed": len(matches),
+        "failures": failures,
+        "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_matchday_trend_index(day, payload)
+    return payload
+
+
+def trend_groups_for_match(index_payload: dict, game_id: str, limit: int) -> dict:
+    entry = (index_payload.get("entries") or {}).get(str(game_id)) or {}
+    groups = {}
+    for key in ("H2H", "Mandante", "Visitante"):
+        items = list(entry.get(key) or [])[:limit]
+        count = len(items)
+        groups[key] = {
+            "count": count,
+            "samples": 0,
+            "over15": round(sum(1 for item in items if int(item.get("total") or 0) > 1) / count * 100) if count else None,
+            "over25": round(sum(1 for item in items if int(item.get("total") or 0) > 2) / count * 100) if count else None,
+        }
+    return groups
 
 
 def _utc_schedule_from_row(row, reference_day: str | None = None):

@@ -1,0 +1,2 @@
+CRON_TZ=America/Sao_Paulo
+0 3 * * * cd /home/viny/greenhunter && DISABLE_WORKER=1 ./venv/bin/python prewarm_matchday.py --days 2 >> data/matchday_cache/prewarm.log 2>&1
