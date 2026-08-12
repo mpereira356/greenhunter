@@ -255,7 +255,7 @@ def analyze_upcoming_match(
     match: dict,
     force_refresh: bool = False,
     detail_limit: int | None = None,
-    cache_variant: str = "detail-v16-archived-halftime",
+    cache_variant: str = "detail-v18-exact-sample",
 ) -> dict:
     placeholder = SimpleNamespace(
         id=f"upcoming-{cache_variant}-{match['game_id']}",

@@ -142,6 +142,7 @@ def create_app():
         _ensure_alert_columns()
         _ensure_live_game_state_columns()
         _ensure_login_attempt_indexes()
+        _ensure_performance_indexes()
 
     # =========================
     # Worker (opcional)
@@ -343,4 +344,24 @@ def _ensure_login_attempt_indexes():
             "CREATE INDEX IF NOT EXISTS ix_login_attempt_ip_success_created "
             "ON login_attempt (ip_address, success, created_at)"
         ))
+        conn.commit()
+
+
+def _ensure_performance_indexes():
+    """Keep common dashboard/worker queries fast as the SQLite database grows."""
+    statements = (
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_user_created "
+        "ON match_alert (user_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_user_status_created "
+        "ON match_alert (user_id, status, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_status_ft_completed "
+        "ON match_alert (status, ft_completed)",
+        "CREATE INDEX IF NOT EXISTS ix_rule_user_active "
+        "ON rule (user_id, is_active)",
+        "CREATE INDEX IF NOT EXISTS ix_live_game_state_updated_at "
+        "ON live_game_state (updated_at)",
+    )
+    with db.engine.connect() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
         conn.commit()

@@ -2326,7 +2326,7 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 payload = None
             events = (payload or {}).get("events") or []
             match_stats = (payload or {}).get("stats") or {}
-            if not events and int(item.get("total") or 0) > 0:
+            if not events:
                 archived_ht_goals = (payload or {}).get("archived_ht_goals")
                 if archived_ht_goals is None:
                     continue

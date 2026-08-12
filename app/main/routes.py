@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
 from ..models import LiveGameState, MatchAlert, Rule
@@ -202,6 +203,16 @@ def dashboard():
     recent_all = (
         MatchAlert.query.filter(
             MatchAlert.user_id == current_user.id, MatchAlert.created_at >= since
+        )
+        .options(
+            load_only(
+                MatchAlert.created_at,
+                MatchAlert.status,
+                MatchAlert.rule_id,
+                MatchAlert.stake_amount,
+                MatchAlert.stake_odd,
+            ),
+            joinedload(MatchAlert.rule).load_only(Rule.id, Rule.name),
         )
         .order_by(MatchAlert.created_at.desc())
         .all()
@@ -586,7 +597,7 @@ def matchday_summary(game_id):
             analysis = analyze_upcoming_match(
                 match,
                 detail_limit=sample_limit,
-                cache_variant=f"card-v16-archived-halftime-{sample_limit}",
+                cache_variant=f"card-v18-exact-sample-{sample_limit}",
             )
         except Exception:
             current_app.logger.exception("Falha ao montar resumo pré-jogo %s", game_id)
@@ -609,8 +620,11 @@ def matchday_summary(game_id):
         count = int(group.get("count") or 0)
         corners_1h = phase.get("avg_corners_1h")
         corners_2h = phase.get("avg_corners_2h")
+        corners_samples = int(phase.get("corners_samples") or 0)
+        cards_samples = int(phase.get("cards_samples") or 0)
+        offsides_samples = int(phase.get("offsides_samples") or 0)
         corners_avg = None
-        if corners_1h is not None and corners_2h is not None:
+        if count > 0 and corners_samples == count and corners_1h is not None and corners_2h is not None:
             corners_avg = round(float(corners_1h) + float(corners_2h), 2)
         summaries[str(group.get("key") or "")] = {
             "count": count,
@@ -619,10 +633,11 @@ def matchday_summary(game_id):
             "over15": round((int(group.get("over15") or 0) / count) * 100) if count else None,
             "over25": round((int(group.get("over25") or 0) / count) * 100) if count else None,
             "corners_avg": corners_avg,
-            "corners_samples": phase.get("corners_samples") or 0,
-            "cards_avg": phase.get("avg_cards_total"),
-            "cards_samples": phase.get("cards_samples") or 0,
-            "offsides_avg": phase.get("avg_offsides"),
+            "corners_samples": corners_samples,
+            "cards_avg": phase.get("avg_cards_total") if count > 0 and cards_samples == count else None,
+            "cards_samples": cards_samples,
+            "offsides_avg": phase.get("avg_offsides") if count > 0 and offsides_samples == count else None,
+            "offsides_samples": offsides_samples,
         }
     return jsonify(
         {
