@@ -57,6 +57,7 @@ HISTORY_HT_DETAIL_LIMITS = {
 
 API_STATUS = {"ok": None, "code": None, "checked_at": None, "last_cycle": None}
 API_ALERT_STATE = {"last_ok": None}
+API_FAILURE_STATE = {"consecutive": 0, "first_at": None}
 BOT_STARTED_AT = None
 LAST_FINALIZE_RUN_AT = None
 SECOND_HALF_BASELINES = {}
@@ -121,10 +122,26 @@ def get_api_status() -> dict:
     }
 
 def update_api_status(ok: bool, code: int | None):
+    if ok:
+        API_FAILURE_STATE["consecutive"] = 0
+        API_FAILURE_STATE["first_at"] = None
+    else:
+        API_FAILURE_STATE["consecutive"] += 1
+        if API_FAILURE_STATE["first_at"] is None:
+            API_FAILURE_STATE["first_at"] = time.time()
     API_STATUS["ok"] = ok
     API_STATUS["code"] = code
     API_STATUS["checked_at"] = now_sp().strftime("%Y-%m-%d %H:%M:%S")
-    notify_api_status(ok, code)
+    # A Cloudflare recovery may briefly return a blocked status while Chrome
+    # renews its clearance. Notify only after a sustained failure.
+    minimum_failures = max(2, int(os.environ.get("API_OFF_CONFIRM_FAILURES", "3")))
+    minimum_seconds = max(10, int(os.environ.get("API_OFF_CONFIRM_SECONDS", "30")))
+    failure_age = time.time() - (API_FAILURE_STATE.get("first_at") or time.time())
+    if ok or (
+        API_FAILURE_STATE["consecutive"] >= minimum_failures
+        and failure_age >= minimum_seconds
+    ):
+        notify_api_status(ok, code)
 
 def notify_api_status(ok: bool, code: int | None):
     last_ok = API_ALERT_STATE.get("last_ok")

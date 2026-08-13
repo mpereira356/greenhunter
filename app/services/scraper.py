@@ -948,6 +948,7 @@ def _cdp_get_page_target(url: str):
 
 
 def _browser_fetch(url: str):
+    global _CF_CONSECUTIVE_CHALLENGES, _CF_RESTART_SCHEDULED
     wait_seconds = int(os.environ.get("BETSAPI_CF_WAIT_SECONDS", "180"))
     urllib = __import__("urllib.request", fromlist=["request"])
 
@@ -1025,7 +1026,6 @@ def _browser_fetch(url: str):
                             last_click_at = time.time()
                     except Exception as exc:
                         print(f"[scraper] clique automatico no Cloudflare falhou: {exc}")
-                _send_cf_telegram_alert(url)
                 if _record_cf_challenge(url):
                     return None, None, None
                 deadline = time.time() + _cf_auto_recovery_timeout_seconds(wait_seconds)
@@ -1052,6 +1052,8 @@ def _browser_fetch(url: str):
                     return None, None, None
 
             print("[scraper] Challenge liberado. Sessao persistente ativa.")
+            _CF_CONSECUTIVE_CHALLENGES = 0
+            _CF_RESTART_SCHEDULED = False
             _remember_browser_session(cookies, user_agent)
             return _SimpleResponse(url, 200, html), cookies, user_agent
         except Exception as exc:
@@ -2326,6 +2328,8 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 payload = None
             events = (payload or {}).get("events") or []
             match_stats = (payload or {}).get("stats") or {}
+            item["history_home_team"] = (payload or {}).get("home_team") or ""
+            item["history_away_team"] = (payload or {}).get("away_team") or ""
             if not events:
                 archived_ht_goals = (payload or {}).get("archived_ht_goals")
                 if archived_ht_goals is None:
@@ -2339,12 +2343,17 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                     "goal_after_ht": total_goals - int(archived_ht_goals) > 0,
                     "corners_ht": None,
                     "corners_2h": None,
+                    "corners_home": None,
+                    "corners_away": None,
                     "yellow_cards_ht": None,
                     "yellow_cards_2h": None,
                     "red_cards_ht": None,
                     "red_cards_2h": None,
                     "throw_ins_total": None,
                     "offsides_total": None,
+                    "shots_total": None,
+                    "shots_on_target_total": None,
+                    "fouls_total": None,
                 })
                 continue
             ht_events = [
@@ -2361,15 +2370,35 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             goals_ht = sum(1 for event in ht_events if event.get("kind") == "goal")
             goals_2h = sum(1 for event in sh_events if event.get("kind") == "goal")
             goals_ft = sum(1 for event in ft_events if event.get("kind") == "goal")
+            history_home_name = _normalize_team_name(str((payload or {}).get("home_team") or ""))
+            history_away_name = _normalize_team_name(str((payload or {}).get("away_team") or ""))
+            goals_ht_home = sum(1 for event in ht_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_home_name)
+            goals_ht_away = sum(1 for event in ht_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_away_name)
+            goal_ht_sides_known = goals_ht_home + goals_ht_away == goals_ht
             throw_ins_total = None
             offsides_total = None
+            shots_total = None
+            shots_on_target_total = None
+            fouls_total = None
+            stat_sides = {}
+            cards_home = cards_away = 0
+            cards_have_sides = False
             for stat_name, stat_values in match_stats.items():
                 normalized_stat = _to_ascii(str(stat_name or "").lower()).replace("-", " ")
                 is_throw_in = normalized_stat in {"throw in", "throw ins", "throwin", "throwins", "laterais", "lateral"}
                 is_offside = normalized_stat in {"offside", "offsides", "impedimento", "impedimentos"}
-                if not is_throw_in and not is_offside:
+                is_shots = normalized_stat in {"shots", "total shots", "shots total", "goal attempts", "finalizacoes", "finalizacao"}
+                is_on_target = normalized_stat in {"on target", "shots on target", "chutes ao gol", "chutes no gol"}
+                is_foul = normalized_stat in {"fouls", "foul", "faltas", "falta"}
+                is_card = normalized_stat in {"yellow cards", "yellow card", "red cards", "red card", "cartoes amarelos", "cartoes vermelhos"}
+                if not any((is_throw_in, is_offside, is_shots, is_on_target, is_foul, is_card)):
                     continue
                 if isinstance(stat_values, dict):
+                    try:
+                        parsed_home = int(stat_values.get("home")) if stat_values.get("home") is not None else None
+                        parsed_away = int(stat_values.get("away")) if stat_values.get("away") is not None else None
+                    except (TypeError, ValueError):
+                        parsed_home = parsed_away = None
                     raw_total = stat_values.get("total")
                     if raw_total is None:
                         try:
@@ -2384,15 +2413,52 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                         throw_ins_total = parsed_total
                     if is_offside:
                         offsides_total = parsed_total
+                        stat_sides["offsides"] = (parsed_home, parsed_away)
+                    if is_shots:
+                        shots_total = parsed_total
+                        stat_sides["shots"] = (parsed_home, parsed_away)
+                    if is_on_target:
+                        shots_on_target_total = parsed_total
+                        stat_sides["shots_on_target"] = (parsed_home, parsed_away)
+                    if is_foul:
+                        fouls_total = parsed_total
+                        stat_sides["fouls"] = (parsed_home, parsed_away)
+                    if is_card and parsed_home is not None and parsed_away is not None:
+                        cards_home += parsed_home
+                        cards_away += parsed_away
+                        cards_have_sides = True
+            event_on_target = sum(1 for event in ft_events if event.get("kind") == "on_target")
+            event_off_target = sum(1 for event in ft_events if event.get("kind") == "off_target")
+            if shots_on_target_total is None and event_on_target:
+                shots_on_target_total = event_on_target
+            if shots_total is None and (event_on_target or event_off_target):
+                shots_total = event_on_target + event_off_target
+            corner_stats = match_stats.get("Corners") if isinstance(match_stats.get("Corners"), dict) else {}
+            try:
+                corners_home = int(corner_stats.get("home")) if corner_stats.get("home") is not None else None
+                corners_away = int(corner_stats.get("away")) if corner_stats.get("away") is not None else None
+            except (TypeError, ValueError):
+                corners_home = corners_away = None
+            if corners_home is None or corners_away is None:
+                home_name = _normalize_team_name(str(item.get("history_home_team") or ""))
+                away_name = _normalize_team_name(str(item.get("history_away_team") or ""))
+                home_events = [event for event in ft_events if event.get("kind") == "corner" and _normalize_team_name(str(event.get("team") or "")) == home_name]
+                away_events = [event for event in ft_events if event.get("kind") == "corner" and _normalize_team_name(str(event.get("team") or "")) == away_name]
+                if home_events or away_events:
+                    corners_home, corners_away = len(home_events), len(away_events)
             detail = {
                 "goals_ht": goals_ht,
                 "goals_2h": goals_2h,
                 "goals_ft_events": goals_ft,
+                "goals_ht_home": goals_ht_home if goal_ht_sides_known else None,
+                "goals_ht_away": goals_ht_away if goal_ht_sides_known else None,
                 "goal_before_ht": goals_ht > 0,
                 "goal_after_ht": goals_2h > 0,
                 "corners_ht": sum(1 for event in ht_events if event.get("kind") == "corner"),
                 "corners_2h": sum(1 for event in sh_events if event.get("kind") == "corner"),
                 "corners_ft_events": sum(1 for event in ft_events if event.get("kind") == "corner"),
+                "corners_home": corners_home,
+                "corners_away": corners_away,
                 "yellow_cards_ht": sum(1 for event in ht_events if event.get("kind") == "yellow_card"),
                 "yellow_cards_2h": sum(1 for event in sh_events if event.get("kind") == "yellow_card"),
                 "yellow_cards_ft_events": sum(1 for event in ft_events if event.get("kind") == "yellow_card"),
@@ -2407,6 +2473,19 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 "off_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "off_target"),
                 "throw_ins_total": throw_ins_total,
                 "offsides_total": offsides_total,
+                "shots_total": shots_total,
+                "shots_on_target_total": shots_on_target_total,
+                "fouls_total": fouls_total,
+                "offsides_home": (stat_sides.get("offsides") or (None, None))[0],
+                "offsides_away": (stat_sides.get("offsides") or (None, None))[1],
+                "shots_home": (stat_sides.get("shots") or (None, None))[0],
+                "shots_away": (stat_sides.get("shots") or (None, None))[1],
+                "shots_on_target_home": (stat_sides.get("shots_on_target") or (None, None))[0],
+                "shots_on_target_away": (stat_sides.get("shots_on_target") or (None, None))[1],
+                "fouls_home": (stat_sides.get("fouls") or (None, None))[0],
+                "fouls_away": (stat_sides.get("fouls") or (None, None))[1],
+                "cards_home": cards_home if cards_have_sides else None,
+                "cards_away": cards_away if cards_have_sides else None,
             }
             seen_urls[url] = detail
             item.update(detail)

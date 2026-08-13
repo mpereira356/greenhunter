@@ -495,7 +495,59 @@ def matchday():
     trend_max = max(trend_min, min(100, request.args.get("trend_max", 100, type=int)))
     trend_limit = max(4, min(10, request.args.get("trend_limit", 6, type=int)))
     trend_active = bool(trend_market)
+    ticket_generator_active = request.args.get("ticket_generator") == "1"
     trend_prefetch = {}
+    generated_goal_suggestions = {}
+    if ticket_generator_active:
+        generator_samples = max(3, min(10, request.args.get("generator_samples", 6, type=int)))
+        generator_count = max(1, min(500, request.args.get("generator_count", 3, type=int)))
+        generator_markets = set(request.args.getlist("generator_market"))
+        goal_markets = generator_markets & {"over15", "over25"}
+        trend_index = load_matchday_trend_index(day)
+        ranked_matches = []
+        if trend_index.get("complete") and goal_markets:
+            for match in matches:
+                if match.get("is_live"):
+                    continue
+                groups = trend_groups_for_match(trend_index, match.get("game_id"), generator_samples)
+                market_scores = []
+                for market in goal_markets:
+                    rows = [
+                        (key, int(group.get(market)), int(group.get("count") or 0))
+                        for key, group in groups.items()
+                        if int(group.get("count") or 0) >= 3 and group.get(market) is not None
+                    ]
+                    values = [value for _, value, _ in rows]
+                    if len(values) < 2:
+                        continue
+                    average = sum(values) / len(values)
+                    spread = max(values) - min(values)
+                    if average >= 80 and spread <= 25:
+                        labels = {"H2H": "H2H", "Mandante": "Casa", "Visitante": "Fora"}
+                        market_scores.append({
+                            "market": market,
+                            "score": average - spread * 0.35 + len(values) * 2 + min(samples for _, _, samples in rows) * 0.5,
+                            "confidence": round(average),
+                            "samples": min(samples for _, _, samples in rows),
+                            "group": " + ".join(labels[key] for key, _, _ in rows),
+                        })
+                if market_scores:
+                    best = max(market_scores, key=lambda item: item["score"])
+                    ranked_matches.append((best["score"], match, best))
+            ranked_matches.sort(key=lambda item: item[0], reverse=True)
+            candidate_limit = min(len(ranked_matches), max(24, generator_count * 2))
+            selected_ranked = ranked_matches[:candidate_limit]
+            matches = [match for _, match, _ in selected_ranked]
+            generated_goal_suggestions = {
+                str(match.get("game_id")): suggestion
+                for _, match, suggestion in selected_ranked
+            }
+            trend_prefetch = {
+                str(match.get("game_id")): trend_groups_for_match(trend_index, match.get("game_id"), generator_samples)
+                for match in matches
+            }
+        else:
+            matches = [match for match in matches if not match.get("is_live")][:max(24, generator_count * 2)]
     if trend_active and trend_market in {"over15", "over25"}:
         trend_index = load_matchday_trend_index(day)
         if trend_index.get("complete"):
@@ -519,7 +571,7 @@ def matchday():
     total_matches = len(matches)
     # O filtro estatístico precisa avaliar a agenda completa da data, não
     # apenas os 12 cards da paginação comum.
-    if not trend_active:
+    if not trend_active and not ticket_generator_active:
         matches = matches[start : start + per_page]
     pagination_args = request.args.to_dict(flat=False)
     pagination_args.pop("page", None)
@@ -549,10 +601,12 @@ def matchday():
         trend_max=trend_max,
         trend_limit=trend_limit,
         trend_prefetch=trend_prefetch,
+        ticket_generator_active=ticket_generator_active,
+        generated_goal_suggestions=generated_goal_suggestions,
         day=day,
         page=page,
-        has_prev=not trend_active and page > 1,
-        has_next=not trend_active and total_matches > start + per_page,
+        has_prev=not trend_active and not ticket_generator_active and page > 1,
+        has_next=not trend_active and not ticket_generator_active and total_matches > start + per_page,
         prev_args=prev_args,
         next_args=next_args,
         trend_clear_args=trend_clear_args,
@@ -623,7 +677,7 @@ def matchday_summary(game_id):
             analysis = analyze_upcoming_match(
                 match,
                 detail_limit=sample_limit,
-                cache_variant=f"card-v18-exact-sample-{sample_limit}",
+                cache_variant=f"card-v27-authoritative-time-{sample_limit}",
             )
         except Exception:
             current_app.logger.exception("Falha ao montar resumo pré-jogo %s", game_id)
@@ -643,27 +697,46 @@ def matchday_summary(game_id):
     summaries = {}
     for group in groups:
         phase = group.get("phase") or {}
+        group_key = str(group.get("key") or "")
+        team_only = group_key in {"Mandante", "Visitante"}
         count = int(group.get("count") or 0)
         corners_1h = phase.get("avg_corners_1h")
         corners_2h = phase.get("avg_corners_2h")
         corners_samples = int(phase.get("corners_samples") or 0)
         cards_samples = int(phase.get("cards_samples") or 0)
         offsides_samples = int(phase.get("offsides_samples") or 0)
+        shots_samples = int(phase.get("shots_samples") or 0)
+        shots_on_target_samples = int(phase.get("shots_on_target_samples") or 0)
+        fouls_samples = int(phase.get("fouls_samples") or 0)
         corners_avg = None
-        if count > 0 and corners_samples == count and corners_1h is not None and corners_2h is not None:
+        if corners_samples >= 3 and corners_1h is not None and corners_2h is not None:
             corners_avg = round(float(corners_1h) + float(corners_2h), 2)
-        summaries[str(group.get("key") or "")] = {
-            "count": count,
-            "samples": phase.get("samples") or 0,
-            "goal_ht": phase.get("goal_1h_pct") if phase.get("samples") else None,
-            "over15": round((int(group.get("over15") or 0) / count) * 100) if count else None,
-            "over25": round((int(group.get("over25") or 0) / count) * 100) if count else None,
+        team_goal_samples = int(phase.get("team_goals_samples") or 0)
+        team_goal_ht_samples = int(phase.get("team_goal_ht_samples") or 0)
+        summaries[group_key] = {
+            "count": team_goal_samples if team_only else count,
+            "samples": team_goal_ht_samples if team_only else (phase.get("samples") or 0),
+            "goal_ht": (phase.get("team_goal_ht_pct") if team_goal_ht_samples else None) if team_only else (phase.get("goal_1h_pct") if phase.get("samples") else None),
+            "over15": (phase.get("team_over15_pct") if team_goal_samples else None) if team_only else (round((int(group.get("over15") or 0) / count) * 100) if count else None),
+            "over25": (phase.get("team_over25_pct") if team_goal_samples else None) if team_only else (round((int(group.get("over25") or 0) / count) * 100) if count else None),
             "corners_avg": corners_avg,
             "corners_samples": corners_samples,
-            "cards_avg": phase.get("avg_cards_total") if count > 0 and cards_samples == count else None,
-            "cards_samples": cards_samples,
-            "offsides_avg": phase.get("avg_offsides") if count > 0 and offsides_samples == count else None,
-            "offsides_samples": offsides_samples,
+            "corner_lines": phase.get("corner_lines") or {},
+            "team_corners_avg": phase.get("avg_team_corners") if int(phase.get("team_corners_samples") or 0) >= 3 else None,
+            "team_corners_samples": int(phase.get("team_corners_samples") or 0),
+            "team_corner_lines": phase.get("team_corner_lines") or {},
+            "cards_avg": phase.get("avg_team_cards") if team_only else (phase.get("avg_cards_total") if cards_samples >= 3 else None),
+            "cards_samples": int(phase.get("team_cards_samples") or 0) if team_only else cards_samples,
+            "card_lines": phase.get("card_lines") or {},
+            "offsides_avg": phase.get("avg_team_offsides") if team_only else (phase.get("avg_offsides") if count > 0 and offsides_samples == count else None),
+            "offsides_samples": int(phase.get("team_offsides_samples") or 0) if team_only else offsides_samples,
+            "shots_avg": phase.get("avg_team_shots") if team_only else (phase.get("avg_shots") if shots_samples >= 1 else None),
+            "shots_samples": int(phase.get("team_shots_samples") or 0) if team_only else shots_samples,
+            "shots_on_target_avg": phase.get("avg_team_shots_on_target") if team_only else (phase.get("avg_shots_on_target") if shots_on_target_samples >= 1 else None),
+            "shots_on_target_samples": int(phase.get("team_shots_on_target_samples") or 0) if team_only else shots_on_target_samples,
+            "fouls_avg": phase.get("avg_team_fouls") if team_only else (phase.get("avg_fouls") if fouls_samples >= 1 else None),
+            "fouls_samples": int(phase.get("team_fouls_samples") or 0) if team_only else fouls_samples,
+            "history_values": phase.get("history_values") or {},
         }
     return jsonify(
         {

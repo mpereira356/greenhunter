@@ -99,8 +99,20 @@ def edit_message_text(token: str, chat_id: str, message_id: int, text: str):
     try:
         resp = _post_with_retry(session, url, payload)
         if resp.status_code != 200:
+            try:
+                description = str((resp.json() or {}).get("description") or "").casefold()
+            except Exception:
+                description = ""
+            if "message is not modified" in description:
+                return True, "unchanged"
             resp = _post_with_retry(session, url, fallback_payload)
         if resp.status_code != 200:
+            try:
+                description = str((resp.json() or {}).get("description") or "").casefold()
+            except Exception:
+                description = ""
+            if "message is not modified" in description:
+                return True, "unchanged"
             return False, f"HTTP {resp.status_code}: {resp.text[:180]}"
         return True, "ok"
     except requests.RequestException as exc:

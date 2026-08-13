@@ -11,6 +11,7 @@
       <p>Abra uma partida para comparar H2H, mandante e visitante. As porcentagens são frequências históricas, não garantias.</p>
     </div>
     <div class="matchday-hero-actions">
+      <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#ticketGeneratorModal">Gerar sugestão de bilhete</button>
       <div class="matchday-help">
         <button class="matchday-help-trigger" type="button" aria-label="Entenda os indicadores" aria-describedby="matchday-help-legend">i</button>
         <div class="matchday-help-popover" id="matchday-help-legend" role="tooltip">
@@ -25,6 +26,9 @@
             <div><dt>Média cartões</dt><dd>Média total de cartões amarelos e vermelhos.</dd></div>
             <div><dt>Média imped.</dt><dd>Média total de impedimentos por partida, quando disponível.</dd></div>
             <div><dt>Amostra</dt><dd>Quantidade de jogos analisados por coluna; padrão 6, ajustável entre 1 e 10 em cada card.</dd></div>
+            <div><dt>Bilhete</dt><dd>Clique em qualquer valor disponível para adicionar ao bilhete. Clique novamente para remover.</dd></div>
+            <div><dt>Análise rápida</dt><dd>Passe o mouse sobre um valor para conferir os jogos e números usados no cálculo. No celular, toque no valor.</dd></div>
+            <div><dt>Valores históricos</dt><dd>A janela mostra cada confronto anterior e o total correspondente ao indicador escolhido.</dd></div>
           </dl>
           <small>As porcentagens representam frequência histórica, não garantia de resultado.</small>
         </div>
@@ -33,10 +37,34 @@
     </div>
   </div>
 
+  <div class="modal fade" id="ticketGeneratorModal" tabindex="-1" aria-labelledby="ticketGeneratorTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content matchday-generator-modal">
+      <div class="modal-header"><div><span class="analysis-kicker">Pré-jogo</span><h2 class="modal-title fs-5" id="ticketGeneratorTitle">Gerar sugestão de bilhete</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <form method="get" data-ticket-generator-form>
+        <div class="modal-body">
+          <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="ticket_generator" value="1">
+          {% for league in selected_leagues %}<input type="hidden" name="league" value="{{ league }}">{% endfor %}
+          {% for team in selected_teams %}<input type="hidden" name="team" value="{{ team }}">{% endfor %}
+          <div class="matchday-generator-grid">
+            <label><span>Quantidade de jogos</span><input class="form-control" type="number" inputmode="numeric" min="1" step="1" name="generator_count" value="3" required></label>
+            <label><span>Analisar até</span><select class="form-select" name="generator_samples">{% for n in range(3,11) %}<option value="{{ n }}"{% if n == 6 %} selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
+          </div>
+          <fieldset class="matchday-generator-markets"><legend>Mercados permitidos</legend>
+            {% for value, label in [('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols'),('corners_avg','Escanteios'),('cards_avg','Cartões')] %}
+            <label><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" checked><span>{{ label }}</span></label>
+            {% endfor %}
+          </fieldset>
+          <p class="matchday-generator-note">A quantidade escolhida é o máximo analisado. Bases com pelo menos 3 jogos também podem participar quando apresentarem porcentagem alta. Não representa garantia de resultado.</p>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" type="submit">Analisar jogos e gerar</button></div>
+      </form>
+    </div></div>
+  </div>
+
   <form class="matchday-filters" method="get">
     <label class="matchday-select-field matchday-date-field">
       <span>Data</span>
-      <input class="form-control" type="date" name="day" value="{{ day }}" aria-label="Data da agenda" onchange="this.form.submit()">
+      <input class="form-control" type="date" name="day" value="{{ day }}" aria-label="Data da agenda" onchange="this.form.requestSubmit()">
     </label>
     <div class="matchday-select-field">
       <span>Campeonato</span>
@@ -53,7 +81,7 @@
             </label>
             {% for league in available_leagues %}
             <label data-option-text="{{ league|lower }}">
-              <input class="form-check-input" type="checkbox" name="league" value="{{ league }}" {% if league in selected_leagues %}checked{% endif %}>
+              <input class="form-check-input" type="checkbox" name="league" value="{{ league }}" {% if not selected_leagues or league in selected_leagues %}checked{% endif %}>
               <span>{{ league }}</span>
             </label>
             {% endfor %}
@@ -76,7 +104,7 @@
             </label>
             {% for team in available_teams %}
             <label data-option-text="{{ team|lower }}" data-team-leagues="{{ team_leagues[team]|tojson|forceescape }}">
-              <input class="form-check-input" type="checkbox" name="team" value="{{ team }}" {% if team in selected_teams %}checked{% endif %}>
+              <input class="form-check-input" type="checkbox" name="team" value="{{ team }}" {% if not selected_teams or team in selected_teams %}checked{% endif %}>
               <span>{{ team }}</span>
             </label>
             {% endfor %}
@@ -144,7 +172,7 @@
   {% if matches %}
   <div class="matchday-grid">
     {% for match in matches %}
-    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-sample-limit="{{ trend_limit if trend_active else 6 }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}>
+    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-is-live="{{ '1' if match.is_live else '0' }}" data-sample-limit="{{ request.args.get('generator_samples', 6) if ticket_generator_active else (trend_limit if trend_active else 6) }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}{% if match.game_id|string in generated_goal_suggestions %} data-generator-suggestion="{{ generated_goal_suggestions[match.game_id|string]|tojson|forceescape }}"{% endif %}>
       <div class="matchday-card-head">
         <span class="{% if match.is_live %}is-live{% endif %}" data-game-time data-live-prefix="{% if match.is_live %}AO VIVO · {% endif %}">{% if match.is_live %}AO VIVO · {% endif %}{{ match.time }}</span>
         <small>{{ match.league or "Liga não informada" }}</small>
@@ -186,12 +214,14 @@
       <button class="matchday-ticket-clear" type="button" data-ticket-clear>Limpar bilhete</button>
     </footer>
   </aside>
+  <div class="matchday-history-popover" data-history-popover hidden></div>
 </section>
 <script>
 (function () {
   const leaguePicker = document.querySelector('[data-filter-picker="league"]');
   const teamPicker = document.querySelector('[data-filter-picker="team"]');
   const pickers = Array.from(document.querySelectorAll('[data-filter-picker]'));
+  const matchdayFilterForm = document.querySelector('.matchday-filters');
 
   function checkedValues(picker) {
     return Array.from(picker.querySelectorAll('input[type="checkbox"][name]:checked')).map((input) => input.value);
@@ -199,10 +229,12 @@
 
   function updateSummary(picker) {
     const values = checkedValues(picker);
-    picker.querySelector('[data-select-all]').checked = values.length === 0;
+    const available = Array.from(picker.querySelectorAll('input[type="checkbox"][name]')).filter((input) => input.closest('[data-option-text]').dataset.leagueVisible !== 'false');
+    const allSelected = available.length > 0 && available.every((input) => input.checked);
+    picker.querySelector('[data-select-all]').checked = allSelected;
     const summary = picker.querySelector('[data-picker-summary]');
     const fallback = picker.dataset.filterPicker === 'league' ? 'Todos os campeonatos' : 'Todos os times';
-    summary.textContent = values.length === 0 ? fallback : (values.length === 1 ? values[0] : `${values.length} selecionados`);
+    summary.textContent = allSelected ? fallback : (values.length === 0 ? 'Nenhum selecionado' : (values.length === 1 ? values[0] : `${values.length} selecionados`));
   }
 
   function applyTextSearch(picker) {
@@ -231,11 +263,9 @@
   pickers.forEach((picker) => {
     picker.querySelector('.matchday-option-search').addEventListener('input', () => applyTextSearch(picker));
     picker.querySelector('[data-select-all]').addEventListener('change', (event) => {
-      if (!event.target.checked) {
-        event.target.checked = checkedValues(picker).length === 0;
-        return;
-      }
-      picker.querySelectorAll('input[type="checkbox"][name]').forEach((input) => { input.checked = false; });
+      picker.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
+        if (!input.closest('[data-option-text]').hidden) input.checked = event.target.checked;
+      });
       picker.querySelector('.matchday-option-search').value = '';
       applyTextSearch(picker);
       updateSummary(picker);
@@ -263,6 +293,16 @@
   });
   updateTeamsForLeagues();
 
+  matchdayFilterForm.addEventListener('submit', () => {
+    [leaguePicker, teamPicker].forEach((picker) => {
+      const available = Array.from(picker.querySelectorAll('input[type="checkbox"][name]'))
+        .filter((input) => input.closest('[data-option-text]').dataset.leagueVisible !== 'false');
+      if (available.length && available.every((input) => input.checked)) {
+        available.forEach((input) => { input.disabled = true; });
+      }
+    });
+  });
+
   document.addEventListener('click', (event) => {
     pickers.forEach((picker) => {
       if (picker.contains(event.target)) return;
@@ -282,15 +322,73 @@
   const ticket = document.querySelector('[data-bet-ticket]');
   const ticketLauncher = document.querySelector('[data-ticket-launcher]');
   const ticketStorageKey = 'greenhunter-matchday-ticket-v1';
+  const summaryCacheVersion = 'v28-time-source';
+  const historyPopover = document.querySelector('[data-history-popover]');
   let ticketItems = [];
+
+  try {
+    Object.keys(localStorage).filter((key) => key.startsWith('greenhunter-summary:')).forEach((key) => {
+      const cached = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!cached || Date.now() - Number(cached.savedAt || 0) > 24 * 60 * 60 * 1000) localStorage.removeItem(key);
+    });
+  } catch (_) {}
+  let generatedCandidateQueue = [];
+  let generatedAllCandidates = [];
+  const excludedGeneratedGames = new Set();
 
   try { ticketItems = JSON.parse(localStorage.getItem(ticketStorageKey) || '[]'); } catch (_) { ticketItems = []; }
   if (!Array.isArray(ticketItems)) ticketItems = [];
 
-  const marketLabels = {goal_ht: 'Gol no 1º tempo', over15: 'Mais de 1,5 gols', over25: 'Mais de 2,5 gols', corners_avg: 'Média de escanteios', cards_avg: 'Média de cartões'};
+  const marketLabels = {goal_ht: 'Gol no 1º tempo', over15: 'Mais de 1,5 gols', over25: 'Mais de 2,5 gols', corners_avg: 'Média de escanteios', cards_avg: 'Média de cartões', offsides_avg: 'Média de impedimentos', shots_avg: 'Média de finalizações', shots_on_target_avg: 'Média de chutes ao gol', fouls_avg: 'Média de faltas'};
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character]));
   function saveTicket() {
     localStorage.setItem(ticketStorageKey, JSON.stringify(ticketItems));
+  }
+
+  function generatedCandidateToItem(candidate) {
+    const card = candidate.card;
+    const clock = card.querySelector('[data-game-time]').textContent.trim();
+    const groups = card._trendGroups || {};
+    const candidateGroup = String(candidate.group || 'Histórico disponível');
+    const groupKeys = [
+      candidateGroup.includes('H2H') ? 'H2H' : null,
+      candidateGroup.includes('Casa') || candidateGroup.includes('Mandante') ? 'Mandante' : null,
+      candidateGroup.includes('Fora') || candidateGroup.includes('Visitante') ? 'Visitante' : null
+    ].filter(Boolean);
+    const over25Rows = candidate.market === 'over15' ? groupKeys.map((key) => groups[key] || {})
+      .filter((group) => Number(group.count || 0) >= 3 && Number.isFinite(Number(group.over25))) : [];
+    const over25Value = over25Rows.length
+      ? Math.round(over25Rows.reduce((sum, group) => sum + Number(group.over25), 0) / over25Rows.length)
+      : null;
+    return {
+      id: `${card.dataset.gameId}:generated:${candidate.market}`,
+      gameId: card.dataset.gameId,
+      day: card.dataset.gameDay,
+      time: clock,
+      league: card.dataset.league,
+      home: card.dataset.homeTeam,
+      away: card.dataset.awayTeam,
+      market: candidate.line,
+      group: `${candidateGroup} · recomendação por histórico`,
+      value: candidate.confidence,
+      unit: '%',
+      samples: candidate.samples,
+      secondaryMarket: over25Value === null ? '' : 'Mais de 2,5 gols',
+      secondaryValue: over25Value,
+      generated: true
+    };
+  }
+
+  function addNextGeneratedCandidate() {
+    const gamesInTicket = new Set(ticketItems.map((item) => String(item.gameId)));
+    const next = generatedCandidateQueue.find((candidate) => {
+      const gameId = String(candidate.card.dataset.gameId);
+      return !gamesInTicket.has(gameId) && !excludedGeneratedGames.has(gameId);
+    });
+    if (!next) return false;
+    generatedAllCandidates.filter((candidate) => String(candidate.card.dataset.gameId) === String(next.card.dataset.gameId)).slice(0, 3)
+      .forEach((candidate) => ticketItems.push(generatedCandidateToItem(candidate)));
+    return true;
   }
 
   function renderTicket(openWhenPopulated) {
@@ -317,38 +415,59 @@
           ${game.selections.map((item) => `
           <div class="matchday-ticket-selection">
             <div><span>${escapeHtml(item.market)}</span><b>${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b></div>
+            ${item.secondaryMarket && item.secondaryValue !== null && item.secondaryValue !== undefined ? `<small class="matchday-ticket-secondary"><span>${escapeHtml(item.secondaryMarket)}</span><b>${escapeHtml(item.secondaryValue)}%</b></small>` : ''}
             <small>${escapeHtml(item.group)} · ${escapeHtml(item.samples)} jogos</small>
             <button type="button" data-ticket-remove="${escapeHtml(item.id)}" aria-label="Remover ${escapeHtml(item.market)}">×</button>
           </div>`).join('')}
         </div>
       </article>`).join('') : '<div class="matchday-ticket-empty">Clique em uma linha de mercado nos resultados filtrados para montar seu bilhete.</div>';
     itemsBox.querySelectorAll('[data-ticket-remove]').forEach((button) => button.addEventListener('click', () => {
-      ticketItems = ticketItems.filter((item) => item.id !== button.dataset.ticketRemove);
+      const removed = ticketItems.find((item) => item.id === button.dataset.ticketRemove);
+      if (removed && removed.generated) {
+        const removedGameId = String(removed.gameId);
+        excludedGeneratedGames.add(removedGameId);
+        ticketItems = ticketItems.filter((item) => String(item.gameId) !== removedGameId);
+        addNextGeneratedCandidate();
+      } else {
+        ticketItems = ticketItems.filter((item) => item.id !== button.dataset.ticketRemove);
+      }
       saveTicket();
       renderTicket(false);
     }));
     if (openWhenPopulated && ticketItems.length) ticket.hidden = false;
     ticketLauncher.hidden = !ticket.hidden || ticketItems.length === 0;
+    syncTicketSelectionMarks();
+  }
+
+  function syncTicketSelectionMarks() {
+    document.querySelectorAll('[data-ticket-cell]').forEach((cell) => {
+      const card = cell.closest('[data-matchday-summary]');
+      const id = `${card.dataset.gameId}:${cell.dataset.ticketCell}:${cell.dataset.ticketGroup}`;
+      cell.classList.toggle('is-ticket-selected', ticketItems.some((item) => item.id === id));
+    });
   }
 
   function selectedTrendForCard(card, market, exactGroup) {
     const groups = card._trendGroups || {};
     const requestedGroup = exactGroup || trendFilter.querySelector('[data-trend-group]').value;
     const candidates = requestedGroup === 'best' ? ['H2H', 'Mandante', 'Visitante'] : [requestedGroup];
+    const requiredSamples = 0;
     return candidates.map((key) => {
       const source = groups[key] || {};
-      const samples = market === 'corners_avg' ? Number(source.corners_samples || 0)
+      const teamCorner = market === 'corners_avg' && key !== 'H2H';
+      const sampleKeys = {cards_avg: 'cards_samples', offsides_avg: 'offsides_samples', shots_avg: 'shots_samples', shots_on_target_avg: 'shots_on_target_samples', fouls_avg: 'fouls_samples'};
+      const samples = market === 'corners_avg' ? Number(source[teamCorner ? 'team_corners_samples' : 'corners_samples'] || 0)
         : market === 'cards_avg' ? Number(source.cards_samples || 0)
         : market === 'goal_ht' ? Number(source.samples || 0)
-        : Number(source.count || 0);
-      return {key, samples, value: source[market]};
-    }).filter((item) => item.samples >= selectedTrendLimit && item.value !== null && item.value !== undefined)
+        : Number(source[sampleKeys[market]] || source.count || 0);
+      return {key, samples, value: source[teamCorner ? 'team_corners_avg' : market]};
+    }).filter((item) => item.samples >= requiredSamples && item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value)))
       .sort((a, b) => Number(b.value) - Number(a.value))[0] || null;
   }
 
   document.addEventListener('click', (event) => {
     const target = event.target.closest('[data-ticket-market], [data-ticket-cell]');
-    if (!target || !trendActive) return;
+    if (!target) return;
     const card = target.closest('[data-matchday-summary]');
     const market = target.dataset.ticketMarket || target.dataset.ticketCell;
     const exactGroup = target.dataset.ticketGroup || '';
@@ -356,16 +475,55 @@
     if (!selection) return;
     const id = `${card.dataset.gameId}:${market}:${selection.key}`;
     const clock = card.querySelector('[data-game-time]').textContent.replace('AO VIVO · ', '').trim();
-    const groupLabel = selection.key === 'Mandante' ? 'Casa' : selection.key === 'Visitante' ? 'Fora' : (['corners_avg', 'cards_avg'].includes(market) ? 'Total (H2H)' : selection.key);
-    const item = {id, gameId: card.dataset.gameId, day: card.dataset.gameDay, time: clock, league: card.dataset.league, home: card.dataset.homeTeam, away: card.dataset.awayTeam, market: marketLabels[market], group: groupLabel, value: selection.value, unit: ['corners_avg', 'cards_avg'].includes(market) ? '' : '%', samples: selection.samples};
+    const teamName = selection.key === 'Mandante' ? card.dataset.homeTeam : selection.key === 'Visitante' ? card.dataset.awayTeam : '';
+    const groupLabel = selection.key === 'H2H' ? 'Total · H2H' : `${teamName} · ${selection.key === 'Mandante' ? 'Casa' : 'Fora'}`;
+    const secondary = market === 'over15' ? selectedTrendForCard(card, 'over25', selection.key) : null;
+    const percentageMarket = ['goal_ht', 'over15', 'over25'].includes(market);
+    const marketName = teamName && market === 'corners_avg' ? `${teamName} — escanteios` : marketLabels[market];
+    const item = {id, gameId: card.dataset.gameId, day: card.dataset.gameDay, time: clock, league: card.dataset.league, home: card.dataset.homeTeam, away: card.dataset.awayTeam, market: marketName, group: groupLabel, value: selection.value, unit: percentageMarket ? '%' : '', samples: selection.samples, secondaryMarket: secondary ? 'Mais de 2,5 gols' : '', secondaryValue: secondary ? secondary.value : null};
     const existing = ticketItems.findIndex((saved) => saved.id === id);
-    if (existing >= 0) ticketItems[existing] = item; else ticketItems.push(item);
+    if (existing >= 0) ticketItems.splice(existing, 1); else ticketItems.push(item);
     saveTicket();
     renderTicket(true);
   });
 
+  function showHistoryPopover(cell, pointerEvent) {
+    const values = JSON.parse(decodeURIComponent(cell.dataset.history || '%5B%5D'));
+    const card = cell.closest('[data-matchday-summary]');
+    const column = cell.dataset.ticketGroup === 'H2H' ? 'H2H · Total' : cell.dataset.ticketGroup === 'Mandante' ? card.dataset.homeTeam : card.dataset.awayTeam;
+    const label = marketLabels[cell.dataset.ticketCell] || 'Histórico';
+    historyPopover.innerHTML = `<strong>${escapeHtml(label)}</strong><small>${escapeHtml(column)} · últimos ${values.length} jogos com dados</small><div>${values.length ? values.map((entry, index) => {
+      const row = entry && typeof entry === 'object' ? entry : {match: `Jogo ${index + 1}`, value: entry};
+      const breakdown = row.home_value !== undefined && row.away_value !== undefined
+        ? `<small>${escapeHtml(row.home_name)} ${escapeHtml(row.home_value)} + ${escapeHtml(row.away_name)} ${escapeHtml(row.away_value)}</small>`
+        : '';
+      return `<span><i>${escapeHtml(row.match)}${breakdown}</i><b>${escapeHtml(row.value)}</b></span>`;
+    }).join('') : '<em>Sem valores detalhados.</em>'}</div>`;
+    const rect = cell.getBoundingClientRect();
+    historyPopover.hidden = false;
+    const gap = 32;
+    const pointerX = Number(pointerEvent?.clientX) || rect.right;
+    const pointerY = Number(pointerEvent?.clientY) || (rect.top + rect.height / 2);
+    const spaceRight = window.innerWidth - pointerX;
+    const leftCandidate = spaceRight >= historyPopover.offsetWidth + gap + 8
+      ? pointerX + gap
+      : pointerX - historyPopover.offsetWidth - gap;
+    const left = Math.max(8, Math.min(window.innerWidth - historyPopover.offsetWidth - 8, leftCandidate));
+    const top = Math.max(8, Math.min(window.innerHeight - historyPopover.offsetHeight - 8, pointerY - 24));
+    Object.assign(historyPopover.style, {left: `${left}px`, top: `${top}px`});
+  }
+
+  document.addEventListener('pointerover', (event) => {
+    const cell = event.target.closest('[data-ticket-cell]');
+    if (cell) showHistoryPopover(cell, event);
+  });
+  document.addEventListener('pointerout', (event) => {
+    if (event.relatedTarget?.closest?.('[data-ticket-cell]') === event.target.closest?.('[data-ticket-cell]')) return;
+    if (!event.relatedTarget?.closest?.('[data-history-popover]')) historyPopover.hidden = true;
+  });
+
   ticket.querySelector('[data-ticket-close]').addEventListener('click', () => { ticket.hidden = true; renderTicket(false); });
-  ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => { ticketItems = []; saveTicket(); ticket.hidden = true; renderTicket(false); });
+  ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => { ticketItems = []; excludedGeneratedGames.clear(); saveTicket(); ticket.hidden = true; renderTicket(false); });
   ticketLauncher.addEventListener('click', () => { ticket.hidden = false; renderTicket(false); });
 
   let dragState = null;
@@ -466,19 +624,30 @@
     const box = card.querySelector('.matchday-card-summary');
     card._trendFailed = false;
     const limit = Number(card.dataset.sampleLimit || 6);
-    box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Calculando tendências...</div>';
+    const summaryCacheKey = `greenhunter-summary:${summaryCacheVersion}:${card.dataset.gameDay}:${card.dataset.gameId}:${limit}`;
     try {
-      const summaryUrl = new URL(card.dataset.matchdaySummary, window.location.origin);
-      summaryUrl.searchParams.set('limit', String(limit));
-      const response = await fetch(summaryUrl, {headers: {'Accept': 'application/json'}});
-      const data = await response.json().catch(() => ({}));
-      if (response.status === 429 && data.busy) {
-        box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Na fila de análise...</div>';
-        const retrySeconds = Math.max(2, Number(response.headers.get('Retry-After')) || 3);
-        await new Promise((resolve) => window.setTimeout(resolve, retrySeconds * 1000 + Math.random() * 800));
-        return loadCard(card);
+      let data = null;
+      try {
+        const cached = JSON.parse(localStorage.getItem(summaryCacheKey) || 'null');
+        if (cached && Date.now() - Number(cached.savedAt || 0) < 12 * 60 * 60 * 1000) data = cached.data;
+      } catch (_) {}
+      if (!data) {
+        box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Calculando tendências...</div>';
+        const summaryUrl = new URL(card.dataset.matchdaySummary, window.location.origin);
+        summaryUrl.searchParams.set('limit', String(limit));
+        const response = await fetch(summaryUrl, {headers: {'Accept': 'application/json'}});
+        data = await response.json().catch(() => ({}));
+        if (response.status === 429 && data.busy) {
+          box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Na fila de análise...</div>';
+          const retrySeconds = Math.max(2, Number(response.headers.get('Retry-After')) || 3);
+          await new Promise((resolve) => window.setTimeout(resolve, retrySeconds * 1000 + Math.random() * 800));
+          return loadCard(card);
+        }
+        if (!response.ok) throw new Error(data.error || 'Falha temporária ao consultar o histórico.');
+        if (data.ok && data.status === 'ready') {
+          try { localStorage.setItem(summaryCacheKey, JSON.stringify({savedAt: Date.now(), data})); } catch (_) {}
+        }
       }
-      if (!response.ok) throw new Error(data.error || 'Falha temporária ao consultar o histórico.');
       if (!data.ok) throw new Error(data.error || 'Sem dados');
       if (data.scheduled_time) {
         const clock = card.querySelector('[data-game-time]');
@@ -496,14 +665,26 @@
         return;
       }
       const value = (item, suffix) => item === null || item === undefined ? '-' : `${item}${suffix || ''}`;
-      const h2h = data.groups.H2H || {};
-      const home = data.groups.Mandante || {};
-      const away = data.groups.Visitante || {};
-      card._trendGroups = data.groups;
-      const cells = (key, suffix, selectable) => `
-        <td ${selectable && Number(h2h[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && h2h[key] !== null && h2h[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="H2H" title="Adicionar Total (H2H) ao bilhete"` : ''}>${value(h2h[key], suffix)}</td>
-        <td ${selectable && Number(home[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && home[key] !== null && home[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="Mandante" title="Adicionar Casa ao bilhete"` : ''}>${value(home[key], suffix)}</td>
-        <td ${selectable && Number(away[key === 'corners_avg' ? 'corners_samples' : 'cards_samples'] || 0) >= selectedTrendLimit && away[key] !== null && away[key] !== undefined ? `class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="Visitante" title="Adicionar Fora ao bilhete"` : ''}>${value(away[key], suffix)}</td>`;
+      const prefetched = card._trendGroups || {};
+      const mergedGroups = {};
+      ['H2H', 'Mandante', 'Visitante'].forEach((key) => { mergedGroups[key] = {...(prefetched[key] || {}), ...(data.groups[key] || {})}; });
+      const h2h = mergedGroups.H2H || {};
+      const home = mergedGroups.Mandante || {};
+      const away = mergedGroups.Visitante || {};
+      card._trendGroups = mergedGroups;
+      const sampleKey = (key) => ({goal_ht: 'samples', corners_avg: 'corners_samples', cards_avg: 'cards_samples', offsides_avg: 'offsides_samples', shots_avg: 'shots_samples', shots_on_target_avg: 'shots_on_target_samples', fouls_avg: 'fouls_samples'}[key] || 'count');
+      const historyData = (source, group, key, displayKey) => {
+        const teamKeys = {goal_ht: 'team_goal_ht', over15: 'team_goals', over25: 'team_goals', corners_avg: 'team_corners_avg', cards_avg: 'team_cards', offsides_avg: 'team_offsides', shots_avg: 'team_shots', shots_on_target_avg: 'team_shots_on_target', fouls_avg: 'team_fouls'};
+        const historyKey = group === 'H2H' ? displayKey : (teamKeys[key] || displayKey);
+        return encodeURIComponent(JSON.stringify((source.history_values || {})[historyKey] || []));
+      };
+      const ticketCell = (source, group, key, displayKey, samplesKey, suffix) => source[displayKey] !== null && source[displayKey] !== undefined && Number.isFinite(Number(source[displayKey]))
+        ? `<td class="is-ticket-cell" data-ticket-cell="${key}" data-ticket-group="${group}" data-history="${historyData(source, group, key, displayKey)}">${value(source[displayKey], suffix)}</td>`
+        : `<td>${value(source[displayKey], suffix)}</td>`;
+      const cells = (key, suffix) => `
+        ${ticketCell(h2h, 'H2H', key, key, sampleKey(key), suffix)}
+        ${ticketCell(home, 'Mandante', key, key === 'corners_avg' ? 'team_corners_avg' : key, key === 'corners_avg' ? 'team_corners_samples' : sampleKey(key), suffix)}
+        ${ticketCell(away, 'Visitante', key, key === 'corners_avg' ? 'team_corners_avg' : key, key === 'corners_avg' ? 'team_corners_samples' : sampleKey(key), suffix)}`;
       const firstSample = trendActive ? 4 : 1;
       const sampleOptions = Array.from({length: 11 - firstSample}, (_, index) => index + firstSample)
         .map((number) => `<option value="${number}" ${number === limit ? 'selected' : ''}>${number}</option>`)
@@ -512,12 +693,15 @@
         <table class="matchday-mini-table matchday-compare-table">
           <thead><tr><th>Mercado</th><th>H2H</th><th>Casa</th><th>Fora</th></tr></thead>
           <tbody>
-            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="goal_ht" title="Adicionar Gol HT ao bilhete"' : ''}><td>Gol HT</td>${cells('goal_ht', '%')}</tr>
-            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="over15" title="Adicionar Mais de 1,5 ao bilhete"' : ''}><td>Mais de 1,5</td>${cells('over15', '%')}</tr>
-            <tr ${trendActive ? 'class="is-ticket-option" data-ticket-market="over25" title="Adicionar Mais de 2,5 ao bilhete"' : ''}><td>Mais de 2,5</td>${cells('over25', '%')}</tr>
-            <tr><td>Média esc.</td>${cells('corners_avg', '', trendActive)}</tr>
-            <tr><td>Média cartões</td>${cells('cards_avg', '', trendActive)}</tr>
+            <tr><td>Gol HT</td>${cells('goal_ht', '%')}</tr>
+            <tr><td>Mais de 1,5</td>${cells('over15', '%')}</tr>
+            <tr><td>Mais de 2,5</td>${cells('over25', '%')}</tr>
+            <tr><td>Média esc.</td>${cells('corners_avg', '')}</tr>
+            <tr><td>Média cartões</td>${cells('cards_avg', '')}</tr>
             <tr><td>Média imped.</td>${cells('offsides_avg', '')}</tr>
+            <tr><td>Média finaliz.</td>${cells('shots_avg', '')}</tr>
+            <tr><td>Média chutes gol</td>${cells('shots_on_target_avg', '')}</tr>
+            <tr><td>Média faltas</td>${cells('fouls_avg', '')}</tr>
             <tr class="matchday-sample-row">
               <td><label class="matchday-sample-control"><span>Amostra</span><select aria-label="Quantidade de jogos da amostra">${sampleOptions}</select></label></td>
               <td>${value(h2h.samples)}j</td><td>${value(home.samples)}j</td><td>${value(away.samples)}j</td>
@@ -529,9 +713,10 @@
         card.dataset.sampleLimit = String(nextLimit);
         loadCard(card);
       });
+      syncTicketSelectionMarks();
       applyTrendFilter();
     } catch (error) {
-      card._trendGroups = {};
+      card._trendGroups = card._trendGroups || {};
       card._trendFailed = true;
       box.innerHTML = `<div class="matchday-summary-state is-error">
         <strong>Não foi possível carregar agora</strong>
@@ -551,8 +736,126 @@
       await loadCard(card);
     }
   }
+
+  function generateSuggestedTicket(finalAttempt) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ticket_generator') !== '1' || generateSuggestedTicket.done) return false;
+    const wanted = Math.max(1, Number(params.get('generator_count')) || 3);
+    const minimumSamples = 3;
+    const enabled = new Set(params.getAll('generator_market'));
+    if (!enabled.size) ['goal_ht', 'over15', 'over25'].forEach((key) => enabled.add(key));
+    if (!finalAttempt && (enabled.has('corners_avg') || enabled.has('cards_avg'))) return false;
+    const candidates = [];
+
+    cards.filter((card) => card.dataset.isLive !== '1').forEach((card) => {
+      if (card.dataset.generatorSuggestion) {
+        try {
+          const suggestion = JSON.parse(card.dataset.generatorSuggestion);
+          candidates.push({card, market: suggestion.market, line: marketLabels[suggestion.market], score: Number(suggestion.confidence) + Number(suggestion.samples) * .5, confidence: Number(suggestion.confidence), samples: Number(suggestion.samples), group: suggestion.group});
+        } catch (_) {}
+      }
+      const groups = card._trendGroups || {};
+      const bases = ['H2H', 'Mandante', 'Visitante'].map((key) => ({key, data: groups[key] || {}}));
+      ['goal_ht', 'over15', 'over25'].filter((market) => enabled.has(market)).forEach((market) => {
+        const rows = bases.map(({key, data}) => ({key, samples: Number(market === 'goal_ht' ? data.samples : data.count) || 0, value: Number(data[market])}))
+          .filter((row) => row.samples >= minimumSamples && Number.isFinite(row.value));
+        if (rows.length < 2) return;
+        const values = rows.map((row) => row.value);
+        const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+        const spread = Math.max(...values) - Math.min(...values);
+        if (average < 80 || spread > 25) return;
+        const sampleSize = Math.min(...rows.map((row) => row.samples));
+        candidates.push({card, market, marketText: marketLabels[market], line: marketLabels[market], score: average - spread * .2 + sampleSize * .5, confidence: Math.round(average), samples: sampleSize, group: rows.map((row) => row.key === 'Mandante' ? 'Casa' : row.key === 'Visitante' ? 'Fora' : 'H2H').join(' + ')});
+      });
+      [['corners_avg', 'escanteios'], ['cards_avg', 'cartões']].filter(([market]) => enabled.has(market)).forEach(([market, noun]) => {
+        const sampleKey = market === 'corners_avg' ? 'corners_samples' : 'cards_samples';
+        const lineKey = market === 'corners_avg' ? 'corner_lines' : 'card_lines';
+        const available = bases.filter(({data}) => Number(data[sampleKey] || 0) >= minimumSamples);
+        const commonLines = [...new Set(available.flatMap(({data}) => Object.keys(data[lineKey] || {})))];
+        const choices = commonLines.map((line) => {
+          const rows = available.map(({key, data}) => ({key, samples: Number(data[sampleKey]), percentage: Number((data[lineKey] || {})[line])}))
+            .filter((row) => Number.isFinite(row.percentage));
+          if (rows.length < 2) return null;
+          const percentages = rows.map((row) => row.percentage);
+          const confidence = percentages.reduce((sum, value) => sum + value, 0) / percentages.length;
+          const spread = Math.max(...percentages) - Math.min(...percentages);
+          if (confidence < 67 || spread > 30) return null;
+          return {line: Number(line), confidence: Math.round(confidence), spread, rows, samples: Math.min(...rows.map((row) => row.samples))};
+        }).filter(Boolean).sort((a, b) => (b.confidence + b.line * 1.2 - b.spread * .2) - (a.confidence + a.line * 1.2 - a.spread * .2));
+        if (!choices.length) return;
+        const best = choices[0];
+        candidates.push({card, market, line: `Mais de ${best.line} ${noun}`, score: best.confidence + best.line * 1.2 - best.spread * .2 + best.samples * .5, confidence: best.confidence, samples: best.samples, group: best.rows.map((row) => row.key === 'Mandante' ? 'Casa' : row.key === 'Visitante' ? 'Fora' : 'H2H').join(' + ')});
+      });
+      if (enabled.has('corners_avg')) {
+        [
+          {key: 'Mandante', side: 'Casa', team: card.dataset.homeTeam, market: 'corners_home'},
+          {key: 'Visitante', side: 'Visitante', team: card.dataset.awayTeam, market: 'corners_away'}
+        ].forEach(({key, side, team, market}) => {
+          const source = groups[key] || {};
+          const samples = Number(source.team_corners_samples || 0);
+          const average = Number(source.team_corners_avg);
+          const lines = Object.entries(source.team_corner_lines || {})
+            .map(([line, percentage]) => ({line: Number(line), percentage: Number(percentage)}))
+            .filter((entry) => Number.isFinite(entry.line) && Number.isFinite(entry.percentage) && entry.percentage >= 67)
+            .sort((a, b) => b.line - a.line || b.percentage - a.percentage);
+          if (samples < minimumSamples || !Number.isFinite(average) || !lines.length) return;
+          const bestLine = lines[0];
+          candidates.push({
+            card,
+            market,
+            line: `Mais de ${bestLine.line} escanteios — ${team}`,
+            score: bestLine.percentage + bestLine.line * 1.5 + samples * .75,
+            confidence: bestLine.percentage,
+            samples,
+            group: `${side} · média ${average}`
+          });
+        });
+      }
+    });
+
+    const deduplicated = new Map();
+    candidates.forEach((candidate) => {
+      const key = `${candidate.card.dataset.gameId}:${candidate.market}`;
+      if (!deduplicated.has(key) || candidate.score > deduplicated.get(key).score) deduplicated.set(key, candidate);
+    });
+    generatedAllCandidates = [...deduplicated.values()].sort((a, b) => b.score - a.score);
+    const selectedGameIds = [];
+    [...enabled].forEach((market) => {
+      const candidate = generatedAllCandidates.find((item) => item.market === market && !selectedGameIds.includes(String(item.card.dataset.gameId)));
+      if (candidate && selectedGameIds.length < wanted) selectedGameIds.push(String(candidate.card.dataset.gameId));
+    });
+    generatedAllCandidates.forEach((candidate) => {
+      const gameId = String(candidate.card.dataset.gameId);
+      if (selectedGameIds.length < wanted && !selectedGameIds.includes(gameId)) selectedGameIds.push(gameId);
+    });
+    generatedCandidateQueue = selectedGameIds.map((gameId) => generatedAllCandidates.find((candidate) => String(candidate.card.dataset.gameId) === gameId)).filter(Boolean);
+    const selected = selectedGameIds.flatMap((gameId) => generatedAllCandidates.filter((candidate) => String(candidate.card.dataset.gameId) === gameId).slice(0, 3));
+    if (!selected.length) {
+      if (!finalAttempt) return false;
+      const onlyCorners = enabled.size === 1 && enabled.has('corners_avg');
+      const onlyCards = enabled.size === 1 && enabled.has('cards_avg');
+      const message = onlyCorners
+        ? 'Não encontramos jogos com média de escanteios consistente em pelo menos 3 partidas válidas nesta data.'
+        : onlyCards
+          ? 'Não encontramos jogos com média de cartões consistente em pelo menos 3 partidas válidas nesta data.'
+          : 'Não encontramos jogos que atendam aos critérios estatísticos nos mercados escolhidos. São necessárias pelo menos 3 partidas válidas por base.';
+      window.alert(message);
+      return false;
+    }
+    ticketItems = selected.map(generatedCandidateToItem);
+    saveTicket();
+    renderTicket(true);
+    generateSuggestedTicket.done = true;
+    return true;
+  }
+
+  // Gols usam o índice compartilhado das 03:00 e podem gerar o bilhete
+  // imediatamente, sem aguardar a coleta detalhada de todos os cards.
+  generateSuggestedTicket(false);
   const workers = Math.min(2, cards.length);
-  for (let index = 0; index < workers; index += 1) loadWorker();
+  const workerTasks = [];
+  for (let index = 0; index < workers; index += 1) workerTasks.push(loadWorker());
+  Promise.all(workerTasks).then(() => generateSuggestedTicket(true));
 })();
 </script>
 {% endblock %}

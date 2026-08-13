@@ -5,6 +5,8 @@ from hashlib import sha1
 from statistics import mean
 
 import requests
+import re
+import unicodedata
 
 from app.models import LiveGameState
 from app.services.scraper import (
@@ -118,7 +120,23 @@ def _pct(part: int, total: int):
     return round((part / total) * 100) if total else 0
 
 
-def _phase_metrics(items: list[dict]) -> dict:
+def _team_key(value) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode().casefold()
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _same_team(left, right) -> bool:
+    left_key, right_key = _team_key(left), _team_key(right)
+    if not left_key or not right_key:
+        return False
+    if left_key == right_key:
+        return True
+    # A fonte alterna nomes como "Orlando City" / "Orlando City SC" e
+    # "Pumas" / "UNAM Pumas". Só aceite contenção para nomes significativos.
+    return min(len(left_key), len(right_key)) >= 6 and (left_key in right_key or right_key in left_key)
+
+
+def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
     detailed = [item for item in items if item.get("goals_ht") is not None]
     total = len(detailed)
     if not total:
@@ -138,6 +156,9 @@ def _phase_metrics(items: list[dict]) -> dict:
             "avg_cards_2h": None,
             "corner_lines": {},
             "corners_samples": 0,
+            "team_corners_samples": 0,
+            "avg_team_corners": None,
+            "team_corner_lines": {},
             "avg_cards_total": None,
             "card_lines": {},
             "cards_samples": 0,
@@ -146,6 +167,13 @@ def _phase_metrics(items: list[dict]) -> dict:
             "throw_in_lines": {},
             "offsides_samples": 0,
             "avg_offsides": None,
+            "shots_samples": 0,
+            "avg_shots": None,
+            "shots_on_target_samples": 0,
+            "avg_shots_on_target": None,
+            "fouls_samples": 0,
+            "avg_fouls": None,
+            "history_values": {},
         }
     goal_1h = sum(1 for item in detailed if int(item.get("goals_ht") or 0) > 0)
     goal_2h = sum(1 for item in detailed if int(item.get("goals_2h") or 0) > 0)
@@ -163,9 +191,71 @@ def _phase_metrics(items: list[dict]) -> dict:
         int(item.get("corners_ht") or 0) + int(item.get("corners_2h") or 0)
         for item in corner_detailed
     ]
+    target_key = _team_key(target_team)
+
+    def team_side_value(item, home_field, away_field):
+        if not target_key:
+            return None
+        if _same_team(item.get("history_home_team"), target_team):
+            return item.get(home_field)
+        if _same_team(item.get("history_away_team"), target_team):
+            return item.get(away_field)
+        return None
+
+    def team_values(home_field, away_field):
+        return [int(value) for item in detailed if (value := team_side_value(item, home_field, away_field)) is not None]
+
+    team_goals = team_values("home", "away")
+    team_goals_ht = team_values("goals_ht_home", "goals_ht_away")
+    team_cards = team_values("cards_home", "cards_away")
+    team_offsides = team_values("offsides_home", "offsides_away")
+    team_shots = team_values("shots_home", "shots_away")
+    team_shots_on_target = team_values("shots_on_target_home", "shots_on_target_away")
+    team_fouls = team_values("fouls_home", "fouls_away")
+    team_corner_values = []
+    if target_key:
+        for item in corner_detailed:
+            value = None
+            if _same_team(item.get("history_home_team"), target_team):
+                value = item.get("corners_home")
+            elif _same_team(item.get("history_away_team"), target_team):
+                value = item.get("corners_away")
+            if value is not None:
+                team_corner_values.append(int(value))
     card_totals = [cards_1h[index] + cards_2h[index] for index in range(len(card_detailed))]
     throw_ins = [int(item["throw_ins_total"]) for item in detailed if item.get("throw_ins_total") is not None]
     offsides = [int(item["offsides_total"]) for item in detailed if item.get("offsides_total") is not None]
+    shots = [int(item["shots_total"]) for item in detailed if item.get("shots_total") is not None]
+    shots_on_target = [int(item["shots_on_target_total"]) for item in detailed if item.get("shots_on_target_total") is not None]
+    fouls = [int(item["fouls_total"]) for item in detailed if item.get("fouls_total") is not None]
+
+    def history_rows(value_getter, sides_getter=None):
+        rows = []
+        for item in detailed:
+            value = value_getter(item)
+            if value is None:
+                continue
+            home_name = str(item.get("history_home_team") or "Time da casa")
+            away_name = str(item.get("history_away_team") or "Time visitante")
+            row = {"match": f"{home_name} x {away_name}", "value": int(value)}
+            sides = sides_getter(item) if sides_getter else None
+            if sides and sides[0] is not None and sides[1] is not None:
+                row["home_name"], row["away_name"] = home_name, away_name
+                row["home_value"], row["away_value"] = int(sides[0]), int(sides[1])
+            rows.append(row)
+        return rows
+
+    def team_corner_value(item):
+        if _same_team(item.get("history_home_team"), target_team):
+            return item.get("corners_home")
+        if _same_team(item.get("history_away_team"), target_team):
+            return item.get("corners_away")
+        return None
+
+    def card_total(item):
+        if item.get("yellow_cards_ht") is None:
+            return None
+        return sum(int(item.get(key) or 0) for key in ("yellow_cards_ht", "yellow_cards_2h", "red_cards_ht", "red_cards_2h"))
     return {
         "samples": total,
         "goal_1h_games": goal_1h,
@@ -191,6 +281,27 @@ def _phase_metrics(items: list[dict]) -> dict:
             for line in (4.5, 7.5, 8.5, 9.5)
         },
         "corners_samples": len(corner_detailed),
+        "team_corners_samples": len(team_corner_values),
+        "avg_team_corners": round(mean(team_corner_values), 2) if team_corner_values else None,
+        "team_corner_lines": {
+            str(line): _pct(sum(1 for corners in team_corner_values if corners > line), len(team_corner_values))
+            for line in (1.5, 2.5, 3.5, 4.5, 5.5, 6.5)
+        } if team_corner_values else {},
+        "team_goals_samples": len(team_goals),
+        "team_goal_ht_samples": len(team_goals_ht),
+        "team_goal_ht_pct": _pct(sum(1 for value in team_goals_ht if value > 0), len(team_goals_ht)),
+        "team_over15_pct": _pct(sum(1 for value in team_goals if value > 1), len(team_goals)),
+        "team_over25_pct": _pct(sum(1 for value in team_goals if value > 2), len(team_goals)),
+        "team_cards_samples": len(team_cards),
+        "avg_team_cards": round(mean(team_cards), 2) if team_cards else None,
+        "team_offsides_samples": len(team_offsides),
+        "avg_team_offsides": round(mean(team_offsides), 2) if team_offsides else None,
+        "team_shots_samples": len(team_shots),
+        "avg_team_shots": round(mean(team_shots), 2) if team_shots else None,
+        "team_shots_on_target_samples": len(team_shots_on_target),
+        "avg_team_shots_on_target": round(mean(team_shots_on_target), 2) if team_shots_on_target else None,
+        "team_fouls_samples": len(team_fouls),
+        "avg_team_fouls": round(mean(team_fouls), 2) if team_fouls else None,
         "throw_ins_samples": len(throw_ins),
         "avg_throw_ins": round(mean(throw_ins), 2) if throw_ins else None,
         "throw_in_lines": {
@@ -199,12 +310,37 @@ def _phase_metrics(items: list[dict]) -> dict:
         } if throw_ins else {},
         "offsides_samples": len(offsides),
         "avg_offsides": round(mean(offsides), 2) if offsides else None,
+        "shots_samples": len(shots),
+        "avg_shots": round(mean(shots), 2) if shots else None,
+        "shots_on_target_samples": len(shots_on_target),
+        "avg_shots_on_target": round(mean(shots_on_target), 2) if shots_on_target else None,
+        "fouls_samples": len(fouls),
+        "avg_fouls": round(mean(fouls), 2) if fouls else None,
+        "history_values": {
+            "goal_ht": history_rows(lambda item: item.get("goals_ht")),
+            "over15": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
+            "over25": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
+            "corners_avg": history_rows(lambda item: None if item.get("corners_ht") is None else int(item.get("corners_ht") or 0) + int(item.get("corners_2h") or 0), lambda item: (item.get("corners_home"), item.get("corners_away"))),
+            "team_corners_avg": history_rows(team_corner_value),
+            "cards_avg": history_rows(card_total, lambda item: (item.get("cards_home"), item.get("cards_away"))),
+            "offsides_avg": history_rows(lambda item: item.get("offsides_total"), lambda item: (item.get("offsides_home"), item.get("offsides_away"))),
+            "shots_avg": history_rows(lambda item: item.get("shots_total"), lambda item: (item.get("shots_home"), item.get("shots_away"))),
+            "shots_on_target_avg": history_rows(lambda item: item.get("shots_on_target_total"), lambda item: (item.get("shots_on_target_home"), item.get("shots_on_target_away"))),
+            "fouls_avg": history_rows(lambda item: item.get("fouls_total"), lambda item: (item.get("fouls_home"), item.get("fouls_away"))),
+            "team_goal_ht": history_rows(lambda item: team_side_value(item, "goals_ht_home", "goals_ht_away")),
+            "team_goals": history_rows(lambda item: team_side_value(item, "home", "away")),
+            "team_cards": history_rows(lambda item: team_side_value(item, "cards_home", "cards_away")),
+            "team_offsides": history_rows(lambda item: team_side_value(item, "offsides_home", "offsides_away")),
+            "team_shots": history_rows(lambda item: team_side_value(item, "shots_home", "shots_away")),
+            "team_shots_on_target": history_rows(lambda item: team_side_value(item, "shots_on_target_home", "shots_on_target_away")),
+            "team_fouls": history_rows(lambda item: team_side_value(item, "fouls_home", "fouls_away")),
+        },
     }
 
 
-def _group_analysis(label: str, items: list[dict]) -> dict:
+def _group_analysis(label: str, items: list[dict], target_team: str | None = None) -> dict:
     summary = summarize_history(items) or {}
-    phase = _phase_metrics(items)
+    phase = _phase_metrics(items, target_team)
     return {
         "key": label,
         "count": summary.get("count", 0),
@@ -290,8 +426,8 @@ def build_alert_analysis(
         history_data = enrich_history_with_ht_goals(session, history_data, selected_detail_limits)
     groups = [
         _group_analysis("H2H", history_data.get("h2h", [])),
-        _group_analysis("Mandante", history_data.get("home", [])),
-        _group_analysis("Visitante", history_data.get("away", [])),
+        _group_analysis("Mandante", history_data.get("home", []), getattr(alert, "home_team", None)),
+        _group_analysis("Visitante", history_data.get("away", []), getattr(alert, "away_team", None)),
     ]
     current = _current_snapshot(alert, session)
     best_signal = max(

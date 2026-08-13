@@ -58,6 +58,15 @@ class MatchdayParserTest(unittest.TestCase):
         self.assertEqual(match["time"], "06:30")
         self.assertEqual(match["day"], "2026-08-12")
 
+    def test_keeps_full_betsapi_event_clock_without_double_conversion(self):
+        html = """
+        <tr><td class="league_n"><a>Australia Cup</a></td><td>2026/08/12 06:30</td>
+        <td><a href="/soccer/r/12345277/apia-vs-sydney">Apia v Sydney</a></td></tr>
+        """
+        match = parse_matchday_html(html, reference_day="2026-08-12")[0]
+        self.assertEqual(match["time"], "06:30")
+        self.assertEqual(match["day"], "2026-08-12")
+
     def test_utc_conversion_can_move_fixture_to_previous_local_day(self):
         html = """
         <tr><td class="league_n"><a>League</a></td><td>08/12 01:30</td>

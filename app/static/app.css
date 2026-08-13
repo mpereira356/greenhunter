@@ -6319,6 +6319,54 @@ textarea {
 .matchday-ticket-item strong em { color: var(--text-muted, #66736c); font-size: .62rem; font-style: normal; text-transform: uppercase; }
 .matchday-ticket-selection > div { display: flex; align-items: center; justify-content: space-between; color: var(--primary, #168451); font-size: .75rem; font-weight: 800; }
 .matchday-ticket-selection > div b { font-family: "DM Mono", monospace; font-size: .9rem; }
+.matchday-ticket-selection .matchday-ticket-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: .08rem 0;
+  color: var(--text-muted, #66736c);
+  font-size: .64rem;
+}
+.matchday-ticket-selection .matchday-ticket-secondary b {
+  color: var(--text-color, #23342b);
+  font-family: "DM Mono", monospace;
+  font-size: .68rem;
+}
+.matchday-compare-table td.is-ticket-cell { cursor: pointer; transition: background-color .16s ease, box-shadow .16s ease, color .16s ease; }
+.matchday-compare-table td.is-ticket-cell:hover { background: rgba(31, 166, 98, .09); }
+.matchday-compare-table td.is-ticket-cell.is-ticket-selected {
+  color: var(--primary, #168451);
+  background: rgba(31, 166, 98, .14);
+  box-shadow: inset 0 0 0 1px rgba(31, 166, 98, .42);
+  font-weight: 900;
+}
+.matchday-history-popover {
+  position: fixed;
+  z-index: 1090;
+  width: min(230px, calc(100vw - 16px));
+  padding: .65rem;
+  border: 1px solid rgba(31, 166, 98, .3);
+  border-radius: 11px;
+  color: var(--text-main, #17231d);
+  background: var(--bg-card, #fff);
+  box-shadow: 0 12px 32px rgba(20, 48, 34, .18);
+  pointer-events: none;
+}
+.matchday-history-popover > strong { display: block; color: var(--primary, #168451); font-size: .76rem; }
+.matchday-history-popover > small { display: block; margin: .12rem 0 .45rem; color: var(--text-muted, #66736c); font-size: .61rem; }
+.matchday-history-popover > div { display: grid; gap: .25rem; }
+.matchday-history-popover span { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .3rem .4rem; border-radius: 6px; background: rgba(31, 166, 98, .07); }
+.matchday-history-popover i { overflow: hidden; color: var(--text-muted, #66736c); font-size: .58rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.matchday-history-popover i small { display: block; overflow: hidden; margin-top: .08rem; color: var(--text-main, #17231d); font-size: .55rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.matchday-history-popover b { font-family: "DM Mono", monospace; font-size: .69rem; }
+.matchday-history-popover em { grid-column: 1 / -1; color: var(--text-muted, #66736c); font-size: .65rem; font-style: normal; }
+.theme-dark .matchday-history-popover {
+  border-color: rgba(0, 229, 160, .32);
+  color: var(--text-main);
+  background: var(--bg-card);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .48);
+}
+.theme-dark .matchday-history-popover span { background: rgba(0, 229, 160, .09); }
 
 .matchday-ticket-empty {
   padding: 1.25rem .8rem;
@@ -6471,6 +6519,49 @@ textarea {
   font-size: .82rem;
   font-weight: 800;
   cursor: pointer;
+}
+
+.matchday-generator-modal {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+.matchday-generator-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+}
+
+.matchday-generator-grid label > span,
+.matchday-generator-markets legend {
+  display: block;
+  margin-bottom: .35rem;
+  color: var(--text-muted);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.matchday-generator-markets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  margin-top: 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.matchday-generator-markets legend { grid-column: 1 / -1; }
+.matchday-generator-markets label { display: flex; align-items: center; gap: .5rem; }
+.matchday-generator-note { margin: 1rem 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.5; }
+
+@media (max-width: 560px) {
+  .matchday-generator-grid { grid-template-columns: 1fr; }
+  .matchday-generator-markets { grid-template-columns: 1fr; }
+  .matchday-generator-modal .modal-footer { display: grid; grid-template-columns: 1fr; }
+  .matchday-generator-modal .modal-footer .btn { width: 100%; }
 }
 
 .matchday-filter-picker {

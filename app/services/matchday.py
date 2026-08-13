@@ -21,7 +21,7 @@ from app.utils.time import now_sp
 
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
-MATCHDAY_CACHE_VERSION = 4
+MATCHDAY_CACHE_VERSION = 5
 MATCHDAY_TREND_INDEX_VERSION = 1
 
 
@@ -169,6 +169,19 @@ def _utc_schedule_from_row(row, reference_day: str | None = None):
     import re
 
     text = row.get_text(" ", strip=True)
+    # Na página individual, o BetsAPI publica AAAA/MM/DD HH:MM já no
+    # horário apresentado ao usuário. Não capture o trecho MM/DD desse
+    # formato e não aplique a conversão UTC uma segunda vez.
+    full_date = re.search(r"\b(\d{4})/(\d{1,2})/(\d{1,2})\s+([01]?\d|2[0-3]):([0-5]\d)\b", text)
+    if full_date:
+        try:
+            return datetime(
+                int(full_date.group(1)), int(full_date.group(2)), int(full_date.group(3)),
+                int(full_date.group(4)), int(full_date.group(5)),
+                tzinfo=ZoneInfo("America/Sao_Paulo"),
+            )
+        except ValueError:
+            return None
     found = re.search(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s+([01]?\d|2[0-3]):([0-5]\d)\b", text)
     if not found:
         return None
