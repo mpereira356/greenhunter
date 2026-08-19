@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Meus Bilhetes | GreenHunter{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div><h1>Meus bilhetes</h1><p class="page-subtitle">Apostas salvas, resultados e retorno financeiro.</p></div>
+</section>
+<div class="saved-ticket-grid">
+  {% for ticket in tickets %}
+  <article class="saved-ticket-card">
+    <header><div><strong>{{ ticket.name }}</strong><small>{{ ticket.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div><div class="saved-ticket-actions">{% if ticket.status == 'pending' %}<a href="{{ url_for('main.edit_saved_ticket', ticket_id=ticket.id) }}" aria-label="Editar {{ ticket.name }}" title="Editar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg></a>{% endif %}<span class="status-badge status-{{ ticket.status }}">{{ ticket.status|upper }}</span></div></header>
+    <div class="saved-ticket-money"><span>Odd <b>{{ '%.2f'|format(ticket.total_odd) }}</b></span><span>Aposta <b>R$ {{ '%.2f'|format(ticket.stake_amount) }}</b></span><span>Resultado <b class="ticket-result status-{{ ticket.status }}">R$ {{ '%.2f'|format(ticket.profit) }}</b></span></div>
+    <div class="saved-ticket-legs">
+      {% for game in ticket.legs|groupby('game_id') %}
+      {% set first = game.list[0] %}
+      <section class="saved-ticket-game">
+        <header><small>{{ first.league or 'Liga não informada' }}</small><b>{{ first.home_team }} <em>vs</em> {{ first.away_team }}</b></header>
+        <div class="saved-ticket-game-markets">
+          {% for leg in game.list %}
+          <div><small>{{ leg.market_label }}{% if leg.result_value is not none %}<em>Apurado: {{ '%g'|format(leg.result_value) }}{% if leg.market_key in ['over15', 'over25', 'goal_ht'] %} {{ 'gol' if leg.result_value == 1 else 'gols' }}{% elif 'corner' in leg.market_key %} {{ 'escanteio' if leg.result_value == 1 else 'escanteios' }}{% elif 'card' in leg.market_key %} {{ 'cartão' if leg.result_value == 1 else 'cartões' }}{% endif %}</em>{% endif %}</small><span class="status-badge status-{{ leg.status }}">{{ leg.status|upper }}</span></div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  </article>
+  {% else %}<div class="analysis-empty">Nenhum bilhete salvo ainda.</div>{% endfor %}
+</div>
+{% endblock %}

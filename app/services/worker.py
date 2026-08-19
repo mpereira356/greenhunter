@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
 
 from app.extensions import db
-from app.models import LiveGameState, MatchAlert, Rule, User
+from app.models import LiveGameState, MatchAlert, Rule, SavedTicket, SavedTicketLeg, User
 from app.services.evaluator import _build_ai_assessment, _build_ai_commentary, compare, evaluate_rule, history_confidence, render_message, stats_to_json
 from app.services.exporter import export_alert
 from app.services.ml_engine import infer_green_profile, maybe_retrain_model, predict_alert_ml
@@ -1952,15 +1952,34 @@ def start_worker(app):
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
     if ENTRY_ENRICHMENT_ENABLED:
         threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
+    prewarm_enabled = os.environ.get("MATCHDAY_PREWARM_ENABLED", "1").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if prewarm_enabled:
+        threading.Thread(target=run_matchday_prewarm_worker, args=(app,), daemon=True).start()
 
 
 def run_matchday_prewarm_worker(app):
     """Build the shared six-game matchday cache before users apply trend filters."""
-    from app.services.matchday import analyze_upcoming_match, get_matchday
+    from app.services.matchday import (
+        MATCHDAY_TREND_INDEX_VERSION,
+        _save_matchday_trend_index,
+        analyze_upcoming_match,
+        get_matchday,
+        load_matchday_trend_index,
+    )
 
     sample_limit = 6
+    cache_variant = f"card-v30-periods-{sample_limit}"
     startup_delay = max(10, int(os.environ.get("MATCHDAY_PREWARM_STARTUP_DELAY", "30")))
-    game_delay = max(0.5, float(os.environ.get("MATCHDAY_PREWARM_GAME_DELAY", "2")))
+    # Keep the warm-up intentionally serial. A full matchday can contain more
+    # than 500 games and aggressive concurrency tends to trigger the upstream
+    # anti-bot protection and competes with interactive requests.
+    game_delay = max(1.0, float(os.environ.get("MATCHDAY_PREWARM_GAME_DELAY", "3")))
+    batch_size = max(1, int(os.environ.get("MATCHDAY_PREWARM_BATCH_SIZE", "10")))
+    batch_pause = max(0.0, float(os.environ.get("MATCHDAY_PREWARM_BATCH_PAUSE", "5")))
+    game_attempts = max(1, int(os.environ.get("MATCHDAY_PREWARM_GAME_ATTEMPTS", "3")))
+    error_pause = max(10.0, float(os.environ.get("MATCHDAY_PREWARM_ERROR_PAUSE", "30")))
     retry_delay = max(300, int(os.environ.get("MATCHDAY_PREWARM_RETRY_SECONDS", "900")))
     state_path = os.environ.get("MATCHDAY_PREWARM_STATE_PATH", "data/matchday_cache/prewarm-state.json")
     time.sleep(startup_delay)
@@ -1999,7 +2018,12 @@ def run_matchday_prewarm_worker(app):
         for offset in (0, 1):
             target = (now + timedelta(days=offset)).strftime("%Y-%m-%d")
             target_state = (state.get("days") or {}).get(target) or {}
-            if not scheduled and target_state.get("complete") and int(target_state.get("sample_limit") or 0) == sample_limit:
+            if (
+                not scheduled
+                and target_state.get("complete")
+                and int(target_state.get("sample_limit") or 0) == sample_limit
+                and target_state.get("cache_variant") == cache_variant
+            ):
                 continue
             try:
                 payload = get_matchday(target, force_refresh=scheduled)
@@ -2010,53 +2034,130 @@ def run_matchday_prewarm_worker(app):
                 continue
             completed = 0
             failed = 0
+            trend_payload = load_matchday_trend_index(target)
+            trend_entries = dict(trend_payload.get("entries") or {})
+            trend_payload = {
+                "version": MATCHDAY_TREND_INDEX_VERSION,
+                "day": target,
+                "complete": False,
+                "total": len(matches),
+                "entries": trend_entries,
+                "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+            }
             state.setdefault("days", {})[target] = {
                 "complete": False,
                 "processing": True,
                 "sample_limit": sample_limit,
+                "cache_variant": cache_variant,
                 "matches": len(matches),
                 "completed": 0,
                 "failed": 0,
+                "processed": 0,
                 "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
             }
             save_state(state)
             print(f"[matchday_prewarm] iniciando {target}: {len(matches)} jogos")
+            consecutive_failures = 0
             for index, match in enumerate(matches, start=1):
-                try:
-                    analyze_upcoming_match(
-                        match,
-                        detail_limit=sample_limit,
-                        cache_variant=f"card-v18-exact-sample-{sample_limit}",
-                    )
-                    completed += 1
-                except Exception as exc:
+                last_error = None
+                for attempt in range(1, game_attempts + 1):
+                    try:
+                        # build_alert_analysis also checks LiveGameState. The
+                        # background thread therefore needs its own Flask/DB
+                        # context even for an upcoming fixture.
+                        with app.app_context():
+                            analysis = analyze_upcoming_match(
+                                match,
+                                detail_limit=sample_limit,
+                                cache_variant=cache_variant,
+                            )
+                            db.session.remove()
+                        groups_by_key = {
+                            str(group.get("key") or ""): group
+                            for group in (analysis.get("groups") or [])
+                            if isinstance(group, dict)
+                        }
+                        trend_entries[str(match.get("game_id") or "")] = {
+                            output_key: [
+                                {
+                                    "home": int(item.get("home") or 0),
+                                    "away": int(item.get("away") or 0),
+                                    "total": int(item.get("total") or 0),
+                                }
+                                for item in (groups_by_key.get(source_key, {}).get("items") or [])[:sample_limit]
+                                if isinstance(item, dict)
+                            ]
+                            for output_key, source_key in (
+                                ("H2H", "H2H"),
+                                ("Mandante", "Mandante"),
+                                ("Visitante", "Visitante"),
+                            )
+                        }
+                        completed += 1
+                        consecutive_failures = 0
+                        last_error = None
+                        break
+                    except Exception as exc:
+                        last_error = exc
+                        if attempt < game_attempts:
+                            time.sleep(error_pause * attempt)
+                if last_error is not None:
                     failed += 1
-                    print(f"[matchday_prewarm] jogo {match.get('game_id')} falhou: {type(exc).__name__}")
+                    consecutive_failures += 1
+                    print(
+                        f"[matchday_prewarm] jogo {match.get('game_id')} falhou: "
+                        f"{type(last_error).__name__}: {str(last_error)[:180]}"
+                    )
+                    # When the upstream browser/session is temporarily
+                    # unavailable, stop hammering it and let interactive
+                    # traffic recover before continuing the shared queue.
+                    if consecutive_failures >= 5:
+                        time.sleep(error_pause * 2)
+                        consecutive_failures = 0
                 if index % 10 == 0:
                     state["days"][target].update({
                         "completed": completed,
                         "failed": failed,
+                        "processed": index,
                         "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
                     })
                     save_state(state)
+                    trend_payload.update({
+                        "processed": index,
+                        "failures": failed,
+                        "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+                    })
+                    _save_matchday_trend_index(target, trend_payload)
                 time.sleep(game_delay)
+                if batch_pause and index % batch_size == 0 and index < len(matches):
+                    time.sleep(batch_pause)
             had_failures = had_failures or failed > 0
             state.setdefault("days", {})[target] = {
                 "complete": failed == 0,
                 "processing": False,
                 "sample_limit": sample_limit,
+                "cache_variant": cache_variant,
                 "matches": len(matches),
                 "completed": completed,
                 "failed": failed,
+                "processed": len(matches),
                 "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
             }
             save_state(state)
+            trend_payload.update({
+                "complete": failed == 0 and all(
+                    str(match.get("game_id") or "") in trend_entries for match in matches
+                ),
+                "processed": len(matches),
+                "failures": failed,
+                "updated_at": now_sp().strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            _save_matchday_trend_index(target, trend_payload)
             print(f"[matchday_prewarm] {target} pronto={completed} falhas={failed}")
         if scheduled:
             state["scheduled_refresh"] = schedule_key
             save_state(state)
         next_retry_at = time.time() + (retry_delay if had_failures else 6 * 60 * 60)
-        db.session.remove()
         time.sleep(60)
 
 def run_worker(app):
@@ -2072,6 +2173,8 @@ def run_worker(app):
                 if ML_AUTOTRAIN_ENABLED:
                     maybe_retrain_model(force=False)
                 process_live_games(session)
+                from app.services.tickets import resolve_saved_tickets
+                resolve_saved_tickets()
                 _flush_entry_notification_queue(force=False)
                 now = now_sp()
                 if (
@@ -2400,7 +2503,17 @@ def process_live_games(session):
     if not games: return
 
     active_rules = Rule.query.filter_by(is_active=True).all()
+    all_live_games = games
     games = _filter_candidate_games(games, active_rules)
+    tracked_ticket_ids = {
+        str(row[0]) for row in db.session.query(SavedTicketLeg.game_id)
+        .join(SavedTicket, SavedTicket.id == SavedTicketLeg.ticket_id)
+        .filter(SavedTicket.status.in_(("pending", "red")), SavedTicketLeg.status == "pending").distinct().all()
+    }
+    if tracked_ticket_ids:
+        selected_ids = {str(game.get("game_id")) for game in games}
+        ticket_games = [game for game in all_live_games if str(game.get("game_id")) in tracked_ticket_ids and str(game.get("game_id")) not in selected_ids]
+        games = ticket_games + games
     if len(games) > WORKER_MAX_CANDIDATE_GAMES:
         start = LIVE_GAME_CURSOR % len(games)
         rotated = games[start:] + games[:start]

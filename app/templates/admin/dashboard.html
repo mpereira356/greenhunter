@@ -175,6 +175,7 @@
                 <th>Ativas</th>
                 <th>Alertas</th>
                 <th>Ultimo alerta</th>
+                <th>Ultimo login</th>
                 <th></th>
               </tr>
             </thead>
@@ -187,13 +188,14 @@
                 <td>{{ row.active_rules }}</td>
                 <td>{{ row.alerts }}</td>
                 <td>{{ row.last_alert.strftime('%d/%m %H:%M') if row.last_alert else '-' }}</td>
+                <td>{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
                 <td class="text-end">
                   <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
                 </td>
               </tr>
               {% endfor %}
               {% if users|length == 0 %}
-              <tr><td colspan="7" class="text-muted">Sem usuarios ainda.</td></tr>
+              <tr><td colspan="8" class="text-muted">Sem usuarios ainda.</td></tr>
               {% endif %}
             </tbody>
           </table>

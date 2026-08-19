@@ -25,6 +25,7 @@ class User(UserMixin, db.Model):
 
     rules = db.relationship("Rule", backref="user", cascade="all, delete-orphan")
     alerts = db.relationship("MatchAlert", backref="user", cascade="all, delete-orphan")
+    saved_tickets = db.relationship("SavedTicket", backref="user", cascade="all, delete-orphan")
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password, method="pbkdf2:sha256", salt_length=16)
@@ -241,6 +242,43 @@ class LiveGameState(db.Model):
     second_half_started_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
     updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+
+class SavedTicket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    total_odd = db.Column(db.Float, nullable=False)
+    stake_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False, index=True)
+    profit = db.Column(db.Float, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    resolved_at = db.Column(db.DateTime)
+    telegram_notified_at = db.Column(db.DateTime)
+
+    legs = db.relationship(
+        "SavedTicketLeg", backref="ticket", cascade="all, delete-orphan", order_by="SavedTicketLeg.id"
+    )
+
+
+class SavedTicketLeg(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("saved_ticket.id"), nullable=False, index=True)
+    game_id = db.Column(db.String(32), nullable=False, index=True)
+    game_day = db.Column(db.String(10))
+    game_time = db.Column(db.String(40))
+    league = db.Column(db.String(120))
+    home_team = db.Column(db.String(120), nullable=False)
+    away_team = db.Column(db.String(120), nullable=False)
+    market_key = db.Column(db.String(64), nullable=False)
+    market_label = db.Column(db.String(160), nullable=False)
+    target_side = db.Column(db.String(20), default="total", nullable=False)
+    target_line = db.Column(db.Float)
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    result_value = db.Column(db.Float)
+    samples = db.Column(db.Integer)
+    source_group = db.Column(db.String(120))
+    checked_at = db.Column(db.DateTime)
 
 
 class LoginAttempt(db.Model):

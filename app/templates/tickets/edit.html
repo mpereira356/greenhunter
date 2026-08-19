@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ ticket.name }} | GreenHunter{% endblock %}
+{% block content %}
+<section class="page-header ticket-edit-heading">
+  <div><a href="{{ url_for('main.saved_tickets') }}">← Meus bilhetes</a><h1>Editar {{ ticket.name }}</h1><p class="page-subtitle">Ajuste a aposta enquanto o bilhete ainda está pendente.</p></div>
+</section>
+<form method="post" class="ticket-edit-form">
+  <div class="ticket-edit-money">
+    <label>Odd total<input name="total_odd" inputmode="decimal" required value="{{ ticket.total_odd }}"></label>
+    <label>Valor apostado (R$)<input name="stake_amount" inputmode="decimal" required value="{{ '%.2f'|format(ticket.stake_amount) }}"></label>
+  </div>
+  <div class="ticket-edit-legs">
+    {% for leg in ticket.legs %}
+    <article>
+      <div><small>{{ leg.league or 'Liga não informada' }}</small><strong>{{ leg.home_team }} <em>vs</em> {{ leg.away_team }}</strong><span>{{ leg.market_label }}</span></div>
+      {% if leg.market_key != 'goal_ht' %}<label>Linha<select name="line_{{ leg.id }}" required>{% for option in line_options[leg.id] %}<option value="{{ option }}" {% if option == leg.target_line|float %}selected{% endif %}>Mais de {{ ('%.1f'|format(option)).replace('.', ',') }}</option>{% endfor %}</select></label>{% endif %}
+      <label class="ticket-edit-remove"><input type="checkbox" name="remove_leg_{{ leg.id }}" value="1"><span>Remover opção</span></label>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="ticket-edit-footer"><a class="btn btn-outline-secondary" href="{{ url_for('main.saved_tickets') }}">Cancelar</a><button class="btn btn-primary" type="submit">Salvar alterações</button></div>
+</form>
+{% endblock %}

@@ -20,6 +20,21 @@ def _can_manage_alert(alert) -> bool:
     return current_user.is_admin_user or alert.user_id == current_user.id
 
 
+@history_bp.route("/<int:alert_id>/analysis/loading")
+@login_required
+def alert_analysis_loading(alert_id):
+    alert = MatchAlert.query.get_or_404(alert_id)
+    if not _can_manage_alert(alert):
+        flash("Voce nao tem permissao para ver esta analise.", "danger")
+        return redirect(url_for("history.history"))
+    analysis_url = url_for("history.alert_analysis", alert_id=alert.id)
+    return render_template(
+        "history/loading.html",
+        alert=alert,
+        analysis_url=analysis_url,
+    )
+
+
 @history_bp.route("/<int:alert_id>/analysis")
 @login_required
 def alert_analysis(alert_id):

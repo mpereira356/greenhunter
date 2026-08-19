@@ -21,7 +21,7 @@ from app.utils.time import now_sp
 
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
-MATCHDAY_CACHE_VERSION = 5
+MATCHDAY_CACHE_VERSION = 6
 MATCHDAY_TREND_INDEX_VERSION = 1
 
 
@@ -35,6 +35,26 @@ def _is_excluded_youth_match(*values: str) -> bool:
         r"\bunder[\s._-]?(?:17|18|19|20)\b",
     )
     return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+
+def _is_excluded_match(league: str, *teams: str) -> bool:
+    """Reject unsupported youth categories and blocked national competitions."""
+    import re
+    import unicodedata
+
+    if _is_excluded_youth_match(league, *teams):
+        return True
+    normalized_league = unicodedata.normalize("NFKD", str(league or "").casefold())
+    normalized_league = "".join(char for char in normalized_league if not unicodedata.combining(char))
+    blocked_countries = (
+        r"\bbelarus\b",
+        r"\bbelarusian\b",
+        r"\bbielorrussia\b",
+        r"\brussia\b",
+        r"\brussian\b",
+        r"\brussia\b",
+    )
+    return any(re.search(pattern, normalized_league) for pattern in blocked_countries)
 
 
 def _cache_path(day: str) -> str:
@@ -236,7 +256,7 @@ def parse_matchday_html(
         league = league_link.get_text(" ", strip=True) if league_link else ""
         if "esoccer" in league.casefold():
             continue
-        if _is_excluded_youth_match(league, home, away):
+        if _is_excluded_match(league, home, away):
             continue
         matches[game_id] = {
             "game_id": game_id,
@@ -275,7 +295,7 @@ def _fetch_from_api(day: str, token: str) -> list[dict]:
             if not game_id or not home or not away:
                 continue
             league = (event.get("league") or {}).get("name") or ""
-            if _is_excluded_youth_match(league, home, away):
+            if _is_excluded_match(league, home, away):
                 continue
             timestamp = event.get("time")
             try:

@@ -2338,17 +2338,30 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 item.update({
                     "goals_ht": int(archived_ht_goals),
                     "goals_2h": max(0, total_goals - int(archived_ht_goals)),
+                    "goals_ht_home": None,
+                    "goals_ht_away": None,
+                    "goals_2h_home": None,
+                    "goals_2h_away": None,
                     "goals_ft_events": total_goals,
                     "goal_before_ht": int(archived_ht_goals) > 0,
                     "goal_after_ht": total_goals - int(archived_ht_goals) > 0,
                     "corners_ht": None,
                     "corners_2h": None,
+                    "corners_10": None,
                     "corners_home": None,
                     "corners_away": None,
+                    "corners_ht_home": None,
+                    "corners_ht_away": None,
+                    "corners_2h_home": None,
+                    "corners_2h_away": None,
                     "yellow_cards_ht": None,
                     "yellow_cards_2h": None,
                     "red_cards_ht": None,
                     "red_cards_2h": None,
+                    "cards_ht_home": None,
+                    "cards_ht_away": None,
+                    "cards_2h_home": None,
+                    "cards_2h_away": None,
                     "throw_ins_total": None,
                     "offsides_total": None,
                     "shots_total": None,
@@ -2367,6 +2380,10 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 if isinstance(event, dict) and _history_event_in_second_half(event)
             ]
             ft_events = [event for event in events if isinstance(event, dict)]
+            timed_corner_events = [
+                event for event in ft_events
+                if event.get("kind") == "corner" and isinstance(event.get("minute"), int)
+            ]
             goals_ht = sum(1 for event in ht_events if event.get("kind") == "goal")
             goals_2h = sum(1 for event in sh_events if event.get("kind") == "goal")
             goals_ft = sum(1 for event in ft_events if event.get("kind") == "goal")
@@ -2375,6 +2392,24 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             goals_ht_home = sum(1 for event in ht_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_home_name)
             goals_ht_away = sum(1 for event in ht_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_away_name)
             goal_ht_sides_known = goals_ht_home + goals_ht_away == goals_ht
+            goals_2h_home = sum(1 for event in sh_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_home_name)
+            goals_2h_away = sum(1 for event in sh_events if event.get("kind") == "goal" and _normalize_team_name(str(event.get("team") or "")) == history_away_name)
+            goal_2h_sides_known = goals_2h_home + goals_2h_away == goals_2h
+
+            def phase_sides(events, kinds):
+                selected = [event for event in events if event.get("kind") in kinds]
+                home_count = sum(1 for event in selected if _normalize_team_name(str(event.get("team") or "")) == history_home_name)
+                away_count = sum(1 for event in selected if _normalize_team_name(str(event.get("team") or "")) == history_away_name)
+                return (home_count, away_count) if home_count + away_count == len(selected) else (None, None)
+
+            corners_ht_home, corners_ht_away = phase_sides(ht_events, {"corner"})
+            corners_2h_home, corners_2h_away = phase_sides(sh_events, {"corner"})
+            cards_ht_home, cards_ht_away = phase_sides(ht_events, {"yellow_card", "red_card"})
+            cards_2h_home, cards_2h_away = phase_sides(sh_events, {"yellow_card", "red_card"})
+            on_target_ht_home, on_target_ht_away = phase_sides(ht_events, {"on_target"})
+            on_target_2h_home, on_target_2h_away = phase_sides(sh_events, {"on_target"})
+            shots_ht_home, shots_ht_away = phase_sides(ht_events, {"on_target", "off_target"})
+            shots_2h_home, shots_2h_away = phase_sides(sh_events, {"on_target", "off_target"})
             throw_ins_total = None
             offsides_total = None
             shots_total = None
@@ -2452,22 +2487,41 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 "goals_ft_events": goals_ft,
                 "goals_ht_home": goals_ht_home if goal_ht_sides_known else None,
                 "goals_ht_away": goals_ht_away if goal_ht_sides_known else None,
+                "goals_2h_home": goals_2h_home if goal_2h_sides_known else None,
+                "goals_2h_away": goals_2h_away if goal_2h_sides_known else None,
                 "goal_before_ht": goals_ht > 0,
                 "goal_after_ht": goals_2h > 0,
                 "corners_ht": sum(1 for event in ht_events if event.get("kind") == "corner"),
                 "corners_2h": sum(1 for event in sh_events if event.get("kind") == "corner"),
+                "corners_10": sum(1 for event in timed_corner_events if int(event.get("minute")) <= 10) if ft_events else None,
                 "corners_ft_events": sum(1 for event in ft_events if event.get("kind") == "corner"),
                 "corners_home": corners_home,
                 "corners_away": corners_away,
+                "corners_ht_home": corners_ht_home,
+                "corners_ht_away": corners_ht_away,
+                "corners_2h_home": corners_2h_home,
+                "corners_2h_away": corners_2h_away,
                 "yellow_cards_ht": sum(1 for event in ht_events if event.get("kind") == "yellow_card"),
                 "yellow_cards_2h": sum(1 for event in sh_events if event.get("kind") == "yellow_card"),
                 "yellow_cards_ft_events": sum(1 for event in ft_events if event.get("kind") == "yellow_card"),
                 "red_cards_ht": sum(1 for event in ht_events if event.get("kind") == "red_card"),
                 "red_cards_2h": sum(1 for event in sh_events if event.get("kind") == "red_card"),
                 "red_cards_ft_events": sum(1 for event in ft_events if event.get("kind") == "red_card"),
+                "cards_ht_home": cards_ht_home,
+                "cards_ht_away": cards_ht_away,
+                "cards_2h_home": cards_2h_home,
+                "cards_2h_away": cards_2h_away,
                 "on_target_events_ht": sum(1 for event in ht_events if event.get("kind") == "on_target"),
                 "on_target_events_2h": sum(1 for event in sh_events if event.get("kind") == "on_target"),
                 "on_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "on_target"),
+                "on_target_ht_home": on_target_ht_home,
+                "on_target_ht_away": on_target_ht_away,
+                "on_target_2h_home": on_target_2h_home,
+                "on_target_2h_away": on_target_2h_away,
+                "shots_ht_home": shots_ht_home,
+                "shots_ht_away": shots_ht_away,
+                "shots_2h_home": shots_2h_home,
+                "shots_2h_away": shots_2h_away,
                 "off_target_events_ht": sum(1 for event in ht_events if event.get("kind") == "off_target"),
                 "off_target_events_2h": sum(1 for event in sh_events if event.get("kind") == "off_target"),
                 "off_target_events_ft": sum(1 for event in ft_events if event.get("kind") == "off_target"),

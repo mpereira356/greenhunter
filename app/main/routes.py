@@ -1,5 +1,7 @@
 import json
+import re
 import threading
+import unicodedata
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -8,11 +10,11 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, Rule
+from ..models import LiveGameState, MatchAlert, Rule, SavedTicket, SavedTicketLeg
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
 from ..services.matchday import (
-    _is_excluded_youth_match,
+    _is_excluded_match,
     analyze_upcoming_match,
     find_match,
     get_matchday,
@@ -24,6 +26,37 @@ from ..utils.time import now_sp
 
 main_bp = Blueprint("main", __name__)
 _matchday_analysis_slots = threading.BoundedSemaphore(2)
+
+RELEVANT_MATCHDAY_LEAGUES = {
+    "uefa champions league", "uefa champions league qualifying",
+    "uefa europa league", "uefa europa league qualifying",
+    "uefa conference league", "uefa conference league qualifying",
+    "england premier league", "english premier league",
+    "spain la liga", "italy serie a", "germany bundesliga", "france ligue 1",
+    "portugal primeira liga", "netherlands eredivisie",
+    "belgium first division a", "turkey super lig", "scotland premiership",
+    "brazil serie a", "brazil serie b", "brazil cup", "copa do brasil",
+    "copa libertadores", "copa sudamericana",
+    "argentina liga profesional", "argentina cup", "copa argentina",
+    "colombia primera a", "chile primera division", "uruguay primera division",
+    "usa mls", "mexico liga mx", "leagues cup", "concacaf champions cup",
+    "fifa world cup", "world cup qualifying", "uefa nations league",
+    "uefa european championship", "european championship", "copa america",
+}
+
+
+def _normalized_league_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return " ".join(
+        "".join(char for char in normalized if not unicodedata.combining(char))
+        .casefold()
+        .replace("-", " ")
+        .split()
+    )
+
+
+def _is_relevant_matchday_league(value: str) -> bool:
+    return _normalized_league_name(value) in RELEVANT_MATCHDAY_LEAGUES
 
 
 def _site_url(path: str = "") -> str:
@@ -110,6 +143,14 @@ def _alert_profit(alert) -> float:
     return 0.0
 
 
+def _ticket_profit(ticket) -> float:
+    if ticket.status == "green":
+        return float(ticket.stake_amount) * (float(ticket.total_odd) - 1)
+    if ticket.status == "red":
+        return -float(ticket.stake_amount)
+    return 0.0
+
+
 def _current_matchday_live_matches() -> list[dict]:
     cutoff = now_sp() - timedelta(minutes=15)
     states = (
@@ -123,7 +164,7 @@ def _current_matchday_live_matches() -> list[dict]:
         time_text = (state.time_text or "").strip()
         if time_text.casefold() in {"ft", "finished", "ended", "encerrado"}:
             continue
-        if _is_excluded_youth_match(state.league, state.home_team, state.away_team):
+        if _is_excluded_match(state.league, state.home_team, state.away_team):
             continue
         match = {
             "game_id": str(state.game_id),
@@ -243,21 +284,31 @@ def dashboard():
         for alert in recent_all
         if alert.stake_amount is not None and alert.stake_odd is not None
     ]
+    finance_tickets = SavedTicket.query.filter(
+        SavedTicket.user_id == current_user.id, SavedTicket.created_at >= since
+    ).all()
     finance_today_alerts = [
         alert
         for alert in finance_alerts
         if start_day <= alert.created_at < end_day
     ]
-    financial_profit = round(sum(_alert_profit(alert) for alert in finance_alerts), 2)
-    financial_profit_today = round(sum(_alert_profit(alert) for alert in finance_today_alerts), 2)
-    financial_staked = round(sum(float(alert.stake_amount or 0) for alert in finance_alerts), 2)
-    financial_bets = len(finance_alerts)
+    today_tickets = [ticket for ticket in finance_tickets if start_day <= ticket.created_at < end_day]
+    financial_profit = round(sum(_alert_profit(alert) for alert in finance_alerts) + sum(_ticket_profit(ticket) for ticket in finance_tickets), 2)
+    financial_profit_today = round(sum(_alert_profit(alert) for alert in finance_today_alerts) + sum(_ticket_profit(ticket) for ticket in today_tickets), 2)
+    financial_staked = round(sum(float(alert.stake_amount or 0) for alert in finance_alerts) + sum(float(ticket.stake_amount or 0) for ticket in finance_tickets), 2)
+    financial_bets = len(finance_alerts) + len(finance_tickets)
     finance_daily = {}
     for alert in finance_alerts:
         key = alert.created_at.strftime("%Y-%m-%d")
         finance_daily.setdefault(key, {"profit": 0.0, "staked": 0.0, "bets": 0})
         finance_daily[key]["profit"] += _alert_profit(alert)
         finance_daily[key]["staked"] += float(alert.stake_amount or 0)
+        finance_daily[key]["bets"] += 1
+    for ticket in finance_tickets:
+        key = ticket.created_at.strftime("%Y-%m-%d")
+        finance_daily.setdefault(key, {"profit": 0.0, "staked": 0.0, "bets": 0})
+        finance_daily[key]["profit"] += _ticket_profit(ticket)
+        finance_daily[key]["staked"] += float(ticket.stake_amount or 0)
         finance_daily[key]["bets"] += 1
     finance_days = []
     max_finance_abs = 1
@@ -366,6 +417,139 @@ def api_status():
     return jsonify(get_api_status())
 
 
+@main_bp.route("/bilhetes")
+@login_required
+def saved_tickets():
+    tickets = (
+        SavedTicket.query.filter_by(user_id=current_user.id)
+        .order_by(SavedTicket.created_at.desc()).limit(200).all()
+    )
+    return render_template("tickets/list.html", tickets=tickets)
+
+
+@main_bp.route("/bilhetes/<int:ticket_id>/editar", methods=["GET", "POST"])
+@login_required
+def edit_saved_ticket(ticket_id):
+    ticket = SavedTicket.query.filter_by(id=ticket_id, user_id=current_user.id).first_or_404()
+    if ticket.status != "pending":
+        flash("Bilhetes já finalizados não podem ser alterados.", "warning")
+        return redirect(url_for("main.saved_tickets"))
+    if request.method == "GET":
+        line_options = {}
+        for leg in ticket.legs:
+            key = (leg.market_key or "").casefold()
+            maximum = 20.5 if "corner" in key else 12.5 if "card" in key else 8.5 if key in {"over15", "over25"} or key.startswith("goals_") else 30.5
+            options = [index + 0.5 for index in range(int(maximum + 0.5))]
+            if leg.target_line is not None and float(leg.target_line) not in options:
+                options.append(float(leg.target_line))
+                options.sort()
+            line_options[leg.id] = options
+        return render_template("tickets/edit.html", ticket=ticket, line_options=line_options)
+
+    try:
+        odd = float((request.form.get("total_odd") or "").replace(",", "."))
+        stake = float((request.form.get("stake_amount") or "").replace(",", "."))
+    except ValueError:
+        flash("Informe uma odd e um valor apostado válidos.", "warning")
+        return redirect(url_for("main.edit_saved_ticket", ticket_id=ticket.id))
+    if odd <= 1 or stake <= 0:
+        flash("A odd deve ser maior que 1 e o valor deve ser maior que zero.", "warning")
+        return redirect(url_for("main.edit_saved_ticket", ticket_id=ticket.id))
+
+    kept = []
+    for leg in ticket.legs:
+        if request.form.get(f"remove_leg_{leg.id}"):
+            db.session.delete(leg)
+            continue
+        raw_line = (request.form.get(f"line_{leg.id}") or "").strip().replace(",", ".")
+        if leg.market_key != "goal_ht":
+            try:
+                line = float(raw_line)
+            except ValueError:
+                flash(f"Linha inválida em {leg.market_label}.", "warning")
+                db.session.rollback()
+                return redirect(url_for("main.edit_saved_ticket", ticket_id=ticket.id))
+            if line < 0:
+                flash("A linha do mercado não pode ser negativa.", "warning")
+                db.session.rollback()
+                return redirect(url_for("main.edit_saved_ticket", ticket_id=ticket.id))
+            leg.target_line = line
+            formatted = f"{line:.1f}".replace(".", ",")
+            if re.search(r"(?:mais de|acima de)\s*\d+(?:[.,]\d+)?", leg.market_label, re.I):
+                leg.market_label = re.sub(
+                    r"((?:mais de|acima de)\s*)\d+(?:[.,]\d+)?",
+                    rf"\g<1>{formatted}", leg.market_label, count=1, flags=re.I,
+                )
+        kept.append(leg)
+    if not kept:
+        db.session.rollback()
+        flash("O bilhete precisa manter pelo menos uma opção.", "warning")
+        return redirect(url_for("main.edit_saved_ticket", ticket_id=ticket.id))
+    ticket.total_odd = round(odd, 3)
+    ticket.stake_amount = round(stake, 2)
+    db.session.commit()
+    flash(f"{ticket.name} atualizado com sucesso.", "success")
+    return redirect(url_for("main.saved_tickets"))
+
+
+@main_bp.route("/api/bilhetes", methods=["POST"])
+@login_required
+def save_ticket():
+    payload = request.get_json(silent=True) or {}
+    try:
+        odd = float(str(payload.get("odd", "")).replace(",", "."))
+        stake = float(str(payload.get("stake", "")).replace(",", "."))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, message="Informe uma odd e um valor apostado válidos."), 400
+    if odd <= 1 or stake <= 0:
+        return jsonify(ok=False, message="A odd deve ser maior que 1 e o valor deve ser maior que zero."), 400
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        return jsonify(ok=False, message="O bilhete está vazio."), 400
+
+    ticket = SavedTicket(
+        user_id=current_user.id,
+        name=f"Bilhete #{SavedTicket.query.filter_by(user_id=current_user.id).count() + 1}",
+        total_odd=round(odd, 3), stake_amount=round(stake, 2), status="pending",
+    )
+    db.session.add(ticket)
+    db.session.flush()
+    for item in items[:100]:
+        market_key = str(item.get("generatedMarket") or item.get("marketKey") or "").strip()
+        label = str(item.get("market") or "Mercado").strip()[:160]
+        line = item.get("selectedLine")
+        if line is None:
+            found = re.search(r"(?:mais de|acima de)\s*(\d+(?:[.,]\d+)?)", label, re.I)
+            line = found.group(1).replace(",", ".") if found else None
+        try:
+            line = float(line) if line is not None else None
+        except (TypeError, ValueError):
+            line = None
+        if not market_key:
+            lower = label.casefold()
+            market_key = "over15" if "1,5" in lower else "over25" if "2,5" in lower else "goal_ht" if "1º tempo" in lower else ""
+        if market_key.endswith("_home"):
+            side = "home"
+        elif market_key.endswith("_away"):
+            side = "away"
+        else:
+            group = str(item.get("group") or "").casefold()
+            side = "home" if "casa" in group and "fora" not in group else "away" if "fora" in group and "casa" not in group else "total"
+        if not market_key or (market_key not in {"goal_ht", "over15", "over25"} and line is None):
+            db.session.rollback()
+            return jsonify(ok=False, message=f"Defina uma linha de aposta para “{label}” antes de salvar."), 400
+        db.session.add(SavedTicketLeg(
+            ticket_id=ticket.id, game_id=str(item.get("gameId") or "")[:32],
+            game_day=str(item.get("day") or "")[:10], game_time=str(item.get("time") or "")[:40],
+            league=str(item.get("league") or "")[:120], home_team=str(item.get("home") or "")[:120],
+            away_team=str(item.get("away") or "")[:120], market_key=market_key[:64],
+            market_label=label, target_side=side, target_line=line,
+            samples=int(item.get("samples") or 0), source_group=str(item.get("group") or "")[:120],
+        ))
+    db.session.commit()
+    return jsonify(ok=True, ticket_id=ticket.id, name=ticket.name, message=f"{ticket.name} salvo e em acompanhamento.")
+
+
 @main_bp.route("/undo/<token>", methods=["GET"])
 @login_required
 def undo_action(token):
@@ -465,6 +649,7 @@ def matchday():
     available_leagues = list(
         dict.fromkeys(match["league"] for match in all_matches if match.get("league"))
     )
+    relevant_leagues = [league for league in available_leagues if _is_relevant_matchday_league(league)]
     team_leagues = {}
     for match in all_matches:
         league = match.get("league") or ""
@@ -474,6 +659,7 @@ def matchday():
     available_teams = list(team_leagues)
     selected_leagues = [value for value in request.args.getlist("league") if value in available_leagues]
     selected_teams = [value for value in request.args.getlist("team") if value in available_teams]
+    relevant_selection_active = bool(selected_leagues) and bool(relevant_leagues) and set(relevant_leagues).issubset(selected_leagues)
     selected_league_keys = {value.casefold() for value in selected_leagues}
     selected_team_keys = {value.casefold() for value in selected_teams}
     matches = all_matches
@@ -486,7 +672,10 @@ def matchday():
             or (match.get("away_team") or "").casefold() in selected_team_keys
         ]
     trend_market = (request.args.get("trend_market") or "").strip()
-    if trend_market not in {"goal_ht", "over15", "over25"}:
+    if trend_market not in {
+        "goal_ht", "over15", "over25", "corners_10_over1", "corners_avg",
+        "cards_avg", "offsides_avg", "shots_avg", "shots_on_target_avg", "fouls_avg",
+    }:
         trend_market = ""
     trend_group = (request.args.get("trend_group") or "best").strip()
     if trend_group not in {"best", "H2H", "Mandante", "Visitante"}:
@@ -505,7 +694,11 @@ def matchday():
         goal_markets = generator_markets & {"over15", "over25"}
         trend_index = load_matchday_trend_index(day)
         ranked_matches = []
-        if trend_index.get("complete") and goal_markets:
+        # O atalho do índice de gols só pode limitar a agenda quando apenas
+        # mercados de gols foram pedidos. Com cartões/escanteios, todos os
+        # próximos jogos precisam chegar ao cliente para formar e repor o bilhete.
+        only_goal_markets = bool(generator_markets) and generator_markets <= {"over15", "over25"}
+        if trend_index.get("complete") and goal_markets and only_goal_markets:
             for match in matches:
                 if match.get("is_live"):
                     continue
@@ -547,7 +740,7 @@ def matchday():
                 for match in matches
             }
         else:
-            matches = [match for match in matches if not match.get("is_live")][:max(24, generator_count * 2)]
+            matches = [match for match in matches if not match.get("is_live")][:max(60, generator_count * 8)]
     if trend_active and trend_market in {"over15", "over25"}:
         trend_index = load_matchday_trend_index(day)
         if trend_index.get("complete"):
@@ -586,6 +779,8 @@ def matchday():
         matches=matches,
         total_matches=total_matches,
         available_leagues=available_leagues,
+        relevant_leagues=relevant_leagues,
+        relevant_selection_active=relevant_selection_active,
         available_teams=available_teams,
         team_leagues={
             team: [league for league in available_leagues if league in leagues]
@@ -677,7 +872,7 @@ def matchday_summary(game_id):
             analysis = analyze_upcoming_match(
                 match,
                 detail_limit=sample_limit,
-                cache_variant=f"card-v27-authoritative-time-{sample_limit}",
+                cache_variant=f"card-v30-periods-{sample_limit}",
             )
         except Exception:
             current_app.logger.exception("Falha ao montar resumo pré-jogo %s", game_id)
@@ -713,6 +908,64 @@ def matchday_summary(game_id):
             corners_avg = round(float(corners_1h) + float(corners_2h), 2)
         team_goal_samples = int(phase.get("team_goals_samples") or 0)
         team_goal_ht_samples = int(phase.get("team_goal_ht_samples") or 0)
+
+        def period_summary(period: str) -> dict:
+            history = phase.get("history_values") or {}
+            suffix = "1h" if period == "first" else "2h"
+            goal_key = ("team_goal_ht" if period == "first" else "team_goals_2h") if team_only else ("goal_ht" if period == "first" else "goals_2h")
+            corner_key = f"team_corners_{suffix}" if team_only else f"corners_{suffix}"
+            card_key = f"team_cards_{suffix}" if team_only else f"cards_{suffix}"
+            shots_key = f"team_shots_{suffix}" if team_only else f"shots_{suffix}"
+            target_key = f"team_on_target_{suffix}" if team_only else f"on_target_{suffix}"
+
+            def rows(key):
+                return [row for row in (history.get(key) or []) if isinstance(row, dict) and row.get("value") is not None]
+
+            def average(key):
+                values = [float(row["value"]) for row in rows(key)]
+                return round(sum(values) / len(values), 2) if values else None
+
+            def percentage(key, threshold):
+                values = [float(row["value"]) for row in rows(key)]
+                return round(sum(1 for value in values if value > threshold) / len(values) * 100) if values else None
+
+            goal_rows = rows(goal_key)
+            corner_rows = rows(corner_key)
+            card_rows = rows(card_key)
+            shots_rows = rows(shots_key)
+            target_rows = rows(target_key)
+            return {
+                "count": len(goal_rows),
+                "samples": len(goal_rows),
+                "goal_ht": percentage(goal_key, 0),
+                "over15": percentage(goal_key, 1),
+                "over25": percentage(goal_key, 2),
+                "corners_avg": average(corner_key),
+                "corners_samples": len(corner_rows),
+                "cards_avg": average(card_key),
+                "cards_samples": len(card_rows),
+                "shots_avg": average(shots_key),
+                "shots_samples": len(shots_rows),
+                "shots_on_target_avg": average(target_key),
+                "shots_on_target_samples": len(target_rows),
+                "corners_10_over1": phase.get("corners_10_over1_pct") if period == "first" else None,
+                "corners_10_samples": int(phase.get("corners_10_samples") or 0) if period == "first" else 0,
+                "offsides_avg": None,
+                "offsides_samples": 0,
+                "fouls_avg": None,
+                "fouls_samples": 0,
+                "history_values": {
+                    "goal_ht": goal_rows,
+                    "over15": goal_rows,
+                    "over25": goal_rows,
+                    "corners_avg": corner_rows,
+                    "cards_avg": card_rows,
+                    "shots_avg": shots_rows,
+                    "shots_on_target_avg": target_rows,
+                    "corners_10_over1": (history.get("corners_10_over1") or []) if period == "first" else [],
+                },
+            }
+
         summaries[group_key] = {
             "count": team_goal_samples if team_only else count,
             "samples": team_goal_ht_samples if team_only else (phase.get("samples") or 0),
@@ -722,6 +975,9 @@ def matchday_summary(game_id):
             "corners_avg": corners_avg,
             "corners_samples": corners_samples,
             "corner_lines": phase.get("corner_lines") or {},
+            "corners_10_over0": phase.get("corners_10_over0_pct"),
+            "corners_10_over1": phase.get("corners_10_over1_pct"),
+            "corners_10_samples": int(phase.get("corners_10_samples") or 0),
             "team_corners_avg": phase.get("avg_team_corners") if int(phase.get("team_corners_samples") or 0) >= 3 else None,
             "team_corners_samples": int(phase.get("team_corners_samples") or 0),
             "team_corner_lines": phase.get("team_corner_lines") or {},
@@ -737,6 +993,10 @@ def matchday_summary(game_id):
             "fouls_avg": phase.get("avg_team_fouls") if team_only else (phase.get("avg_fouls") if fouls_samples >= 1 else None),
             "fouls_samples": int(phase.get("team_fouls_samples") or 0) if team_only else fouls_samples,
             "history_values": phase.get("history_values") or {},
+            "periods": {
+                "first": period_summary("first"),
+                "second": period_summary("second"),
+            },
         }
     return jsonify(
         {

@@ -11,6 +11,20 @@
 
 <div class="card">
   <div class="card-body">
+    <form class="row g-2 align-items-center mb-3" method="get" action="{{ url_for('admin.users_list') }}">
+      <div class="col-12 col-md-6 col-lg-4">
+        <label class="visually-hidden" for="user-search">Pesquisar usuario ou ID</label>
+        <div class="input-group">
+          <input id="user-search" class="form-control" type="search" name="q" value="{{ search_query }}" placeholder="Pesquisar por usuario ou ID" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Pesquisar</button>
+        </div>
+      </div>
+      {% if search_query %}
+      <div class="col-auto">
+        <a class="btn btn-outline-secondary" href="{{ url_for('admin.users_list') }}">Limpar</a>
+      </div>
+      {% endif %}
+    </form>
     <div class="table-responsive">
       <table class="table table-clean align-middle mb-0">
         <thead>
@@ -22,6 +36,7 @@
             <th>Regras</th>
             <th>Alertas</th>
             <th>Criado em</th>
+            <th>Ultimo login</th>
             <th></th>
           </tr>
         </thead>
@@ -41,13 +56,14 @@
             <td>{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
             <td>{{ row.alerts }}</td>
             <td>{{ row.user.created_at.strftime('%d/%m/%Y') }}</td>
+            <td>{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
             <td class="text-end">
               <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
             </td>
           </tr>
           {% endfor %}
           {% if users|length == 0 %}
-          <tr><td colspan="8" class="text-muted">Sem usuarios ainda.</td></tr>
+          <tr><td colspan="9" class="text-muted">Nenhum usuario encontrado.</td></tr>
           {% endif %}
         </tbody>
       </table>

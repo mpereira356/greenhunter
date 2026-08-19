@@ -156,6 +156,9 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
             "avg_cards_2h": None,
             "corner_lines": {},
             "corners_samples": 0,
+            "corners_10_samples": 0,
+            "corners_10_over0_pct": None,
+            "corners_10_over1_pct": None,
             "team_corners_samples": 0,
             "avg_team_corners": None,
             "team_corner_lines": {},
@@ -179,6 +182,8 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
     goal_2h = sum(1 for item in detailed if int(item.get("goals_2h") or 0) > 0)
     card_detailed = [item for item in detailed if item.get("yellow_cards_ht") is not None]
     corner_detailed = [item for item in detailed if item.get("corners_ht") is not None]
+    corners_10_detailed = [item for item in detailed if item.get("corners_10") is not None]
+    corners_10_values = [int(item.get("corners_10") or 0) for item in corners_10_detailed]
     cards_1h = [
         int(item.get("yellow_cards_ht") or 0) + int(item.get("red_cards_ht") or 0)
         for item in card_detailed
@@ -207,12 +212,21 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
 
     team_goals = team_values("home", "away")
     team_goals_ht = team_values("goals_ht_home", "goals_ht_away")
+    team_goals_2h = team_values("goals_2h_home", "goals_2h_away")
     team_cards = team_values("cards_home", "cards_away")
+    team_cards_1h = team_values("cards_ht_home", "cards_ht_away")
+    team_cards_2h = team_values("cards_2h_home", "cards_2h_away")
     team_offsides = team_values("offsides_home", "offsides_away")
     team_shots = team_values("shots_home", "shots_away")
     team_shots_on_target = team_values("shots_on_target_home", "shots_on_target_away")
+    team_shots_1h = team_values("shots_ht_home", "shots_ht_away")
+    team_shots_2h = team_values("shots_2h_home", "shots_2h_away")
+    team_shots_on_target_1h = team_values("on_target_ht_home", "on_target_ht_away")
+    team_shots_on_target_2h = team_values("on_target_2h_home", "on_target_2h_away")
     team_fouls = team_values("fouls_home", "fouls_away")
     team_corner_values = []
+    team_corners_1h = team_values("corners_ht_home", "corners_ht_away")
+    team_corners_2h = team_values("corners_2h_home", "corners_2h_away")
     if target_key:
         for item in corner_detailed:
             value = None
@@ -281,6 +295,9 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
             for line in (4.5, 7.5, 8.5, 9.5)
         },
         "corners_samples": len(corner_detailed),
+        "corners_10_samples": len(corners_10_values),
+        "corners_10_over0_pct": _pct(sum(1 for value in corners_10_values if value >= 1), len(corners_10_values)) if corners_10_values else None,
+        "corners_10_over1_pct": _pct(sum(1 for value in corners_10_values if value >= 2), len(corners_10_values)) if corners_10_values else None,
         "team_corners_samples": len(team_corner_values),
         "avg_team_corners": round(mean(team_corner_values), 2) if team_corner_values else None,
         "team_corner_lines": {
@@ -290,16 +307,34 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
         "team_goals_samples": len(team_goals),
         "team_goal_ht_samples": len(team_goals_ht),
         "team_goal_ht_pct": _pct(sum(1 for value in team_goals_ht if value > 0), len(team_goals_ht)),
+        "team_goal_2h_samples": len(team_goals_2h),
+        "team_goal_2h_pct": _pct(sum(1 for value in team_goals_2h if value > 0), len(team_goals_2h)),
         "team_over15_pct": _pct(sum(1 for value in team_goals if value > 1), len(team_goals)),
         "team_over25_pct": _pct(sum(1 for value in team_goals if value > 2), len(team_goals)),
         "team_cards_samples": len(team_cards),
         "avg_team_cards": round(mean(team_cards), 2) if team_cards else None,
+        "avg_team_cards_1h": round(mean(team_cards_1h), 2) if team_cards_1h else None,
+        "avg_team_cards_2h": round(mean(team_cards_2h), 2) if team_cards_2h else None,
+        "team_cards_1h_samples": len(team_cards_1h),
+        "team_cards_2h_samples": len(team_cards_2h),
+        "avg_team_corners_1h": round(mean(team_corners_1h), 2) if team_corners_1h else None,
+        "avg_team_corners_2h": round(mean(team_corners_2h), 2) if team_corners_2h else None,
+        "team_corners_1h_samples": len(team_corners_1h),
+        "team_corners_2h_samples": len(team_corners_2h),
         "team_offsides_samples": len(team_offsides),
         "avg_team_offsides": round(mean(team_offsides), 2) if team_offsides else None,
         "team_shots_samples": len(team_shots),
         "avg_team_shots": round(mean(team_shots), 2) if team_shots else None,
+        "avg_team_shots_1h": round(mean(team_shots_1h), 2) if team_shots_1h else None,
+        "avg_team_shots_2h": round(mean(team_shots_2h), 2) if team_shots_2h else None,
+        "team_shots_1h_samples": len(team_shots_1h),
+        "team_shots_2h_samples": len(team_shots_2h),
         "team_shots_on_target_samples": len(team_shots_on_target),
         "avg_team_shots_on_target": round(mean(team_shots_on_target), 2) if team_shots_on_target else None,
+        "avg_team_shots_on_target_1h": round(mean(team_shots_on_target_1h), 2) if team_shots_on_target_1h else None,
+        "avg_team_shots_on_target_2h": round(mean(team_shots_on_target_2h), 2) if team_shots_on_target_2h else None,
+        "team_shots_on_target_1h_samples": len(team_shots_on_target_1h),
+        "team_shots_on_target_2h_samples": len(team_shots_on_target_2h),
         "team_fouls_samples": len(team_fouls),
         "avg_team_fouls": round(mean(team_fouls), 2) if team_fouls else None,
         "throw_ins_samples": len(throw_ins),
@@ -318,9 +353,19 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
         "avg_fouls": round(mean(fouls), 2) if fouls else None,
         "history_values": {
             "goal_ht": history_rows(lambda item: item.get("goals_ht")),
+            "goals_2h": history_rows(lambda item: item.get("goals_2h")),
+            "corners_1h": history_rows(lambda item: item.get("corners_ht")),
+            "corners_2h": history_rows(lambda item: item.get("corners_2h")),
+            "cards_1h": history_rows(lambda item: None if item.get("yellow_cards_ht") is None else int(item.get("yellow_cards_ht") or 0) + int(item.get("red_cards_ht") or 0)),
+            "cards_2h": history_rows(lambda item: None if item.get("yellow_cards_2h") is None else int(item.get("yellow_cards_2h") or 0) + int(item.get("red_cards_2h") or 0)),
+            "shots_1h": history_rows(lambda item: int(item.get("on_target_events_ht") or 0) + int(item.get("off_target_events_ht") or 0) if item.get("on_target_events_ht") is not None else None),
+            "shots_2h": history_rows(lambda item: int(item.get("on_target_events_2h") or 0) + int(item.get("off_target_events_2h") or 0) if item.get("on_target_events_2h") is not None else None),
+            "on_target_1h": history_rows(lambda item: item.get("on_target_events_ht")),
+            "on_target_2h": history_rows(lambda item: item.get("on_target_events_2h")),
             "over15": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
             "over25": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
             "corners_avg": history_rows(lambda item: None if item.get("corners_ht") is None else int(item.get("corners_ht") or 0) + int(item.get("corners_2h") or 0), lambda item: (item.get("corners_home"), item.get("corners_away"))),
+            "corners_10_over1": history_rows(lambda item: item.get("corners_10")),
             "team_corners_avg": history_rows(team_corner_value),
             "cards_avg": history_rows(card_total, lambda item: (item.get("cards_home"), item.get("cards_away"))),
             "offsides_avg": history_rows(lambda item: item.get("offsides_total"), lambda item: (item.get("offsides_home"), item.get("offsides_away"))),
@@ -328,6 +373,15 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
             "shots_on_target_avg": history_rows(lambda item: item.get("shots_on_target_total"), lambda item: (item.get("shots_on_target_home"), item.get("shots_on_target_away"))),
             "fouls_avg": history_rows(lambda item: item.get("fouls_total"), lambda item: (item.get("fouls_home"), item.get("fouls_away"))),
             "team_goal_ht": history_rows(lambda item: team_side_value(item, "goals_ht_home", "goals_ht_away")),
+            "team_goals_2h": history_rows(lambda item: team_side_value(item, "goals_2h_home", "goals_2h_away")),
+            "team_corners_1h": history_rows(lambda item: team_side_value(item, "corners_ht_home", "corners_ht_away")),
+            "team_corners_2h": history_rows(lambda item: team_side_value(item, "corners_2h_home", "corners_2h_away")),
+            "team_cards_1h": history_rows(lambda item: team_side_value(item, "cards_ht_home", "cards_ht_away")),
+            "team_cards_2h": history_rows(lambda item: team_side_value(item, "cards_2h_home", "cards_2h_away")),
+            "team_shots_1h": history_rows(lambda item: team_side_value(item, "shots_ht_home", "shots_ht_away")),
+            "team_shots_2h": history_rows(lambda item: team_side_value(item, "shots_2h_home", "shots_2h_away")),
+            "team_on_target_1h": history_rows(lambda item: team_side_value(item, "on_target_ht_home", "on_target_ht_away")),
+            "team_on_target_2h": history_rows(lambda item: team_side_value(item, "on_target_2h_home", "on_target_2h_away")),
             "team_goals": history_rows(lambda item: team_side_value(item, "home", "away")),
             "team_cards": history_rows(lambda item: team_side_value(item, "cards_home", "cards_away")),
             "team_offsides": history_rows(lambda item: team_side_value(item, "offsides_home", "offsides_away")),

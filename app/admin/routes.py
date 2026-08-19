@@ -7,7 +7,7 @@ import tempfile
 
 from flask import Blueprint, abort, after_this_request, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.engine.url import make_url
 
 from ..extensions import db
@@ -42,6 +42,19 @@ def _format_age(value: datetime | None, now: datetime) -> str:
     if hours < 24:
         return f"{hours}h"
     return f"{hours // 24}d"
+
+
+def _last_successful_logins() -> dict[int, datetime]:
+    return {
+        row.user_id: row.last_login
+        for row in db.session.query(
+            LoginAttempt.user_id,
+            func.max(LoginAttempt.created_at).label("last_login"),
+        )
+        .filter(LoginAttempt.success.is_(True), LoginAttempt.user_id.isnot(None))
+        .group_by(LoginAttempt.user_id)
+        .all()
+    }
 
 
 def _database_info() -> dict:
@@ -338,6 +351,7 @@ def dashboard():
         .group_by(MatchAlert.user_id)
         .all()
     }
+    last_logins = _last_successful_logins()
 
     users = []
     for user in User.query.order_by(User.created_at.desc()).all():
@@ -350,6 +364,7 @@ def dashboard():
                 "active_rules": counts["active_rules"] or 0,
                 "alerts": alerts["alerts"] or 0,
                 "last_alert": alerts["last_alert"],
+                "last_login": last_logins.get(user.id),
             }
         )
 
@@ -536,6 +551,7 @@ def import_database():
 @login_required
 def users_list():
     _require_admin()
+    search_query = (request.args.get("q") or "").strip()
     rule_counts = {
         row.user_id: row.rules
         for row in db.session.query(
@@ -552,16 +568,29 @@ def users_list():
         .group_by(MatchAlert.user_id)
         .all()
     }
+    last_logins = _last_successful_logins()
+    user_query = User.query
+    if search_query:
+        filters = [User.username.ilike(f"%{search_query}%")]
+        if search_query.isdigit():
+            filters.append(User.id == int(search_query))
+        user_query = user_query.filter(or_(*filters))
+
     users = []
-    for user in User.query.order_by(User.created_at.desc()).all():
+    for user in user_query.order_by(User.created_at.desc()).all():
         users.append(
             {
                 "user": user,
                 "rules": rule_counts.get(user.id, 0),
                 "alerts": alert_counts.get(user.id, 0),
+                "last_login": last_logins.get(user.id),
             }
         )
-    return render_template("admin/users.html", users=users)
+    return render_template(
+        "admin/users.html",
+        users=users,
+        search_query=search_query,
+    )
 
 
 @admin_bp.route("/users/<int:user_id>")
