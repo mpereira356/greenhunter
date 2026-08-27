@@ -717,11 +717,16 @@ def matchday():
                     spread = max(values) - min(values)
                     if average >= 80 and spread <= 25:
                         labels = {"H2H": "H2H", "Mandante": "Casa", "Visitante": "Fora"}
+                        sample_floor = min(samples for _, _, samples in rows)
                         market_scores.append({
                             "market": market,
-                            "score": average - spread * 0.35 + len(values) * 2 + min(samples for _, _, samples in rows) * 0.5,
+                            "score": (
+                                average - spread * 0.35 + len(values) * 2
+                                + sample_floor * 1.2
+                                - max(0, 10 - sample_floor) * 1.8
+                            ),
                             "confidence": round(average),
-                            "samples": min(samples for _, _, samples in rows),
+                            "samples": sample_floor,
                             "group": " + ".join(labels[key] for key, _, _ in rows),
                         })
                 if market_scores:

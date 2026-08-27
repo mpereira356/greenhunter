@@ -128,6 +128,19 @@ def _leg_value(leg, state, stats):
         yellow = _stat(stats, ("Yellow Card", "Yellow Cards", "Cartões Amarelos"), leg.target_side)
         red = _stat(stats, ("Red Card", "Red Cards", "Cartões Vermelhos"), leg.target_side)
         return None if yellow is None and red is None else (yellow or 0) + (red or 0)
+    if "shots_on_target" in key:
+        return _stat(stats, ("On Target", "Shots on Target", "Chutes ao Gol"), leg.target_side)
+    if "shots" in key:
+        direct = _stat(stats, ("Shots", "Total Shots", "Finalizações"), leg.target_side)
+        if direct is not None:
+            return direct
+        on_target = _stat(stats, ("On Target", "Shots on Target", "Chutes ao Gol"), leg.target_side)
+        off_target = _stat(stats, ("Off Target", "Shots off Target", "Chutes para Fora"), leg.target_side)
+        return None if on_target is None and off_target is None else (on_target or 0) + (off_target or 0)
+    if "foul" in key:
+        return _stat(stats, ("Fouls", "Fouls Committed", "Faltas"), leg.target_side)
+    if "offside" in key:
+        return _stat(stats, ("Offsides", "Offside", "Impedimentos"), leg.target_side)
     return None
 
 
@@ -164,6 +177,14 @@ def _result_description(leg):
         noun = "escanteio" if value == 1 else "escanteios"
     elif "card" in key:
         noun = "cartão" if value == 1 else "cartões"
+    elif "shots_on_target" in key:
+        noun = "chute ao gol" if value == 1 else "chutes ao gol"
+    elif "shots" in key:
+        noun = "finalização" if value == 1 else "finalizações"
+    elif "foul" in key:
+        noun = "falta" if value == 1 else "faltas"
+    elif "offside" in key:
+        noun = "impedimento" if value == 1 else "impedimentos"
     else:
         noun = "apurado"
     return f"{shown} {noun}"
