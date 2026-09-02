@@ -113,6 +113,16 @@ class MatchdayLeaguePreference(db.Model):
     updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
 
 
+class UserMatchdayPreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
+    relevant_leagues_json = db.Column(db.Text)
+    market_settings_json = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+    user = db.relationship("User", backref=db.backref("matchday_preference", uselist=False, cascade="all, delete-orphan"))
+
+
 class Rule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

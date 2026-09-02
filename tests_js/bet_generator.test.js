@@ -191,6 +191,15 @@ test('linha do primeiro tempo não duplica a mesma linha do jogo completo para a
   assert.equal(engine.correlationPenalty(full, firstHalf), 100);
 });
 
+test('limite pessoal permite ampliar mercados independentes por partida', () => {
+  const pick = (marketGroup, confidenceScore) => ({fixtureId: 'custom-limit', marketGroup, confidenceScore, status: 'APPROVED',
+    adjustedProbability: confidenceScore, dataQualityScore: 90, consistencyScore: 85, valueScore: 50});
+  const ticket = engine.buildTicket([
+    pick('goals_ft', 90), pick('corners_home', 88), pick('cards_total', 86), pick('fouls_total', 84)
+  ], 1, 'balanced', 4);
+  assert.equal(ticket.length, 4);
+});
+
 test('linha liberada somente para edição nunca volta para a geração automática', () => {
   const manual = {fixtureId: 'manual', marketGroup: 'corners_home', status: 'REJECTED',
     rejectionReasons: [engine.REJECTION.MANUAL_ONLY], confidenceScore: 95, rawProbability: 100,

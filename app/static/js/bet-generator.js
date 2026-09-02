@@ -291,8 +291,10 @@
     return pool;
   }
 
-  function buildTicket(candidates, maxGames, profileName = 'balanced') {
-    const profile = CONFIG.profiles[profileName] || CONFIG.profiles.balanced;
+  function buildTicket(candidates, maxGames, profileName = 'balanced', maxSelectionsOverride = null) {
+    const configuredProfile = CONFIG.profiles[profileName] || CONFIG.profiles.balanced;
+    const profile = {...configuredProfile, maxSelectionsPerFixture: maxSelectionsOverride !== null && maxSelectionsOverride !== undefined && Number.isFinite(Number(maxSelectionsOverride))
+      ? Math.max(1, Math.min(6, Number(maxSelectionsOverride))) : configuredProfile.maxSelectionsPerFixture};
     const ranked = rankCandidates(candidates.filter((candidate) => candidate.status === 'APPROVED'));
     const gameLimit = Math.max(1, Number(maxGames) || 1);
     const categoryLimit = Math.max(1, Math.ceil(gameLimit * CONFIG.ticketComposition.maxPrimaryCategoryShare));

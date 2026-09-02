@@ -1,4 +1,5 @@
 import json
+import glob
 import os
 import threading
 import time
@@ -23,7 +24,7 @@ from app.utils.time import now_sp
 
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
-MATCHDAY_CACHE_VERSION = 6
+MATCHDAY_CACHE_VERSION = 7
 MATCHDAY_TREND_INDEX_VERSION = 1
 MATCHDAY_SUMMARY_CACHE_VERSION = 1
 MATCHDAY_SUMMARY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_SUMMARY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
@@ -61,6 +62,21 @@ def save_matchday_summary_cache(day: str, game_id: str, sample_limit: int, paylo
                 os.unlink(temporary)
         except (OSError, UnboundLocalError):
             pass
+
+
+def known_matchday_leagues() -> list[str]:
+    leagues = {}
+    for path in glob.glob(os.path.join(MATCHDAY_CACHE_DIR, "fixtures-*.json")):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                matches = (json.load(handle) or {}).get("matches") or []
+        except (OSError, ValueError, TypeError):
+            continue
+        for match in matches:
+            league = " ".join(str((match or {}).get("league") or "").strip().split())
+            if league:
+                leagues.setdefault(league.casefold(), league)
+    return sorted(leagues.values(), key=str.casefold)
 
 
 def _is_excluded_youth_match(*values: str) -> bool:
@@ -364,24 +380,25 @@ def _fetch_from_public(day: str) -> list[dict]:
     session = make_session()
     maximum = max(1, int(os.environ.get("MATCHDAY_MAX_PAGES", "20")))
     found = {}
+    seen_pages = set()
     for page in range(1, maximum + 1):
         page_matches = []
+        path = f"/cf/soccer/{day}/" if page == 1 else f"/cf/soccer/{day}/p.{page}"
         for base in BASE_URLS:
-            response = get_with_fallback(session, f"{base}/cf/soccer/p.{page}")
+            response = get_with_fallback(session, f"{base}{path}")
             if response.status_code == 200:
                 page_matches = parse_matchday_html(response.text, base, reference_day=day)
             if page_matches:
                 break
         if not page_matches:
             break
-        dated = [item["day"] for item in page_matches if item.get("day")]
+        fingerprint = tuple(sorted(item["game_id"] for item in page_matches))
+        if fingerprint in seen_pages:
+            break
+        seen_pages.add(fingerprint)
         for item in page_matches:
             if item.get("day") == day:
                 found[item["game_id"]] = item
-        if found and dated and min(dated) > day:
-            break
-        if not found and dated and min(dated) > day:
-            break
     return list(found.values())
 
 

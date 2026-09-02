@@ -12,7 +12,9 @@
     </div>
     <div class="analysis-status">
       <span class="history-badge history-badge-{{ 'green' if alert.status == 'green' else ('red' if alert.status == 'red' else 'pending') }}">{{ alert.status|capitalize }}</span>
+      {% if current_user.is_admin_user and alert.url %}
       <a href="{{ alert.url }}" target="_blank" rel="noopener noreferrer">Abrir BetsAPI</a>
+      {% endif %}
     </div>
   </div>
 

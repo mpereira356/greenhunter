@@ -21,7 +21,9 @@
       </form>
       <a href="{{ url_for('main.matchday', day=day) }}">Voltar à agenda</a>
       <a href="{{ url_for('main.matchday_analysis', game_id=match.game_id, day=day, limit=sample_limit, refresh=1) }}">Recalcular</a>
+      {% if current_user.is_admin_user and match.url %}
       <a href="{{ match.url }}" target="_blank" rel="noopener noreferrer">Abrir BetsAPI</a>
+      {% endif %}
     </div>
   </div>
 
@@ -74,7 +76,7 @@
         <div><span>+39,5 laterais</span><strong>{{ group.phase.throw_in_lines.get('39.5', 0) }}%</strong></div>
       </div>
       {% else %}
-      <div class="matchday-unavailable">O BetsAPI não forneceu dados de laterais nesta amostra.</div>
+      <div class="matchday-unavailable">Não há dados de laterais disponíveis nesta amostra.</div>
       {% endif %}
       {% if group.phase.samples < 5 %}<div class="matchday-caution">Amostra detalhada pequena; interprete com cautela.</div>{% endif %}
     </article>

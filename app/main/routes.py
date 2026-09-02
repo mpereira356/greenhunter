@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, Rule, SavedTicket, SavedTicketLeg
+from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, Rule, SavedTicket, SavedTicketLeg, UserMatchdayPreference
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
 from ..services.matchday import (
@@ -18,6 +18,7 @@ from ..services.matchday import (
     analyze_upcoming_match,
     find_match,
     get_matchday,
+    known_matchday_leagues,
     load_matchday_summary_cache,
     save_matchday_summary_cache,
     load_matchday_trend_index,
@@ -36,20 +37,40 @@ RELEVANT_MATCHDAY_LEAGUES = {
     "england premier league", "english premier league",
     "england championship", "english championship", "england league 1", "england league one",
     "england league 2", "england league two",
-    "spain la liga", "italy serie a", "coppa italia", "italy coppa italia",
-    "germany bundesliga", "germany dfb pokal", "dfb pokal", "france ligue 1",
+    "spain la liga", "spain segunda", "spain segunda division",
+    "italy serie a", "italy serie b", "coppa italia", "italy coppa italia",
+    "germany bundesliga", "germany bundesliga ii", "germany bundesliga 2",
+    "germany 2 bundesliga", "germany dfb pokal", "dfb pokal", "france ligue 1",
     "portugal primeira liga", "netherlands eredivisie",
-    "belgium first division a", "turkey super lig", "scotland premiership",
-    "switzerland challenge league", "bulgaria first league", "sweden allsvenskan",
+    "belgium first division a", "turkey super lig", "turkiye super lig", "scotland premiership",
+    "austria bundesliga", "denmark superligaen", "norway eliteserien",
+    "switzerland challenge league", "switzerland super league",
+    "bulgaria first league", "sweden allsvenskan", "greece super league 1",
+    "czechia first league", "czech republic first league", "poland ekstraklasa",
+    "romania liga i", "romania liga 1", "saudi arabia pro league", "saudi pro league",
     "brazil serie a", "brazil serie b", "brazil cup", "copa do brasil",
     "copa libertadores", "copa sudamericana",
     "argentina liga profesional", "argentina cup", "copa argentina",
     "colombia primera a", "paraguay division profesional", "peru liga 1",
     "ecuador ligapro serie a", "ecuador liga pro serie a",
-    "chile primera division", "uruguay primera division",
+    "chile primera division", "chile liga de primera", "uruguay primera division",
     "usa mls", "mexico liga mx", "leagues cup", "concacaf champions cup",
     "fifa world cup", "world cup qualifying", "uefa nations league",
     "uefa european championship", "european championship", "copa america",
+}
+
+DEFAULT_MATCHDAY_MARKET_SETTINGS = {
+    "minimum_samples": 3,
+    "max_markets_per_game": 3,
+    "goals": {"goal_ht": True, "over15": True, "over25": True},
+    "corners": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 8.5, "home": 2.5, "away": 2.5},
+    "cards": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 4.5, "home": 1.5, "away": 1.5},
+    "shots": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 19.5, "home": 10.5, "away": 10.5},
+    "shots_on_target": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 7.5, "home": 3.5, "away": 3.5},
+    "fouls": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 15.5, "home": 7.5, "away": 7.5},
+    "offsides": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 1.5, "home": .5, "away": .5},
+    "corners_1h": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 2.5, "home": 2.5, "away": 2.5},
+    "cards_1h": {"enabled": True, "total_enabled": True, "home_enabled": True, "away_enabled": True, "total": 1.5, "home": .5, "away": .5},
 }
 
 
@@ -75,6 +96,25 @@ def _relevant_league_preferences() -> dict[str, bool]:
         item.normalized_name: bool(item.is_relevant)
         for item in MatchdayLeaguePreference.query.all()
     }
+
+
+def _user_matchday_preference() -> UserMatchdayPreference | None:
+    return UserMatchdayPreference.query.filter_by(user_id=current_user.id).first()
+
+
+def _market_settings(preference: UserMatchdayPreference | None) -> dict:
+    settings = json.loads(json.dumps(DEFAULT_MATCHDAY_MARKET_SETTINGS))
+    custom = _safe_json_dict(preference.market_settings_json) if preference else {}
+    for key, value in custom.items():
+        if isinstance(value, dict) and isinstance(settings.get(key), dict):
+            settings[key].update(value)
+        elif key in {"minimum_samples", "max_markets_per_game"}:
+            settings[key] = value
+    return settings
+
+
+def _global_relevant_names(all_leagues: list[str], overrides: dict[str, bool]) -> list[str]:
+    return [league for league in all_leagues if _is_relevant_matchday_league(league, overrides)]
 
 
 def _site_url(path: str = "") -> str:
@@ -668,10 +708,28 @@ def matchday():
         dict.fromkeys(match["league"] for match in all_matches if match.get("league"))
     )
     league_preferences = _relevant_league_preferences()
-    relevant_leagues = [
-        league for league in available_leagues
-        if _is_relevant_matchday_league(league, league_preferences)
+    global_relevant_leagues = _global_relevant_names(available_leagues, league_preferences)
+    user_preference = _user_matchday_preference()
+    personal_leagues = None
+    decoded_leagues = []
+    if user_preference and user_preference.relevant_leagues_json:
+        try:
+            decoded_leagues = json.loads(user_preference.relevant_leagues_json)
+            if isinstance(decoded_leagues, list):
+                personal_leagues = {_normalized_league_name(value) for value in decoded_leagues}
+        except (TypeError, ValueError):
+            personal_leagues = None
+    relevant_leagues = global_relevant_leagues if personal_leagues is None else [
+        league for league in available_leagues if _normalized_league_name(league) in personal_leagues
     ]
+    all_known_leagues = list(dict.fromkeys([
+        *known_matchday_leagues(), *available_leagues,
+        *[str(value) for value in decoded_leagues]
+    ]))
+    configured_relevant_leagues = _global_relevant_names(all_known_leagues, league_preferences) if personal_leagues is None else [
+        league for league in all_known_leagues if _normalized_league_name(league) in personal_leagues
+    ]
+    global_configured_relevant_leagues = _global_relevant_names(all_known_leagues, league_preferences)
     team_leagues = {}
     for match in all_matches:
         league = match.get("league") or ""
@@ -763,6 +821,13 @@ def matchday():
         total_matches=total_matches,
         available_leagues=available_leagues,
         relevant_leagues=relevant_leagues,
+        global_relevant_leagues=global_relevant_leagues,
+        global_configured_relevant_leagues=global_configured_relevant_leagues,
+        all_known_leagues=sorted(all_known_leagues, key=str.casefold),
+        configured_relevant_leagues=configured_relevant_leagues,
+        personal_relevant_active=personal_leagues is not None,
+        matchday_market_settings=_market_settings(user_preference),
+        default_matchday_market_settings=DEFAULT_MATCHDAY_MARKET_SETTINGS,
         relevant_selection_active=relevant_selection_active,
         available_teams=available_teams,
         team_leagues={
@@ -813,6 +878,59 @@ def toggle_matchday_relevant_league():
         preference.is_relevant = not current
     db.session.commit()
     return jsonify(ok=True, league=league, relevant=bool(preference.is_relevant))
+
+
+@main_bp.post("/jogos-do-dia/preferencias")
+@login_required
+def save_matchday_preferences():
+    payload = request.get_json(silent=True) or {}
+    preference = _user_matchday_preference()
+    if preference is None:
+        preference = UserMatchdayPreference(user_id=current_user.id)
+        db.session.add(preference)
+
+    if payload.get("use_default_leagues") is True:
+        preference.relevant_leagues_json = None
+    else:
+        known = {_normalized_league_name(value): value for value in known_matchday_leagues()}
+        selected = []
+        for raw in payload.get("leagues") or []:
+            normalized = _normalized_league_name(str(raw))
+            if normalized in known and known[normalized] not in selected:
+                selected.append(known[normalized])
+        preference.relevant_leagues_json = json.dumps(selected, ensure_ascii=False)
+
+    submitted = payload.get("market_settings") if isinstance(payload.get("market_settings"), dict) else {}
+    settings = json.loads(json.dumps(DEFAULT_MATCHDAY_MARKET_SETTINGS))
+    try:
+        minimum_samples = int(submitted.get("minimum_samples") or 3)
+    except (TypeError, ValueError):
+        minimum_samples = 3
+    try:
+        max_markets = int(submitted.get("max_markets_per_game") or 3)
+    except (TypeError, ValueError):
+        max_markets = 3
+    settings["minimum_samples"] = max(3, min(10, minimum_samples))
+    settings["max_markets_per_game"] = max(1, min(6, max_markets))
+    for market, defaults in DEFAULT_MATCHDAY_MARKET_SETTINGS.items():
+        if not isinstance(defaults, dict):
+            continue
+        incoming = submitted.get(market) if isinstance(submitted.get(market), dict) else {}
+        if market == "goals":
+            for goal_market in ("goal_ht", "over15", "over25"):
+                settings[market][goal_market] = bool(incoming.get(goal_market, defaults[goal_market]))
+            continue
+        settings[market]["enabled"] = bool(incoming.get("enabled", defaults["enabled"]))
+        for scope in ("total", "home", "away"):
+            settings[market][f"{scope}_enabled"] = bool(incoming.get(f"{scope}_enabled", defaults[f"{scope}_enabled"]))
+            try:
+                value = float(incoming.get(scope, defaults[scope]))
+            except (TypeError, ValueError):
+                value = defaults[scope]
+            settings[market][scope] = max(.5, min(99.5, round(value * 2) / 2))
+    preference.market_settings_json = json.dumps(settings, ensure_ascii=False)
+    db.session.commit()
+    return jsonify(ok=True, message="Preferências dos Jogos do Dia salvas.", settings=settings)
 
 
 @main_bp.route("/jogos-do-dia/<game_id>")
@@ -897,7 +1015,7 @@ def matchday_summary(game_id):
             "ok": True,
             "status": "empty",
             "scheduled_time": analysis.get("scheduled_time"),
-            "message": "O BetsAPI não disponibilizou partidas anteriores para este confronto.",
+            "message": "Não há partidas anteriores disponíveis para este confronto.",
             "groups": {},
         }
         save_matchday_summary_cache(day, str(game_id), sample_limit, payload)

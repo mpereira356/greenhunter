@@ -115,7 +115,9 @@
             <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#statsModal{{ loop.index }}">
               Ver mais
             </button>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir</a>
+            {% if current_user.is_admin_user and item.url %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir BetsAPI</a>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -170,7 +172,9 @@
           </div>
         </div>
         <div class="modal-footer">
-          <a class="btn btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir no site</a>
+          {% if current_user.is_admin_user and item.url %}
+          <a class="btn btn-outline-secondary" href="{{ item.url }}" target="_blank" rel="noopener">Abrir BetsAPI</a>
+          {% endif %}
           <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>

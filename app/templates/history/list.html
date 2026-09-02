@@ -217,7 +217,7 @@
                   <span></span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end history-action-dropdown">
-                  {% if alert.url %}
+                  {% if current_user.is_admin_user and alert.url %}
                   <li>
                     <a
                       class="dropdown-item"
