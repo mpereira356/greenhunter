@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, Rule, SavedTicket, SavedTicketLeg
+from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, Rule, SavedTicket, SavedTicketLeg
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
 from ..services.matchday import (
@@ -18,6 +18,8 @@ from ..services.matchday import (
     analyze_upcoming_match,
     find_match,
     get_matchday,
+    load_matchday_summary_cache,
+    save_matchday_summary_cache,
     load_matchday_trend_index,
     trend_groups_for_match,
 )
@@ -32,13 +34,19 @@ RELEVANT_MATCHDAY_LEAGUES = {
     "uefa europa league", "uefa europa league qualifying",
     "uefa conference league", "uefa conference league qualifying",
     "england premier league", "english premier league",
-    "spain la liga", "italy serie a", "germany bundesliga", "france ligue 1",
+    "england championship", "english championship", "england league 1", "england league one",
+    "england league 2", "england league two",
+    "spain la liga", "italy serie a", "coppa italia", "italy coppa italia",
+    "germany bundesliga", "germany dfb pokal", "dfb pokal", "france ligue 1",
     "portugal primeira liga", "netherlands eredivisie",
     "belgium first division a", "turkey super lig", "scotland premiership",
+    "switzerland challenge league", "bulgaria first league", "sweden allsvenskan",
     "brazil serie a", "brazil serie b", "brazil cup", "copa do brasil",
     "copa libertadores", "copa sudamericana",
     "argentina liga profesional", "argentina cup", "copa argentina",
-    "colombia primera a", "chile primera division", "uruguay primera division",
+    "colombia primera a", "paraguay division profesional", "peru liga 1",
+    "ecuador ligapro serie a", "ecuador liga pro serie a",
+    "chile primera division", "uruguay primera division",
     "usa mls", "mexico liga mx", "leagues cup", "concacaf champions cup",
     "fifa world cup", "world cup qualifying", "uefa nations league",
     "uefa european championship", "european championship", "copa america",
@@ -55,8 +63,18 @@ def _normalized_league_name(value: str) -> str:
     )
 
 
-def _is_relevant_matchday_league(value: str) -> bool:
-    return _normalized_league_name(value) in RELEVANT_MATCHDAY_LEAGUES
+def _is_relevant_matchday_league(value: str, preferences: dict | None = None) -> bool:
+    normalized = _normalized_league_name(value)
+    if preferences is not None and normalized in preferences:
+        return bool(preferences[normalized])
+    return normalized in RELEVANT_MATCHDAY_LEAGUES
+
+
+def _relevant_league_preferences() -> dict[str, bool]:
+    return {
+        item.normalized_name: bool(item.is_relevant)
+        for item in MatchdayLeaguePreference.query.all()
+    }
 
 
 def _site_url(path: str = "") -> str:
@@ -649,7 +667,11 @@ def matchday():
     available_leagues = list(
         dict.fromkeys(match["league"] for match in all_matches if match.get("league"))
     )
-    relevant_leagues = [league for league in available_leagues if _is_relevant_matchday_league(league)]
+    league_preferences = _relevant_league_preferences()
+    relevant_leagues = [
+        league for league in available_leagues
+        if _is_relevant_matchday_league(league, league_preferences)
+    ]
     team_leagues = {}
     for match in all_matches:
         league = match.get("league") or ""
@@ -693,59 +715,15 @@ def matchday():
         generator_markets = set(request.args.getlist("generator_market"))
         goal_markets = generator_markets & {"over15", "over25"}
         trend_index = load_matchday_trend_index(day)
-        ranked_matches = []
-        # O atalho do índice de gols só pode limitar a agenda quando apenas
-        # mercados de gols foram pedidos. Com cartões/escanteios, todos os
-        # próximos jogos precisam chegar ao cliente para formar e repor o bilhete.
-        only_goal_markets = bool(generator_markets) and generator_markets <= {"over15", "over25"}
-        if trend_index.get("complete") and goal_markets and only_goal_markets:
-            for match in matches:
-                if match.get("is_live"):
-                    continue
-                groups = trend_groups_for_match(trend_index, match.get("game_id"), generator_samples)
-                market_scores = []
-                for market in goal_markets:
-                    rows = [
-                        (key, int(group.get(market)), int(group.get("count") or 0))
-                        for key, group in groups.items()
-                        if int(group.get("count") or 0) >= 3 and group.get(market) is not None
-                    ]
-                    values = [value for _, value, _ in rows]
-                    if len(values) < 2:
-                        continue
-                    average = sum(values) / len(values)
-                    spread = max(values) - min(values)
-                    if average >= 80 and spread <= 25:
-                        labels = {"H2H": "H2H", "Mandante": "Casa", "Visitante": "Fora"}
-                        sample_floor = min(samples for _, _, samples in rows)
-                        market_scores.append({
-                            "market": market,
-                            "score": (
-                                average - spread * 0.35 + len(values) * 2
-                                + sample_floor * 1.2
-                                - max(0, 10 - sample_floor) * 1.8
-                            ),
-                            "confidence": round(average),
-                            "samples": sample_floor,
-                            "group": " + ".join(labels[key] for key, _, _ in rows),
-                        })
-                if market_scores:
-                    best = max(market_scores, key=lambda item: item["score"])
-                    ranked_matches.append((best["score"], match, best))
-            ranked_matches.sort(key=lambda item: item[0], reverse=True)
-            candidate_limit = min(len(ranked_matches), max(24, generator_count * 2))
-            selected_ranked = ranked_matches[:candidate_limit]
-            matches = [match for _, match, _ in selected_ranked]
-            generated_goal_suggestions = {
-                str(match.get("game_id")): suggestion
-                for _, match, suggestion in selected_ranked
-            }
+        # O ranking global precisa receber toda a agenda elegível. O índice
+        # diário continua sendo reutilizado como prefetch, mas nunca elimina um
+        # jogo antes que os BetCandidates sejam avaliados.
+        matches = [match for match in matches if not match.get("is_live")]
+        if trend_index.get("complete") and goal_markets:
             trend_prefetch = {
                 str(match.get("game_id")): trend_groups_for_match(trend_index, match.get("game_id"), generator_samples)
                 for match in matches
             }
-        else:
-            matches = [match for match in matches if not match.get("is_live")][:max(60, generator_count * 8)]
     if trend_active and trend_market in {"over15", "over25"}:
         trend_index = load_matchday_trend_index(day)
         if trend_index.get("complete"):
@@ -813,6 +791,30 @@ def matchday():
     )
 
 
+@main_bp.post("/jogos-do-dia/campeonato-principal")
+@login_required
+def toggle_matchday_relevant_league():
+    if not current_user.is_admin_user:
+        return jsonify(ok=False, message="Apenas administradores podem alterar os campeonatos principais."), 403
+    payload = request.get_json(silent=True) or {}
+    league = " ".join(str(payload.get("league") or "").strip().split())[:160]
+    normalized = _normalized_league_name(league)
+    if not normalized:
+        return jsonify(ok=False, message="Campeonato inválido."), 400
+    preference = MatchdayLeaguePreference.query.filter_by(normalized_name=normalized).first()
+    current = preference.is_relevant if preference is not None else normalized in RELEVANT_MATCHDAY_LEAGUES
+    if preference is None:
+        preference = MatchdayLeaguePreference(
+            normalized_name=normalized, display_name=league, is_relevant=not current
+        )
+        db.session.add(preference)
+    else:
+        preference.display_name = league
+        preference.is_relevant = not current
+    db.session.commit()
+    return jsonify(ok=True, league=league, relevant=bool(preference.is_relevant))
+
+
 @main_bp.route("/jogos-do-dia/<game_id>")
 @login_required
 def matchday_analysis(game_id):
@@ -867,6 +869,10 @@ def matchday_summary(game_id):
     if not match:
         return jsonify({"ok": False, "error": "Jogo não encontrado."}), 404
     sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    cached_summary = load_matchday_summary_cache(day, str(game_id), sample_limit)
+    if cached_summary:
+        cached_summary["shared_cache"] = True
+        return jsonify(cached_summary)
     if not _matchday_analysis_slots.acquire(blocking=False):
         response = jsonify({"ok": False, "busy": True, "error": "Análises em processamento. Aguarde."})
         response.status_code = 429
@@ -887,13 +893,15 @@ def matchday_summary(game_id):
     groups = analysis.get("groups") or []
     usable = [group for group in groups if int(group.get("count") or 0) > 0]
     if not usable:
-        return jsonify({
+        payload = {
             "ok": True,
             "status": "empty",
             "scheduled_time": analysis.get("scheduled_time"),
             "message": "O BetsAPI não disponibilizou partidas anteriores para este confronto.",
             "groups": {},
-        })
+        }
+        save_matchday_summary_cache(day, str(game_id), sample_limit, payload)
+        return jsonify(payload)
     summaries = {}
     for group in groups:
         phase = group.get("phase") or {}
@@ -1003,15 +1011,15 @@ def matchday_summary(game_id):
                 "second": period_summary("second"),
             },
         }
-    return jsonify(
-        {
-            "ok": True,
-            "status": "ready",
-            "scheduled_time": analysis.get("scheduled_time"),
-            "sample_limit": sample_limit,
-            "groups": summaries,
-        }
-    )
+    payload = {
+        "ok": True,
+        "status": "ready",
+        "scheduled_time": analysis.get("scheduled_time"),
+        "sample_limit": sample_limit,
+        "groups": summaries,
+    }
+    save_matchday_summary_cache(day, str(game_id), sample_limit, payload)
+    return jsonify(payload)
 
 
 @main_bp.route("/live/favorite-league", methods=["POST"])

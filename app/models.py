@@ -105,6 +105,14 @@ class User(UserMixin, db.Model):
         return max(0, limit)
 
 
+class MatchdayLeaguePreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    normalized_name = db.Column(db.String(160), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(160), nullable=False)
+    is_relevant = db.Column(db.Boolean, default=True, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+
 class Rule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

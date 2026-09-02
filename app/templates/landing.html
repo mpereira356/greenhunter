@@ -16,6 +16,7 @@
     </span>
   </a>
   <div class="ghx-nav-links" aria-label="Navegacao principal">
+    <a href="#apresentacao">Apresentação</a>
     <a href="#beneficios">Beneficios</a>
     <a href="#jogos-do-dia">Jogos do dia</a>
     <a href="#como-funciona">Como funciona</a>
@@ -70,6 +71,24 @@
       <div class="ghx-floating-panel ghx-panel-c">
         <span class="ghx-panel-label">Signal latency</span>
         <strong>0.8s</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="ghx-section ghx-video-showcase" id="apresentacao">
+  <div class="ghx-section-head ghx-video-copy ghx-reveal">
+    <span class="ghx-eyebrow"><i aria-hidden="true"></i> Apresentação da plataforma</span>
+    <h2>Veja o GreenHunter em ação.</h2>
+    <p>Conheça, em poucos minutos, uma plataforma completa para analisar os jogos do dia, comparar tendências, montar bilhetes e acompanhar alertas e resultados.</p>
+  </div>
+  <div class="ghx-video-stage ghx-reveal">
+    <div class="ghx-video-frame">
+      <div class="ghx-video-screen">
+        <video controls playsinline preload="metadata" aria-label="Vídeo de apresentação da plataforma GreenHunter">
+          <source src="{{ url_for('static', filename='video/act.mp4', v='20260827-003523') }}" type="video/mp4">
+          Seu navegador não suporta a reprodução deste vídeo.
+        </video>
       </div>
     </div>
   </div>
@@ -376,5 +395,6 @@
     });
   }, { threshold: 0.16 });
   revealItems.forEach((item) => revealObserver.observe(item));
+
 </script>
 {% endblock %}

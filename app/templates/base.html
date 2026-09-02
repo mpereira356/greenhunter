@@ -60,7 +60,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-matchday-values-v3') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260902-loading-toast-v10') }}">
   </head>
   <body>
     {% if current_user.is_authenticated %}
@@ -232,6 +232,11 @@
     <div class="sidebar-backdrop d-md-none" id="sidebar-backdrop"></div>
     {% endif %}
 
+    <div class="gh-loading-toast" data-global-loading-toast role="status" aria-live="polite" aria-atomic="true" hidden>
+      <span class="gh-loading-toast-spinner" aria-hidden="true"></span>
+      <span><strong data-global-loading-title>Processando...</strong><small data-global-loading-message>Aguarde enquanto concluímos esta ação.</small></span>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
@@ -252,6 +257,55 @@
         }
         return originalFetch(resource, options);
       };
+
+      const globalLoadingToast = document.querySelector('[data-global-loading-toast]');
+      const globalLoadingTitle = globalLoadingToast.querySelector('[data-global-loading-title]');
+      const globalLoadingMessage = globalLoadingToast.querySelector('[data-global-loading-message]');
+      let globalLoadingTimer = null;
+      window.GreenHunterLoading = {
+        show(title = 'Processando...', message = 'Aguarde enquanto concluímos esta ação.') {
+          if (globalLoadingTimer) window.clearTimeout(globalLoadingTimer);
+          globalLoadingTitle.textContent = title;
+          globalLoadingMessage.textContent = message;
+          globalLoadingToast.hidden = false;
+          requestAnimationFrame(() => globalLoadingToast.classList.add('is-visible'));
+        },
+        hide() {
+          globalLoadingToast.classList.remove('is-visible');
+          globalLoadingTimer = window.setTimeout(() => { globalLoadingToast.hidden = true; }, 180);
+        }
+      };
+      window.addEventListener('pageshow', () => window.GreenHunterLoading.hide());
+      document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.matches('[data-ticket-generator-form]')) {
+          window.GreenHunterLoading.show('Analisando jogos...', 'Buscando as melhores opções para montar o bilhete.');
+        } else if (form.matches('.matchday-filters')) {
+          const trend = form.querySelector('[name="trend_market"]')?.value;
+          window.GreenHunterLoading.show(trend ? 'Procurando tendências...' : 'Carregando jogos...', trend ? 'Analisando os jogos que atendem aos filtros escolhidos.' : 'Buscando a agenda e os dados da data selecionada.');
+        } else if (form.closest('.ghx-auth-shell')) {
+          window.GreenHunterLoading.show('Validando acesso...', 'Aguarde enquanto verificamos seus dados.');
+        } else {
+          window.GreenHunterLoading.show('Processando ação...', 'Salvando as informações e atualizando a página.');
+        }
+      });
+      document.addEventListener('click', (event) => {
+        const analysisLink = event.target.closest?.('[data-analysis-link]');
+        if (analysisLink) {
+          window.GreenHunterLoading.show('Montando análise...', 'Coletando o histórico e preparando as estatísticas do jogo.');
+          globalLoadingTimer = window.setTimeout(() => window.GreenHunterLoading.hide(), 2500);
+          return;
+        }
+        const link = event.target.closest?.('a[href]');
+        if (!link || link.target === '_blank' || link.hasAttribute('download') || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        const href = link.getAttribute('href') || '';
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+        let destination;
+        try { destination = new URL(link.href, window.location.href); } catch (_) { return; }
+        if (destination.origin !== window.location.origin) return;
+        window.GreenHunterLoading.show('Carregando página...', 'Preparando as informações solicitadas.');
+      });
     </script>
     {% block scripts %}{% endblock %}
     {% if current_user.is_authenticated %}

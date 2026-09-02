@@ -59,6 +59,7 @@
             {% for value, label in [('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols'),('corners_avg','Escanteios'),('cards_avg','Cartões')] %}
             <label><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" checked><span>{{ label }}</span></label>
             {% endfor %}
+            <label><input class="form-check-input" type="checkbox" name="generator_market" value="first_half" checked><span>Mercados do 1º tempo</span></label>
             {% for value, label in [('shots_avg','Finalizações'),('shots_on_target_avg','Chutes ao gol'),('fouls_avg','Faltas'),('offsides_avg','Impedimentos')] %}
             <label data-relevant-generator-market {% if not relevant_selection_active %}hidden{% endif %}><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" {% if not relevant_selection_active %}disabled{% endif %}><span>{{ label }}</span></label>
             {% endfor %}
@@ -82,7 +83,10 @@
           <span data-picker-summary>Todos os campeonatos</span><span class="matchday-combo-arrow" aria-hidden="true">▾</span>
         </button>
         <div class="matchday-picker-panel" data-combo-panel hidden>
-          <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar campeonato" autocomplete="off">
+          <div class="matchday-picker-tools">
+            <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar campeonato" autocomplete="off">
+            <button class="matchday-picker-close" type="button" data-combo-close aria-label="Fechar lista de campeonatos">×</button>
+          </div>
           <div class="matchday-option-list">
             <label class="matchday-all-option">
               <input class="form-check-input" type="checkbox" data-select-all checked>
@@ -96,6 +100,7 @@
             <label data-option-text="{{ league|lower }}">
               <input class="form-check-input" type="checkbox" name="league" value="{{ league }}" data-relevant="{{ 'true' if league in relevant_leagues else 'false' }}" {% if not selected_leagues or league in selected_leagues %}checked{% endif %}>
               <span>{{ league }}</span>
+              {% if current_user.is_admin_user %}<button class="matchday-league-star{% if league in relevant_leagues %} is-relevant{% endif %}" type="button" data-league-star data-league="{{ league }}" aria-label="{{ 'Remover dos' if league in relevant_leagues else 'Adicionar aos' }} campeonatos principais" aria-pressed="{{ 'true' if league in relevant_leagues else 'false' }}" title="{{ 'Remover dos' if league in relevant_leagues else 'Adicionar aos' }} campeonatos principais">★</button>{% endif %}
             </label>
             {% endfor %}
           </div>
@@ -109,7 +114,10 @@
           <span data-picker-summary>Todos os times</span><span class="matchday-combo-arrow" aria-hidden="true">▾</span>
         </button>
         <div class="matchday-picker-panel" data-combo-panel hidden>
-          <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar time" autocomplete="off">
+          <div class="matchday-picker-tools">
+            <input class="form-control form-control-sm matchday-option-search" type="search" placeholder="Pesquisar time" autocomplete="off">
+            <button class="matchday-picker-close" type="button" data-combo-close aria-label="Fechar lista de times">×</button>
+          </div>
           <div class="matchday-option-list">
             <label class="matchday-all-option">
               <input class="form-check-input" type="checkbox" data-select-all checked>
@@ -240,6 +248,11 @@
       <button class="matchday-ticket-clear" type="button" data-ticket-clear>Limpar bilhete</button>
     </footer>
   </aside>
+  <div class="matchday-ticket-undo" data-ticket-undo role="status" aria-live="polite" hidden>
+    <i aria-hidden="true">✓</i>
+    <span><b data-ticket-undo-title>Bilhete atualizado</b><small data-ticket-undo-message>Você pode desfazer esta alteração.</small></span>
+    <button type="button" data-ticket-undo-button>Desfazer</button>
+  </div>
   <div class="ticket-save-backdrop" data-ticket-save-modal hidden>
     <div class="ticket-save-modal" role="dialog" aria-modal="true" aria-labelledby="ticket-save-title">
       <header><div><strong id="ticket-save-title">Salvar bilhete</strong><small>Informe os dados da aposta realizada.</small></div><button type="button" data-ticket-save-close aria-label="Fechar">×</button></header>
@@ -251,6 +264,7 @@
   </div>
   <div class="matchday-history-popover" data-history-popover hidden></div>
 </section>
+<script src="{{ url_for('static', filename='js/bet-generator.js', v='20260901-v12') }}"></script>
 <script>
 (function () {
   const leaguePicker = document.querySelector('[data-filter-picker="league"]');
@@ -375,9 +389,16 @@
 
   pickers.forEach((picker) => {
     picker.querySelector('.matchday-option-search').addEventListener('input', () => applyTextSearch(picker));
+    picker.querySelector('.matchday-option-search').addEventListener('keydown', (event) => {
+      // A busca serve apenas para localizar opções. Enter não deve enviar o
+      // formulário no meio da montagem de uma seleção múltipla.
+      if (event.key === 'Enter') event.preventDefault();
+    });
     picker.querySelector('[data-select-all]').addEventListener('change', (event) => {
       picker.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
-        if (!input.closest('[data-option-text]').hidden) input.checked = event.target.checked;
+        // "Todos" representa toda a lista permitida pelos campeonatos, não
+        // somente os itens que sobraram visíveis na pesquisa de texto.
+        if (input.closest('[data-option-text]').dataset.leagueVisible !== 'false') input.checked = event.target.checked;
       });
       picker.querySelector('.matchday-option-search').value = '';
       applyTextSearch(picker);
@@ -409,6 +430,11 @@
     });
     const trigger = picker.querySelector('[data-combo-trigger]');
     const panel = picker.querySelector('[data-combo-panel]');
+    const closePanel = (restoreFocus = false) => {
+      panel.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) trigger.focus();
+    };
     trigger.addEventListener('click', () => {
       const willOpen = panel.hidden;
       pickers.filter((other) => other !== picker).forEach((other) => {
@@ -419,16 +445,65 @@
       trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
       if (willOpen) picker.querySelector('.matchday-option-search').focus();
     });
+    picker.querySelector('[data-combo-close]').addEventListener('click', () => closePanel(true));
     updateSummary(picker);
   });
   updateTeamsForLeagues();
 
+  leaguePicker?.querySelectorAll('[data-league-star]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const response = await fetch('{{ url_for("main.toggle_matchday_relevant_league") }}', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({league: button.dataset.league})
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível atualizar o campeonato.');
+        const relevant = Boolean(result.relevant);
+        button.classList.toggle('is-relevant', relevant);
+        button.setAttribute('aria-pressed', relevant ? 'true' : 'false');
+        button.title = relevant ? 'Remover dos campeonatos principais' : 'Adicionar aos campeonatos principais';
+        button.setAttribute('aria-label', button.title);
+        const input = button.closest('label').querySelector('input[name="league"]');
+        input.dataset.relevant = relevant ? 'true' : 'false';
+        const count = leaguePicker.querySelectorAll('input[name="league"][data-relevant="true"]').length;
+        const relevantControl = leaguePicker.querySelector('[data-select-relevant]');
+        const text = relevantControl?.closest('label')?.querySelector('span');
+        if (text) text.textContent = `Principais campeonatos${count ? ` (${count})` : ''}`;
+        if (relevantControl) relevantControl.disabled = count === 0;
+        updateSummary(leaguePicker);
+      } catch (error) {
+        window.alert(error.message || 'Não foi possível atualizar o campeonato.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
   matchdayFilterForm.addEventListener('submit', () => {
+    matchdayFilterForm.querySelectorAll('[data-filter-snapshot]').forEach((input) => input.remove());
     [leaguePicker, teamPicker].forEach((picker) => {
       const available = Array.from(picker.querySelectorAll('input[type="checkbox"][name]'))
         .filter((input) => input.closest('[data-option-text]').dataset.leagueVisible !== 'false');
-      if (available.length && available.every((input) => input.checked)) {
-        available.forEach((input) => { input.disabled = true; });
+      const selected = available.filter((input) => input.checked);
+      const allSelected = available.length > 0 && selected.length === available.length;
+      // Envia uma fotografia exata da seleção em campos próprios. Assim,
+      // pesquisa aberta, opções ocultas e atualizações visuais do combo não
+      // conseguem alterar ou omitir times durante a submissão.
+      available.forEach((input) => { input.disabled = true; });
+      if (!allSelected) {
+        selected.forEach((input) => {
+          const snapshot = document.createElement('input');
+          snapshot.type = 'hidden';
+          snapshot.name = input.name;
+          snapshot.value = input.value;
+          snapshot.dataset.filterSnapshot = 'true';
+          matchdayFilterForm.appendChild(snapshot);
+        });
       }
     });
   });
@@ -481,7 +556,14 @@
   const summaryCacheVersion = 'v31-period-corners-10';
   const historyPopover = document.querySelector('[data-history-popover]');
   const saveModal = document.querySelector('[data-ticket-save-modal]');
+  const ticketUndo = document.querySelector('[data-ticket-undo]');
+  const ticketUndoButton = document.querySelector('[data-ticket-undo-button]');
+  const ticketUndoTitle = document.querySelector('[data-ticket-undo-title]');
+  const ticketUndoMessage = document.querySelector('[data-ticket-undo-message]');
   let ticketItems = [];
+  let ticketUndoAction = null;
+  let ticketUndoFadeTimer = null;
+  let ticketUndoHideTimer = null;
 
   try {
     Object.keys(localStorage).filter((key) => key.startsWith('greenhunter-summary:')).forEach((key) => {
@@ -491,7 +573,48 @@
   } catch (_) {}
   let generatedCandidateQueue = [];
   let generatedAllCandidates = [];
+  let generatedSelectionsByGame = new Map();
   const excludedGeneratedGames = new Set();
+
+  function hideTicketUndo() {
+    if (ticketUndoFadeTimer) window.clearTimeout(ticketUndoFadeTimer);
+    if (ticketUndoHideTimer) window.clearTimeout(ticketUndoHideTimer);
+    ticketUndoFadeTimer = null;
+    ticketUndoHideTimer = null;
+    ticketUndo.classList.remove('is-visible', 'is-fading');
+    ticketUndo.hidden = true;
+    ticketUndoAction = null;
+  }
+
+  function ticketSnapshot() {
+    return {items: JSON.parse(JSON.stringify(ticketItems)), excluded: [...excludedGeneratedGames]};
+  }
+
+  function showTicketUndo(previous, title, message) {
+    if (ticketUndoFadeTimer) window.clearTimeout(ticketUndoFadeTimer);
+    if (ticketUndoHideTimer) window.clearTimeout(ticketUndoHideTimer);
+    ticketUndoAction = previous;
+    ticketUndoTitle.textContent = title || 'Bilhete atualizado';
+    ticketUndoMessage.textContent = message || 'Você pode desfazer esta alteração.';
+    ticketUndo.hidden = false;
+    ticketUndo.classList.remove('is-fading');
+    requestAnimationFrame(() => ticketUndo.classList.add('is-visible'));
+    ticketUndoFadeTimer = window.setTimeout(() => ticketUndo.classList.add('is-fading'), 4400);
+    ticketUndoHideTimer = window.setTimeout(hideTicketUndo, 5000);
+  }
+
+  ticketUndoButton.addEventListener('click', () => {
+    if (!ticketUndoAction) return;
+    const previous = ticketUndoAction;
+    if (ticketUndoFadeTimer) window.clearTimeout(ticketUndoFadeTimer);
+    if (ticketUndoHideTimer) window.clearTimeout(ticketUndoHideTimer);
+    ticketItems = JSON.parse(JSON.stringify(previous.items));
+    excludedGeneratedGames.clear();
+    previous.excluded.forEach((gameId) => excludedGeneratedGames.add(String(gameId)));
+    hideTicketUndo();
+    saveTicket();
+    renderTicket(false);
+  });
 
   try { ticketItems = JSON.parse(localStorage.getItem(ticketStorageKey) || '[]'); } catch (_) { ticketItems = []; }
   if (!Array.isArray(ticketItems)) ticketItems = [];
@@ -558,12 +681,26 @@
       lineNoun: candidate.lineNoun || '',
       lineSuffix: candidate.lineSuffix || '',
       generatedMarket: candidate.market,
-      generated: true
+      generated: true,
+      historicalFrequency: candidate.evaluation?.historicalFrequency ?? candidate.confidence,
+      adjustedProbability: candidate.evaluation?.adjustedProbability ?? null,
+      confidenceScore: candidate.evaluation?.confidenceScore ?? candidate.score,
+      confidenceClass: candidate.evaluation?.classification || '',
+      dataQualityScore: candidate.evaluation?.dataQualityScore ?? null,
+      dataQualityGrade: candidate.evaluation?.dataQualityGrade || '',
+      consistencyScore: candidate.evaluation?.consistencyScore ?? null,
+      sampleScore: candidate.evaluation?.sampleScore ?? null,
+      supportingScore: candidate.evaluation?.supportingScore ?? null,
+      strengths: candidate.evaluation?.strengths || [],
+      weaknesses: candidate.evaluation?.weaknesses || []
     };
   }
 
   function generatedCandidateCategory(candidate) {
     const market = String(candidate.market || '');
+    if (market.startsWith('corners_1h')) return 'corners_1h';
+    if (market.startsWith('cards_1h')) return 'cards_1h';
+    if (market.startsWith('goals_1h')) return 'goals_1h';
     if (market === 'goal_ht') return 'goal_ht';
     if (['over15', 'over25'].includes(market)) return 'goals_ft';
     // Total e desempenho de uma equipe são mercados diferentes. Mantemos uma
@@ -597,6 +734,7 @@
   }
 
   function coherentCandidatesForGame(gameId) {
+    if (generatedSelectionsByGame.has(String(gameId))) return generatedSelectionsByGame.get(String(gameId));
     const gameCandidates = generatedAllCandidates.filter((candidate) => String(candidate.card.dataset.gameId) === String(gameId));
     const individualCornerLines = gameCandidates
       .filter((candidate) => ['corners_home', 'corners_away'].includes(candidate.market))
@@ -686,49 +824,75 @@
             <div><span>${escapeHtml(item.market)}</span><b>${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b></div>
             ${Array.isArray(item.lineOptions) && item.lineOptions.length > 1 ? `<label class="matchday-ticket-line"><span>Ajustar linha</span><select data-ticket-line="${escapeHtml(item.id)}" aria-label="Alterar linha de ${escapeHtml(item.market)}">${item.lineOptions.map((option) => `<option value="${escapeHtml(option.line)}" ${Number(option.line) === Number(item.selectedLine) ? 'selected' : ''}>Mais de ${escapeHtml(option.line)}</option>`).join('')}</select></label>` : ''}
             ${item.secondaryMarket && item.secondaryValue !== null && item.secondaryValue !== undefined && !(item.secondaryMarket === 'Mais de 2,5 gols' && Number(item.selectedLine) === 2.5) ? `<small class="matchday-ticket-secondary"><span>${escapeHtml(item.secondaryMarket)}</span><b>${escapeHtml(item.secondaryValue)}%</b></small>` : ''}
+            ${item.generated && item.adjustedProbability !== null && item.adjustedProbability !== undefined ? `<div class="matchday-ticket-confidence"><strong>Confiança ${escapeHtml(item.confidenceScore)}/100 · ${escapeHtml(item.confidenceClass)}</strong><small>Histórico ${escapeHtml(item.historicalFrequency)}% · Ajustada ${escapeHtml(item.adjustedProbability)}% · Dados ${escapeHtml(item.dataQualityGrade)} · Consistência ${escapeHtml(item.consistencyScore)}/100</small>${(item.strengths || []).length || (item.weaknesses || []).length ? `<details><summary>Por que foi escolhida?</summary>${(item.strengths || []).map((reason) => `<span class="is-strength">+ ${escapeHtml(reason)}</span>`).join('')}${(item.weaknesses || []).map((reason) => `<span class="is-weakness">− ${escapeHtml(reason)}</span>`).join('')}</details>` : ''}</div>` : ''}
             <small>${escapeHtml(item.group)} · ${escapeHtml(item.samples)} jogos</small>
-            <button type="button" data-ticket-remove="${escapeHtml(item.id)}" aria-label="Remover ${escapeHtml(item.market)}">×</button>
+            <button type="button" data-ticket-remove-index="${ticketItems.indexOf(item)}" aria-label="Remover somente ${escapeHtml(item.market)}" title="Remover somente esta seleção">×</button>
           </div>`).join('')}
         </div>
       </article>`).join('') : '<div class="matchday-ticket-empty">Clique em uma linha de mercado nos resultados filtrados para montar seu bilhete.</div>';
-    itemsBox.querySelectorAll('[data-ticket-remove]').forEach((button) => button.addEventListener('click', () => {
-      ticketItems = ticketItems.filter((item) => item.id !== button.dataset.ticketRemove);
+    itemsBox.querySelectorAll('[data-ticket-remove-index]').forEach((button) => button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const previous = ticketSnapshot();
+      const index = Number(button.dataset.ticketRemoveIndex);
+      if (!Number.isInteger(index) || index < 0 || index >= ticketItems.length) return;
+      ticketItems.splice(index, 1);
       saveTicket();
       renderTicket(false);
+      showTicketUndo(previous, 'Seleção removida', 'A seleção foi retirada do bilhete.');
     }));
     itemsBox.querySelectorAll('[data-ticket-remove-game]').forEach((button) => button.addEventListener('click', () => {
       const game = games.find((entry) => entry.key === button.dataset.ticketRemoveGame);
       if (!game) return;
+      const previous = ticketSnapshot();
       const generated = game.selections.some((item) => item.generated);
       const removedGameId = String(game.item.gameId);
+      const removedIndex = ticketItems.findIndex((item) => `${item.day}:${item.gameId}` === game.key);
+      const removedItems = ticketItems.filter((item) => `${item.day}:${item.gameId}` === game.key);
       ticketItems = ticketItems.filter((item) => `${item.day}:${item.gameId}` !== game.key);
       // Excluir é definitivo. Apenas o botão de troca deve procurar e inserir
       // outra partida automaticamente.
       if (generated) excludedGeneratedGames.add(removedGameId);
       saveTicket();
       renderTicket(false);
+      showTicketUndo(previous, 'Jogo removido', 'O jogo completo foi retirado do bilhete.');
     }));
     itemsBox.querySelectorAll('[data-ticket-replace-game]').forEach((button) => button.addEventListener('click', () => {
       const game = games.find((entry) => entry.key === button.dataset.ticketReplaceGame);
       if (!game) return;
+      const previous = ticketSnapshot();
       const removedGameId = String(game.item.gameId);
       excludedGeneratedGames.add(removedGameId);
       ticketItems = ticketItems.filter((item) => `${item.day}:${item.gameId}` !== game.key);
       addNextGeneratedCandidate();
       saveTicket();
       renderTicket(false);
+      showTicketUndo(previous, 'Sugestão atualizada', 'O jogo foi substituído por uma nova sugestão.');
     }));
     itemsBox.querySelectorAll('[data-ticket-line]').forEach((select) => select.addEventListener('change', () => {
       const item = ticketItems.find((saved) => saved.id === select.dataset.ticketLine);
       if (!item) return;
+      const previous = ticketSnapshot();
       const option = (item.lineOptions || []).find((entry) => Number(entry.line) === Number(select.value));
       if (!option) return;
       item.selectedLine = option.line;
       item.value = option.percentage;
+      item.historicalFrequency = option.percentage;
+      if (option.adjustedProbability !== undefined) item.adjustedProbability = option.adjustedProbability;
+      if (option.confidenceScore !== undefined) item.confidenceScore = option.confidenceScore;
+      if (option.confidenceClass !== undefined) item.confidenceClass = option.confidenceClass;
+      if (option.dataQualityScore !== undefined) item.dataQualityScore = option.dataQualityScore;
+      if (option.dataQualityGrade !== undefined) item.dataQualityGrade = option.dataQualityGrade;
+      if (option.consistencyScore !== undefined) item.consistencyScore = option.consistencyScore;
+      if (option.sampleScore !== undefined) item.sampleScore = option.sampleScore;
+      if (option.supportingScore !== undefined) item.supportingScore = option.supportingScore;
+      if (option.strengths !== undefined) item.strengths = option.strengths;
+      if (option.weaknesses !== undefined) item.weaknesses = option.weaknesses;
       item.market = `Mais de ${option.line} ${item.lineNoun}${item.lineSuffix || ''}`;
       removeRedundantTicketCorners(item.gameId);
       saveTicket();
       renderTicket(false);
+      showTicketUndo(previous, 'Linha atualizada', 'A linha e a porcentagem da seleção foram recalculadas.');
     }));
     if (openWhenPopulated && ticketItems.length) ticket.hidden = false;
     ticketLauncher.hidden = !ticket.hidden || ticketItems.length === 0;
@@ -984,7 +1148,15 @@
   });
 
   ticket.querySelector('[data-ticket-close]').addEventListener('click', () => { ticket.hidden = true; renderTicket(false); });
-  ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => { ticketItems = []; excludedGeneratedGames.clear(); saveTicket(); ticket.hidden = true; renderTicket(false); });
+  ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => {
+    const previous = ticketSnapshot();
+    ticketItems = [];
+    excludedGeneratedGames.clear();
+    saveTicket();
+    ticket.hidden = true;
+    renderTicket(false);
+    showTicketUndo(previous, 'Bilhete limpo', 'Todas as seleções foram removidas.');
+  });
   function closeSaveModal() { saveModal.hidden = true; }
   ticket.querySelector('[data-ticket-save]').addEventListener('click', () => {
     if (!ticketItems.length) return;
@@ -1336,7 +1508,304 @@
     )));
   }
 
+  function historyNumbers(group, key) {
+    return ((((group || {}).history_values || {})[key]) || [])
+      .map((entry) => Number(entry && typeof entry === 'object' ? entry.value : entry))
+      .filter(Number.isFinite);
+  }
+
+  function averageNumbers(values) {
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  }
+
+  function normalizedRange(value, low, high) {
+    if (!Number.isFinite(Number(value))) return null;
+    return Math.max(0, Math.min(100, (Number(value) - low) / Math.max(.01, high - low) * 100));
+  }
+
+  function combinedSupport(parts) {
+    const valid = parts.filter((value) => Number.isFinite(Number(value)));
+    return valid.length ? valid.reduce((sum, value) => sum + Number(value), 0) / valid.length : null;
+  }
+
+  function historicalHitRate(group, key, predicate) {
+    const values = historyNumbers(group, key);
+    return values.length ? values.filter(predicate).length / values.length * 100 : null;
+  }
+
+  function goalSupportingScore(groups, historyKey, predicate, line) {
+    const homeShots = averageNumbers(historyNumbers(groups.Mandante, 'team_shots'));
+    const awayShots = averageNumbers(historyNumbers(groups.Visitante, 'team_shots'));
+    const homeTargets = averageNumbers(historyNumbers(groups.Mandante, 'team_shots_on_target'));
+    const awayTargets = averageNumbers(historyNumbers(groups.Visitante, 'team_shots_on_target'));
+    const homeGoals = averageNumbers(historyNumbers(groups.Mandante, 'team_goals'));
+    const awayGoals = averageNumbers(historyNumbers(groups.Visitante, 'team_goals'));
+    const projectedGoals = Number.isFinite(homeGoals) && Number.isFinite(awayGoals) ? homeGoals + awayGoals : null;
+    const marketFrequency = combinedSupport([
+      historicalHitRate(groups.H2H, historyKey, predicate),
+      historicalHitRate(groups.Mandante, historyKey, predicate),
+      historicalHitRate(groups.Visitante, historyKey, predicate)
+    ]);
+    return combinedSupport([
+      normalizedRange(homeShots, 6, 15), normalizedRange(awayShots, 6, 15),
+      normalizedRange(homeTargets, 2, 7), normalizedRange(awayTargets, 2, 7),
+      marketFrequency,
+      projectedGoals === null || historyKey === 'goal_ht' ? null : normalizedRange(projectedGoals - Number(line), -.5, 1.5)
+    ]);
+  }
+
+  function marginSupportingScore(values, line, scale = 12) {
+    const average = averageNumbers(values);
+    return average === null ? null : Math.max(0, Math.min(100, 50 + (average - Number(line)) * scale));
+  }
+
+  function uiCandidateFromEvaluation(card, evaluation, lineOptions) {
+    const team = evaluation.scope === 'home' ? card.dataset.homeTeam : evaluation.scope === 'away' ? card.dataset.awayTeam : '';
+    const suffix = team ? ` — ${team}` : '';
+    const nouns = {corners: 'escanteios', cards: 'cartões', shots: 'finalizações', shots_on_target: 'chutes ao gol', fouls: 'faltas', offsides: 'impedimentos', corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo', goals_1h: 'gols no 1º tempo'};
+    let line = evaluation.label;
+    let noun = '';
+    if (!line) {
+      const base = String(evaluation.marketType).replace(/_(total|home|away)$/, '');
+      noun = nouns[base] || '';
+      line = `Mais de ${evaluation.line} ${noun}${suffix}`;
+    }
+    const samples = Math.max(evaluation.h2hSample, evaluation.homeSample, evaluation.awaySample);
+    const candidate = {
+      card, market: evaluation.marketType, line, score: evaluation.confidenceScore, advancedScore: evaluation.confidenceScore,
+      confidence: Math.round(evaluation.rawProbability), samples, group: `Confiança ${evaluation.confidenceScore}/100 · ${evaluation.classification}`,
+      selectedLine: evaluation.line, lineNoun: noun || (evaluation.marketGroup === 'goals_ft' ? 'gols' : ''), lineSuffix: suffix,
+      lineOptions: lineOptions || [], evaluation
+    };
+    evaluation.uiCandidate = candidate;
+    return candidate;
+  }
+
+  function buildBetCandidatesForCard(card, enabled, profile) {
+    const engine = window.GreenHunterBetGenerator;
+    const groups = card._trendGroups || {};
+    const h2h = groups.H2H || {};
+    const home = groups.Mandante || {};
+    const away = groups.Visitante || {};
+    const fixture = {
+      fixtureId: card.dataset.gameId, competitionName: card.dataset.league,
+      homeTeam: card.dataset.homeTeam, awayTeam: card.dataset.awayTeam
+    };
+    const evaluated = [];
+    const add = (input) => {
+      const result = engine.evaluateCandidate({...fixture, ...input}, profile);
+      evaluated.push(result);
+      return result;
+    };
+
+    if (enabled.has('goal_ht')) add({marketType: 'goal_ht', marketGroup: 'goal_ht', scope: 'total', line: .5,
+      label: 'Gol no 1º tempo', predicate: (value) => value > 0,
+      bases: {h2h: historyNumbers(h2h, 'goal_ht'), home: historyNumbers(home, 'goal_ht'), away: historyNumbers(away, 'goal_ht')},
+      supportingScore: goalSupportingScore(groups, 'goal_ht', (value) => value > 0, .5)});
+    if (enabled.has('over15')) add({marketType: 'over15', marketGroup: 'goals_ft', scope: 'total', line: 1.5,
+      label: 'Mais de 1,5 gols', predicate: (value) => value > 1,
+      bases: {h2h: historyNumbers(h2h, 'over15'), home: historyNumbers(home, 'over15'), away: historyNumbers(away, 'over15')},
+      supportingScore: goalSupportingScore(groups, 'over15', (value) => value > 1, 1.5)});
+    if (enabled.has('over25')) add({marketType: 'over25', marketGroup: 'goals_ft', scope: 'total', line: 2.5,
+      label: 'Mais de 2,5 gols', predicate: (value) => value > 2,
+      bases: {h2h: historyNumbers(h2h, 'over25'), home: historyNumbers(home, 'over25'), away: historyNumbers(away, 'over25')},
+      supportingScore: goalSupportingScore(groups, 'over25', (value) => value > 2, 2.5)});
+
+    const addLineFamily = ({enabledKey, marketBase, groupBase, noun, scope, historyKey, minimum, manualMinimum = minimum, maximum, supportingHistory, supportingScoreForLine, supportingScale, enforcePrimaryFloor = true}) => {
+      if (!enabled.has(enabledKey)) return;
+      const bases = scope === 'home'
+        ? {h2h: [], home: historyNumbers(home, historyKey), away: []}
+        : scope === 'away'
+          ? {h2h: [], home: [], away: historyNumbers(away, historyKey)}
+          : {h2h: historyNumbers(h2h, historyKey), home: historyNumbers(home, historyKey), away: historyNumbers(away, historyKey)};
+      const allValues = [...bases.h2h, ...bases.home, ...bases.away];
+      if (!allValues.length) return;
+      const maxObserved = Math.max(...allValues);
+      const maxLine = Math.min(maximum, Math.max(minimum, Math.ceil(maxObserved) - .5));
+      for (let line = manualMinimum; line <= maxLine; line += 1) {
+        const supportValues = supportingHistory ? supportingHistory() : allValues;
+        const supportingScore = supportingScoreForLine
+          ? supportingScoreForLine(line, supportValues)
+          : marginSupportingScore(supportValues, line, supportingScale || 12);
+        const evaluation = add({marketType: `${marketBase}_${scope}`, marketGroup: `${groupBase}_${scope}`, scope, line,
+          bases, minimumLine: minimum, enforcePrimaryFloor,
+          supportingScore});
+        if (line < minimum) {
+          evaluation.status = 'REJECTED';
+          evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
+        }
+      }
+    };
+
+    if (enabled.has('corners_avg')) {
+      addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope: 'total', historyKey: 'corners_avg', minimum: 8.5, manualMinimum: .5, maximum: 20.5, supportingScale: 11,
+        supportingScoreForLine: (line, totals) => {
+          const homeProduction = averageNumbers(historyNumbers(home, 'team_corners_avg'));
+          const awayProduction = averageNumbers(historyNumbers(away, 'team_corners_avg'));
+          const projected = Number.isFinite(homeProduction) && Number.isFinite(awayProduction) ? homeProduction + awayProduction : null;
+          return combinedSupport([marginSupportingScore(totals, line, 11), projected === null ? null : normalizedRange(projected - line, -2, 3)]);
+        }});
+      addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope: 'home', historyKey: 'team_corners_avg', minimum: 2.5, manualMinimum: .5, maximum: 10.5, supportingScale: 14});
+      addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope: 'away', historyKey: 'team_corners_avg', minimum: 2.5, manualMinimum: .5, maximum: 10.5, supportingScale: 14});
+    }
+    if (enabled.has('cards_avg')) {
+      const cardSupport = (line, cardValues) => {
+        const foulValues = [...historyNumbers(h2h, 'fouls_avg'), ...historyNumbers(home, 'fouls_avg'), ...historyNumbers(away, 'fouls_avg')];
+        return combinedSupport([marginSupportingScore(cardValues, line, 15), normalizedRange(averageNumbers(foulValues), 18, 32)]);
+      };
+      addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'total', historyKey: 'cards_avg', minimum: 4.5, maximum: 12.5, supportingScoreForLine: cardSupport});
+      addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'home', historyKey: 'team_cards', minimum: 1.5, maximum: 8.5, supportingScoreForLine: cardSupport});
+      addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'away', historyKey: 'team_cards', minimum: 1.5, maximum: 8.5, supportingScoreForLine: cardSupport});
+    }
+
+    if (enabled.has('first_half')) {
+      const firstGroups = {
+        h2h: h2h.periods?.first || {}, home: home.periods?.first || {}, away: away.periods?.first || {}
+      };
+      const addFirstHalfFamily = ({marketBase, historyKey, scope, minimum, manualMinimum = minimum, maximum, scale}) => {
+        const bases = scope === 'home'
+          ? {h2h: [], home: historyNumbers(firstGroups.home, historyKey), away: []}
+          : scope === 'away'
+            ? {h2h: [], home: [], away: historyNumbers(firstGroups.away, historyKey)}
+            : {h2h: historyNumbers(firstGroups.h2h, historyKey), home: historyNumbers(firstGroups.home, historyKey), away: historyNumbers(firstGroups.away, historyKey)};
+        const allValues = [...bases.h2h, ...bases.home, ...bases.away];
+        if (!allValues.length) return;
+        const maxLine = Math.min(maximum, Math.max(minimum, Math.ceil(Math.max(...allValues)) - .5));
+        for (let line = manualMinimum; line <= maxLine; line += 1) {
+          const evaluation = add({marketType: `${marketBase}_1h_${scope}`, marketGroup: `${marketBase}_1h_${scope}`, scope, line,
+            bases, minimumLine: minimum, supportingScore: marginSupportingScore(allValues, line, scale)});
+          if (line < minimum) {
+            evaluation.status = 'REJECTED';
+            evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
+          }
+        }
+      };
+      addFirstHalfFamily({marketBase: 'corners', historyKey: 'corners_avg', scope: 'total', minimum: 2.5, manualMinimum: .5, maximum: 10.5, scale: 16});
+      addFirstHalfFamily({marketBase: 'corners', historyKey: 'corners_avg', scope: 'home', minimum: 2.5, manualMinimum: .5, maximum: 7.5, scale: 20});
+      addFirstHalfFamily({marketBase: 'corners', historyKey: 'corners_avg', scope: 'away', minimum: 2.5, manualMinimum: .5, maximum: 7.5, scale: 20});
+      addFirstHalfFamily({marketBase: 'cards', historyKey: 'cards_avg', scope: 'total', minimum: 1.5, maximum: 7.5, scale: 20});
+      addFirstHalfFamily({marketBase: 'cards', historyKey: 'cards_avg', scope: 'home', minimum: .5, maximum: 5.5, scale: 24});
+      addFirstHalfFamily({marketBase: 'cards', historyKey: 'cards_avg', scope: 'away', minimum: .5, maximum: 5.5, scale: 24});
+    }
+
+    [
+      {enabledKey: 'shots_avg', base: 'shots', key: 'shots_avg', teamKey: 'team_shots', totalMin: 19.5, teamMin: 10.5, max: 50.5, scale: 7},
+      {enabledKey: 'shots_on_target_avg', base: 'shots_on_target', key: 'shots_on_target_avg', teamKey: 'team_shots_on_target', totalMin: engine.CONFIG.marketMinimums.shots_on_target_total, teamMin: engine.CONFIG.marketMinimums.shots_on_target_home, max: 25.5, scale: 12},
+      {enabledKey: 'fouls_avg', base: 'fouls', key: 'fouls_avg', teamKey: 'team_fouls', totalMin: 15.5, teamMin: 7.5, max: 45.5, scale: 7},
+      {enabledKey: 'offsides_avg', base: 'offsides', key: 'offsides_avg', teamKey: 'team_offsides', totalMin: 1.5, teamMin: .5, max: 15.5, scale: 18}
+    ].forEach((config) => {
+      addLineFamily({enabledKey: config.enabledKey, marketBase: config.base, groupBase: config.base, scope: 'total', historyKey: config.key, minimum: config.totalMin, maximum: config.max, supportingScale: config.scale});
+      addLineFamily({enabledKey: config.enabledKey, marketBase: config.base, groupBase: config.base, scope: 'home', historyKey: config.teamKey, minimum: config.teamMin, maximum: config.max, supportingScale: config.scale});
+      addLineFamily({enabledKey: config.enabledKey, marketBase: config.base, groupBase: config.base, scope: 'away', historyKey: config.teamKey, minimum: config.teamMin, maximum: config.max, supportingScale: config.scale});
+    });
+    return evaluated;
+  }
+
+  function generateSuggestedTicketV2(finalAttempt) {
+    const engine = window.GreenHunterBetGenerator;
+    if (!engine || !finalAttempt) return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ticket_generator') !== '1' || generateSuggestedTicket.done) return false;
+    const wanted = Math.max(1, Number(params.get('generator_count')) || 3);
+    // Um único critério automático: maior qualidade estatística global.
+    // Parâmetros antigos de perfil na URL são intencionalmente ignorados.
+    const profile = 'balanced';
+    const enabled = new Set(params.getAll('generator_market'));
+    if (!enabled.size) ['goal_ht', 'over15', 'over25'].forEach((key) => enabled.add(key));
+    const eligibleCards = cards.filter((card) => card.dataset.isLive !== '1');
+    const successfulCards = eligibleCards.filter((card) => card._trendGroups && !card._trendFailed);
+    const failedCards = eligibleCards.filter((card) => card._trendFailed);
+    const metadata = engine.analysisMetadata(eligibleCards.length, successfulCards.length, failedCards.length, profile);
+    if (!metadata.analysis_complete) {
+      window.greenHunterBetGeneratorDebug = {metadata, candidates: []};
+      setGeneratorStatus('error', 'Análise incompleta', `${metadata.processed_games} de ${metadata.eligible_games} jogos foram processados; ${metadata.failed_games} falharam. Nenhum bilhete parcial foi criado.`);
+      return false;
+    }
+
+    const allEvaluated = successfulCards.flatMap((card) => buildBetCandidatesForCard(card, enabled, profile));
+    const families = new Map();
+    allEvaluated.forEach((candidate) => {
+      const key = `${candidate.fixtureId}:${candidate.marketGroup}`;
+      if (!families.has(key)) families.set(key, []);
+      families.get(key).push(candidate);
+    });
+    const optimal = [];
+    families.forEach((family) => {
+      const chosen = engine.chooseOptimalLine(family, profile);
+      family.forEach((candidate) => {
+        if (candidate !== chosen && candidate.status === 'APPROVED') {
+          candidate.status = 'REJECTED';
+          candidate.rejectionReasons.push(engine.REJECTION.BETTER_LINE_AVAILABLE);
+        }
+      });
+      if (chosen) optimal.push(chosen);
+    });
+    const requestedCategoryMap = {
+      goal_ht: 'goals', over15: 'goals', over25: 'goals', corners_avg: 'corners', cards_avg: 'cards',
+      shots_avg: 'shots', shots_on_target_avg: 'shots_on_target', fouls_avg: 'fouls', offsides_avg: 'offsides'
+    };
+    const categoryLabels = {
+      goals: 'gols', corners: 'escanteios', cards: 'cartões', shots: 'finalizações',
+      shots_on_target: 'chutes ao gol', fouls: 'faltas', offsides: 'impedimentos', goal_ht: 'gol no 1º tempo',
+      corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo'
+    };
+    const requestedCategories = [...new Set([
+      ...[...enabled].map((market) => requestedCategoryMap[market]).filter(Boolean),
+      ...(enabled.has('first_half') ? ['corners_1h', 'cards_1h'] : [])
+    ])];
+    const diversified = engine.diversifyApprovedPool(optimal, requestedCategories);
+    const approved = diversified.filter((candidate) => candidate.status === 'APPROVED');
+    const uiByEvaluation = new Map();
+    optimal.forEach((evaluation) => {
+      const family = families.get(`${evaluation.fixtureId}:${evaluation.marketGroup}`) || [];
+      const lineOptions = family.map((item) => ({
+        line: item.line, percentage: Math.round(item.rawProbability), adjustedProbability: item.adjustedProbability,
+        confidenceScore: item.confidenceScore, confidenceClass: item.classification,
+        dataQualityScore: item.dataQualityScore, dataQualityGrade: item.dataQualityGrade,
+        consistencyScore: item.consistencyScore, sampleScore: item.sampleScore,
+        supportingScore: item.supportingScore, strengths: item.strengths, weaknesses: item.weaknesses
+      })).sort((a, b) => a.line - b.line);
+      const card = successfulCards.find((item) => String(item.dataset.gameId) === String(evaluation.fixtureId));
+      if (card) uiByEvaluation.set(evaluation, uiCandidateFromEvaluation(card, evaluation, lineOptions));
+    });
+
+    const selectedEvaluations = engine.buildTicket(approved, wanted, profile);
+    const selected = selectedEvaluations.map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
+    generatedAllCandidates = engine.rankCandidates(approved).map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
+    generatedSelectionsByGame = new Map();
+    const fixtureIds = [...new Set(approved.map((candidate) => String(candidate.fixtureId)))];
+    fixtureIds.forEach((fixtureId) => {
+      const picks = engine.buildTicket(approved.filter((candidate) => String(candidate.fixtureId) === fixtureId), 1, profile)
+        .map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
+      generatedSelectionsByGame.set(fixtureId, picks);
+    });
+    generatedCandidateQueue = engine.rankCandidates(approved)
+      .filter((candidate, index, array) => array.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
+      .map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
+    window.greenHunterBetGeneratorDebug = {metadata, enabledMarkets: [...enabled], config: engine.CONFIG, candidates: allEvaluated.map((candidate) => ({...candidate, uiCandidate: undefined, sourceStats: candidate.sourceStats}))};
+
+    if (!selected.length) {
+      setGeneratorStatus('error', 'Nenhuma sugestão aprovada', `Os ${metadata.eligible_games} jogos foram analisados por completo, mas nenhum candidato alcançou os critérios estatísticos necessários.`);
+      return false;
+    }
+    ticketItems = selected.map(generatedCandidateToItem);
+    saveTicket();
+    renderTicket(true);
+    generateSuggestedTicket.done = true;
+    const generatedGames = new Set(selected.map((candidate) => String(candidate.card.dataset.gameId))).size;
+    const includedCategories = [...new Set(selectedEvaluations.map(engine.marketCategory))];
+    const unavailableCategories = requestedCategories.filter((category) => !includedCategories.includes(category));
+    const includedText = includedCategories.map((category) => categoryLabels[category] || category).join(', ');
+    const unavailableText = unavailableCategories.length
+      ? ` Sem candidato aprovado em: ${unavailableCategories.map((category) => categoryLabels[category] || category).join(', ')}.` : '';
+    setGeneratorStatus('success', `Bilhete gerado com ${generatedGames} ${generatedGames === 1 ? 'jogo' : 'jogos'} e ${selected.length} ${selected.length === 1 ? 'seleção' : 'seleções'}`, `${metadata.processed_games} jogos analisados. Mercados incluídos: ${includedText}.${unavailableText}`);
+    return true;
+  }
+
   function generateSuggestedTicket(finalAttempt, allowPartial = false) {
+    return generateSuggestedTicketV2(finalAttempt);
+    /* Implementação anterior preservada temporariamente para migração e
+       comparação. O fluxo ativo retorna pelo motor V2 acima. */
     const params = new URLSearchParams(window.location.search);
     if (params.get('ticket_generator') !== '1' || generateSuggestedTicket.done) return false;
     const wanted = Math.max(1, Number(params.get('generator_count')) || 3);
@@ -1547,29 +2016,16 @@
     }
   }
 
-  // Gols usam o índice compartilhado das 03:00 e podem gerar o bilhete
-  // imediatamente, sem aguardar a coleta detalhada de todos os cards.
+  // A geração definitiva só acontece depois de todos os jogos elegíveis.
   if (ticketGeneratorRequested) {
     setGeneratorStatus('loading', 'Analisando jogos e mercados...', `0 de ${cards.length} jogos verificados. As opções aprovadas serão adicionadas automaticamente.`);
-    safelyGenerateSuggestedTicket(false);
   }
   const workers = Math.min(2, cards.length);
   const workerTasks = [];
   for (let index = 0; index < workers; index += 1) workerTasks.push(loadWorker());
-  // Em agendas grandes, não obriga o usuário a aguardar todos os cards quando
-  // já existem opções aprovadas. O número solicitado é um teto, não uma meta.
-  const partialGenerationTimer = ticketGeneratorRequested
-    ? window.setTimeout(() => {
-        const generated = safelyGenerateSuggestedTicket(false, true);
-        if (!generated) {
-          setGeneratorStatus('info', 'Ainda não encontramos opções aprovadas', 'A análise continuará até verificar todos os jogos disponíveis.');
-        }
-      }, 30000)
-    : null;
   Promise.all(workerTasks).then(() => {
     if (!ticketGeneratorRequested) return;
-    if (partialGenerationTimer) window.clearTimeout(partialGenerationTimer);
-    const generated = safelyGenerateSuggestedTicket(true, true);
+    const generated = safelyGenerateSuggestedTicket(true, false);
     if (!generated && !generateSuggestedTicket.done && pageError?.classList.contains('is-loading')) {
       showPageError(
         'Nenhuma sugestão aprovada',
@@ -1581,7 +2037,6 @@
     window.setTimeout(hideFinishedPageLoading, 1200);
   }).catch((error) => {
     console.error('Falha inesperada durante a consulta dos jogos.', error);
-    if (partialGenerationTimer) window.clearTimeout(partialGenerationTimer);
     if (ticketGeneratorRequested) {
       setGeneratorStatus('error', 'Falha ao consultar os jogos', 'Uma etapa da consulta foi interrompida. Atualize a página e tente gerar o bilhete novamente.');
     }

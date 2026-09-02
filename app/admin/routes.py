@@ -11,7 +11,7 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.engine.url import make_url
 
 from ..extensions import db
-from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, User
+from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, SavedTicket, User
 from ..security import safe_redirect_target
 from ..services.scraper import is_first_half_extra_time
 from ..services.telegram import send_message
@@ -53,6 +53,19 @@ def _last_successful_logins() -> dict[int, datetime]:
         )
         .filter(LoginAttempt.success.is_(True), LoginAttempt.user_id.isnot(None))
         .group_by(LoginAttempt.user_id)
+        .all()
+    }
+
+
+def _saved_ticket_counts() -> dict[int, int]:
+    """Contagem agregada para evitar uma consulta por usuário na listagem."""
+    return {
+        row.user_id: int(row.tickets or 0)
+        for row in db.session.query(
+            SavedTicket.user_id,
+            func.count(SavedTicket.id).label("tickets"),
+        )
+        .group_by(SavedTicket.user_id)
         .all()
     }
 
@@ -352,6 +365,7 @@ def dashboard():
         .all()
     }
     last_logins = _last_successful_logins()
+    ticket_counts = _saved_ticket_counts()
 
     users = []
     for user in User.query.order_by(User.created_at.desc()).all():
@@ -365,6 +379,7 @@ def dashboard():
                 "alerts": alerts["alerts"] or 0,
                 "last_alert": alerts["last_alert"],
                 "last_login": last_logins.get(user.id),
+                "tickets": ticket_counts.get(user.id, 0),
             }
         )
 
@@ -569,6 +584,7 @@ def users_list():
         .all()
     }
     last_logins = _last_successful_logins()
+    ticket_counts = _saved_ticket_counts()
     user_query = User.query
     if search_query:
         filters = [User.username.ilike(f"%{search_query}%")]
@@ -584,6 +600,7 @@ def users_list():
                 "rules": rule_counts.get(user.id, 0),
                 "alerts": alert_counts.get(user.id, 0),
                 "last_login": last_logins.get(user.id),
+                "tickets": ticket_counts.get(user.id, 0),
             }
         )
     return render_template(

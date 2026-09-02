@@ -2,6 +2,7 @@
 {% block title %}Admin | GreenHunter{% endblock %}
 {% block meta_description %}Painel administrativo GreenHunter para acompanhar usuarios, operacao, monitoramento e dados do sistema.{% endblock %}
 {% block content %}
+<div class="admin-dashboard-page">
 <div class="page-header">
   <div>
     <div class="page-title">Painel Administrador</div>
@@ -9,7 +10,15 @@
   </div>
 </div>
 
-<div class="d-flex flex-wrap gap-2 mb-3">
+<nav class="admin-mobile-tabs" data-admin-tabs role="tablist" aria-label="Seções do painel administrativo">
+  <button type="button" role="tab" data-admin-tab="summary" aria-selected="true">Resumo</button>
+  <button type="button" role="tab" data-admin-tab="analysis" aria-selected="false">Análises</button>
+  <button type="button" role="tab" data-admin-tab="users" aria-selected="false">Usuários</button>
+  <button type="button" role="tab" data-admin-tab="system" aria-selected="false">Sistema</button>
+  <button type="button" role="tab" data-admin-tab="config" aria-selected="false">Config.</button>
+</nav>
+
+<div class="d-flex flex-wrap gap-2 mb-3" data-admin-tab-panel="config">
   <a class="btn btn-outline-primary" href="{{ url_for('admin.download_database') }}">Exportar DB</a>
   <form method="post" action="{{ url_for('admin.import_database') }}" enctype="multipart/form-data" class="d-inline" id="db-import-form">
     <input class="d-none" type="file" name="database_file" id="database_file" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" required>
@@ -17,7 +26,7 @@
   </form>
 </div>
 
-<div class="admin-monitor mb-3">
+<div class="admin-monitor mb-3" data-admin-tab-panel="system">
   <div class="admin-monitor-head">
     <div>
       <h5 class="mb-1">Monitor do Sistema</h5>
@@ -66,7 +75,7 @@
   </div>
 </div>
 
-<div class="stat-grid mb-3">
+<div class="stat-grid mb-3" data-admin-tab-panel="summary">
   <div class="stat-card">
     <div class="stat-label">Usuarios</div>
     <div class="stat-value">{{ total_users }}</div>
@@ -93,8 +102,8 @@
   </div>
 </div>
 
-<div class="row g-3 mb-3">
-  <div class="col-lg-4">
+<div class="row g-3 mb-3" data-admin-tab-row>
+  <div class="col-lg-4" data-admin-tab-panel="summary">
     <div class="card h-100">
       <div class="card-body">
         <h5 class="mb-3">Planos</h5>
@@ -106,7 +115,7 @@
       </div>
     </div>
   </div>
-  <div class="col-lg-8">
+  <div class="col-lg-8" data-admin-tab-panel="analysis">
     <div class="card h-100">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -157,8 +166,8 @@
   </div>
 </div>
 
-<div class="row g-3">
-  <div class="col-lg-7">
+<div class="row g-3" data-admin-tab-row>
+  <div class="col-lg-7" data-admin-tab-panel="users">
     <div class="card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -166,7 +175,7 @@
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.users_list') }}">Ver todos</a>
         </div>
         <div class="table-responsive">
-          <table class="table table-clean align-middle mb-0">
+          <table class="table table-clean align-middle mb-0 admin-dashboard-users-table">
             <thead>
               <tr>
                 <th>Usuario</th>
@@ -174,6 +183,7 @@
                 <th>Regras</th>
                 <th>Ativas</th>
                 <th>Alertas</th>
+                <th>Bilhetes</th>
                 <th>Ultimo alerta</th>
                 <th>Ultimo login</th>
                 <th></th>
@@ -182,20 +192,21 @@
             <tbody>
               {% for row in users %}
               <tr>
-                <td>{{ row.user.username }}</td>
-                <td>{{ row.user.plan_label }}</td>
-                <td>{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
-                <td>{{ row.active_rules }}</td>
-                <td>{{ row.alerts }}</td>
-                <td>{{ row.last_alert.strftime('%d/%m %H:%M') if row.last_alert else '-' }}</td>
-                <td>{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
-                <td class="text-end">
+                <td data-label="Usuário">{{ row.user.username }}</td>
+                <td data-label="Plano">{{ row.user.plan_label }}</td>
+                <td data-label="Regras">{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
+                <td data-label="Ativas">{{ row.active_rules }}</td>
+                <td data-label="Alertas">{{ row.alerts }}</td>
+                <td data-label="Bilhetes">{{ row.tickets }}</td>
+                <td data-label="Último alerta">{{ row.last_alert.strftime('%d/%m %H:%M') if row.last_alert else '-' }}</td>
+                <td data-label="Último login">{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
+                <td class="text-end admin-user-action">
                   <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
                 </td>
               </tr>
               {% endfor %}
               {% if users|length == 0 %}
-              <tr><td colspan="8" class="text-muted">Sem usuarios ainda.</td></tr>
+              <tr><td colspan="9" class="text-muted">Sem usuarios ainda.</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -203,7 +214,7 @@
       </div>
     </div>
   </div>
-  <div class="col-lg-5">
+  <div class="col-lg-5" data-admin-tab-panel="analysis">
     <div class="card">
       <div class="card-body">
         <h5 class="mb-3">Top regras (global)</h5>
@@ -236,7 +247,7 @@
   </div>
 </div>
 
-<div class="row g-3 mt-3">
+<div class="row g-3 mt-3" data-admin-tab-panel="config">
   <div class="col-lg-12">
     <div class="card">
       <div class="card-body">
@@ -265,7 +276,7 @@
   </div>
 </div>
 
-<div class="row g-3 mt-3">
+<div class="row g-3 mt-3" data-admin-tab-panel="analysis">
   <div class="col-lg-12">
     <div class="card">
       <div class="card-body">
@@ -303,7 +314,7 @@
   </div>
 </div>
 
-<div class="row g-3 mt-3">
+<div class="row g-3 mt-3" data-admin-tab-panel="system">
   <div class="col-lg-12">
     <div class="card">
       <div class="card-body">
@@ -344,6 +355,8 @@
   </div>
 </div>
 
+</div>
+
 <div class="analysis-loading-overlay" id="analysis-loading-overlay" aria-hidden="true">
   <div class="analysis-loading-box" role="status" aria-live="polite">
     <span class="analysis-loading-spinner" aria-hidden="true"></span>
@@ -365,6 +378,55 @@
       overlay.classList.remove('is-visible');
       overlay.setAttribute('aria-hidden', 'true');
     });
+  })();
+</script>
+<script>
+  (function () {
+    const tabs = Array.from(document.querySelectorAll('[data-admin-tab]'));
+    const panels = Array.from(document.querySelectorAll('[data-admin-tab-panel]'));
+    const rows = Array.from(document.querySelectorAll('[data-admin-tab-row]'));
+    if (!tabs.length || !panels.length) return;
+
+    const allowed = new Set(tabs.map((tab) => tab.dataset.adminTab));
+    const params = new URLSearchParams(window.location.search);
+    let stored = '';
+    try { stored = sessionStorage.getItem('greenhunter-admin-tab') || ''; } catch (_) {}
+    let active = allowed.has(params.get('admin_tab')) ? params.get('admin_tab') : (allowed.has(stored) ? stored : 'summary');
+
+    function renderTabs() {
+      panels.forEach((panel) => { panel.hidden = panel.dataset.adminTabPanel !== active; });
+      rows.forEach((row) => {
+        row.hidden = !Array.from(row.querySelectorAll('[data-admin-tab-panel]')).some((panel) => !panel.hidden);
+      });
+      tabs.forEach((tab) => {
+        const selected = tab.dataset.adminTab === active;
+        tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        tab.tabIndex = selected ? 0 : -1;
+      });
+    }
+
+    function selectTab(tabName) {
+      if (!allowed.has(tabName)) return;
+      active = tabName;
+      try { sessionStorage.setItem('greenhunter-admin-tab', active); } catch (_) {}
+      const url = new URL(window.location.href);
+      url.searchParams.set('admin_tab', active);
+      history.replaceState(null, '', url);
+      renderTabs();
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectTab(tab.dataset.adminTab));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        selectTab(tabs[targetIndex].dataset.adminTab);
+        tabs[targetIndex].focus();
+      });
+    });
+    renderTabs();
   })();
 </script>
 {% endblock %}

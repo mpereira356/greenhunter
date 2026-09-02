@@ -2,6 +2,7 @@
 {% block title %}Usuarios | GreenHunter{% endblock %}
 {% block meta_description %}Gerencie usuarios, acessos e status das contas cadastradas na plataforma GreenHunter.{% endblock %}
 {% block content %}
+<div class="admin-users-page">
 <div class="page-header">
   <div>
     <div class="page-title">Usuarios</div>
@@ -26,7 +27,7 @@
       {% endif %}
     </form>
     <div class="table-responsive">
-      <table class="table table-clean align-middle mb-0">
+      <table class="table table-clean align-middle mb-0 admin-users-table">
         <thead>
           <tr>
             <th>Usuario</th>
@@ -35,6 +36,7 @@
             <th>Admin</th>
             <th>Regras</th>
             <th>Alertas</th>
+            <th>Bilhetes</th>
             <th>Criado em</th>
             <th>Ultimo login</th>
             <th></th>
@@ -43,31 +45,33 @@
         <tbody>
           {% for row in users %}
           <tr>
-            <td>{{ row.user.username }}</td>
-            <td>{{ row.user.email or '-' }}</td>
-            <td>{{ row.user.plan_label }}</td>
-            <td>
+            <td class="admin-user-identity" data-label="Usuário">{{ row.user.username }}</td>
+            <td data-label="E-mail">{{ row.user.email or '-' }}</td>
+            <td data-label="Plano">{{ row.user.plan_label }}</td>
+            <td data-label="Acesso">
               {% if row.user.is_admin_user %}
                 <span class="badge-status badge-on">Admin</span>
               {% else %}
                 <span class="badge-status badge-wait">Usuario</span>
               {% endif %}
             </td>
-            <td>{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
-            <td>{{ row.alerts }}</td>
-            <td>{{ row.user.created_at.strftime('%d/%m/%Y') }}</td>
-            <td>{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
-            <td class="text-end">
+            <td data-label="Regras">{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
+            <td data-label="Alertas">{{ row.alerts }}</td>
+            <td data-label="Bilhetes">{{ row.tickets }}</td>
+            <td data-label="Criado em">{{ row.user.created_at.strftime('%d/%m/%Y') }}</td>
+            <td data-label="Último login">{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
+            <td class="text-end admin-user-action">
               <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
             </td>
           </tr>
           {% endfor %}
           {% if users|length == 0 %}
-          <tr><td colspan="9" class="text-muted">Nenhum usuario encontrado.</td></tr>
+          <tr><td colspan="10" class="text-muted">Nenhum usuario encontrado.</td></tr>
           {% endif %}
         </tbody>
       </table>
     </div>
   </div>
+</div>
 </div>
 {% endblock %}

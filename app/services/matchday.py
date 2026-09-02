@@ -1,6 +1,8 @@
 import json
 import os
+import threading
 import time
+from hashlib import sha1
 from datetime import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -23,6 +25,42 @@ MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
 MATCHDAY_CACHE_VERSION = 6
 MATCHDAY_TREND_INDEX_VERSION = 1
+MATCHDAY_SUMMARY_CACHE_VERSION = 1
+MATCHDAY_SUMMARY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_SUMMARY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
+
+
+def _summary_cache_path(day: str, game_id: str, sample_limit: int) -> str:
+    raw = f"v{MATCHDAY_SUMMARY_CACHE_VERSION}:{day}:{game_id}:{sample_limit}"
+    digest = sha1(raw.encode("utf-8", "ignore")).hexdigest()
+    return os.path.join(MATCHDAY_CACHE_DIR, "summaries", f"{digest}.json")
+
+
+def load_matchday_summary_cache(day: str, game_id: str, sample_limit: int) -> dict | None:
+    path = _summary_cache_path(day, game_id, sample_limit)
+    try:
+        if time.time() - os.stat(path).st_mtime > MATCHDAY_SUMMARY_CACHE_TTL_SECONDS:
+            return None
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return None
+    return payload if isinstance(payload, dict) and payload.get("ok") else None
+
+
+def save_matchday_summary_cache(day: str, game_id: str, sample_limit: int, payload: dict) -> None:
+    path = _summary_cache_path(day, game_id, sample_limit)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temporary = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        except (OSError, UnboundLocalError):
+            pass
 
 
 def _is_excluded_youth_match(*values: str) -> bool:
