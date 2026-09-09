@@ -2106,6 +2106,25 @@ a:hover {
   background-color: rgba(16, 185, 129, 0.02);
 }
 
+/* Mantem a tabela de alertas compacta sem esconder o nome completo da partida. */
+.recent-alerts-table .match-column {
+  max-width: 18rem;
+}
+
+.recent-alerts-table .match-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.recent-alerts-table .match-name:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 /* Badges */
 .badge-status {
   padding: 0.4rem 0.8rem;
@@ -3322,6 +3341,18 @@ code {
   }
   .table-responsive {
     overflow: visible;
+  }
+
+  .recent-alerts-table .match-column {
+    max-width: none;
+  }
+
+  .recent-alerts-table .match-name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: default;
   }
 
   /* Responsivo para abas */

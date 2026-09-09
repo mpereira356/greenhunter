@@ -276,14 +276,21 @@
       </div>
     </div>
     <div class="league-wrap mt-2" style="display:none;">
-      <div class="small text-muted mb-1">Selecione as ligas/campeonatos para esta regra:</div>
-      <div class="d-flex gap-2 align-items-center mb-2">
-        <button type="button" class="btn btn-sm btn-outline-primary league-select-all">Marcar todas</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary league-select-none">Limpar</button>
-        <div class="small text-muted ms-auto league-count"></div>
+      <div class="d-flex gap-2 justify-content-between align-items-center mb-1">
+        <div class="small text-muted">Selecione as ligas/campeonatos para esta regra:</div>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="small text-muted league-count"></div>
+          <button type="button" class="btn btn-sm btn-outline-secondary league-toggle" aria-expanded="true">Recolher campeonatos</button>
+        </div>
       </div>
-      <input type="text" class="form-control form-control-sm league-search" placeholder="Filtrar ligas...">
-      <div class="league-list mt-2" style="max-height: 220px; overflow:auto;"></div>
+      <div class="league-panel-body">
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <button type="button" class="btn btn-sm btn-outline-primary league-select-all">Marcar todas</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary league-select-none">Desmarcar todas</button>
+        </div>
+        <input type="text" class="form-control form-control-sm league-search" placeholder="Filtrar ligas...">
+        <div class="league-list mt-2" style="max-height: 220px; overflow:auto;"></div>
+      </div>
       <input type="hidden" class="league-selected-json" value="[]">
     </div>
   </div>
@@ -555,6 +562,8 @@
     const operatorSelect = cond.querySelector('.stat-operator');
 
     const leagueWrap = cond.querySelector('.league-wrap');
+    const leaguePanelBody = cond.querySelector('.league-panel-body');
+    const leagueToggleBtn = cond.querySelector('.league-toggle');
     const leagueList = cond.querySelector('.league-list');
     const leagueSearch = cond.querySelector('.league-search');
     const leagueHidden = cond.querySelector('.league-selected-json');
@@ -593,14 +602,31 @@
       updateLeagueCount();
     }
 
+    function getFilteredLeagues() {
+      const fold = value => value.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const filter = fold((leagueSearch ? leagueSearch.value : '').toString().trim());
+      const items = (availableLeagues || []).map(normalizeLeagueName).filter(Boolean);
+      if (!filter) return items;
+
+      const femaleQueries = new Set(['women', 'woman', 'female', 'feminino', 'feminina', 'femenil', 'femenina', 'feminin']);
+      if (femaleQueries.has(filter)) {
+        const femaleMarkers = ['women', 'woman', 'female', 'feminin', 'femenil', 'femenin', 'femminil', 'frauen', 'vrouwen', 'dames', 'reina'];
+        return items.filter(name => femaleMarkers.some(marker => fold(name).includes(marker)));
+      }
+      return items.filter(name => fold(name).includes(filter));
+    }
+
+    function updateLeagueActionLabels() {
+      const filtering = Boolean((leagueSearch ? leagueSearch.value : '').toString().trim());
+      if (leagueSelectAllBtn) leagueSelectAllBtn.textContent = filtering ? 'Marcar exibidas' : 'Marcar todas';
+      if (leagueSelectNoneBtn) leagueSelectNoneBtn.textContent = filtering ? 'Desmarcar exibidas' : 'Desmarcar todas';
+    }
+
     function renderLeagueList() {
       if (!leagueList) return;
-      const filter = (leagueSearch ? leagueSearch.value : '').toString().trim().toLowerCase();
       const selected = new Set(getRowLeagues().map(x => x.toLowerCase()));
-      const items = (availableLeagues || []).filter(x => normalizeLeagueName(x));
-      const filtered = filter
-        ? items.filter(x => normalizeLeagueName(x).toLowerCase().includes(filter))
-        : items;
+      const filtered = getFilteredLeagues();
+      updateLeagueActionLabels();
 
       if (filtered.length === 0) {
         leagueList.innerHTML = `<div class="small text-muted">Nenhuma liga disponivel.</div>`;
@@ -676,6 +702,14 @@
     }
 
     if (leagueSearch) leagueSearch.addEventListener('input', renderLeagueList);
+    if (leagueToggleBtn && leaguePanelBody) {
+      leagueToggleBtn.addEventListener('click', () => {
+        const expanded = leagueToggleBtn.getAttribute('aria-expanded') === 'true';
+        leagueToggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        leagueToggleBtn.textContent = expanded ? 'Mostrar campeonatos' : 'Recolher campeonatos';
+        leaguePanelBody.style.display = expanded ? 'none' : '';
+      });
+    }
     if (leagueSelectAllBtn) {
       leagueSelectAllBtn.addEventListener('click', () => {
         const current = getRowLeagues();

@@ -159,7 +159,7 @@
       <div class="card-body">
         <h5 class="card-title">Ultimos Alertas</h5>
         <div class="table-responsive">
-          <table class="table table-clean align-middle">
+          <table class="table table-clean align-middle recent-alerts-table">
             <thead>
               <tr>
                 <th>Regra</th>
@@ -172,12 +172,15 @@
               {% for alert in recent_alerts %}
               <tr>
                 <td class="fw-semibold">{{ alert.rule.name|title }}</td>
-                <td>
-                  <div class="d-flex align-items-center gap-2">
-                    <span>{{ alert.home_team }}</span>
-                    <span class="text-muted small">vs</span>
-                    <span>{{ alert.away_team }}</span>
-                  </div>
+                <td class="match-column">
+                  <span
+                    class="match-name"
+                    tabindex="0"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    data-bs-container="body"
+                    title="{{ alert.home_team }} vs {{ alert.away_team }}"
+                  >{{ alert.home_team }} <span class="text-muted small">vs</span> {{ alert.away_team }}</span>
                 </td>
                 <td>
                   {% if alert.status == 'GREEN' %}
@@ -251,4 +254,12 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.recent-alerts-table [data-bs-toggle="tooltip"]').forEach((element) => {
+    new bootstrap.Tooltip(element, { trigger: 'hover focus' });
+  });
+</script>
 {% endblock %}

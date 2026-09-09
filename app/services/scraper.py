@@ -22,6 +22,12 @@ from urllib3.util.retry import Retry
 
 BASE_URLS = ("https://betsapi.com", "https://pt.betsapi.com")
 SECOND_HALF_TOKENS = ("2nd", "2o", "2h", "second", "segundo")
+EXCLUDED_COMPETITION_TOKENS = (
+    "beach soccer",
+    "beachsoccer",
+    "futebol de areia",
+    "futebol areia",
+)
 CF_CHALLENGE_MARKERS = (
     "just a moment",
     "um momento",
@@ -43,6 +49,13 @@ _BROWSER_LAST_LAUNCHED_AT = 0.0
 _BROWSER_TARGET_ID = None
 _BROWSER_SESSION_COOKIES = []
 _BROWSER_SESSION_USER_AGENT = None
+
+
+def is_excluded_competition(name: str | None) -> bool:
+    """Return True for competition types that GreenHunter must not collect."""
+    normalized = unicodedata.normalize("NFKD", str(name or ""))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+    return any(token in normalized for token in EXCLUDED_COMPETITION_TOKENS)
 
 
 def make_session():
@@ -1803,7 +1816,7 @@ def fetch_live_games(session):
 
             if not (sport_a and sport_a.get("href") == "/c/soccer"):
                 continue
-            if "esoccer" in league_name.lower():
+            if "esoccer" in league_name.lower() or is_excluded_competition(league_name):
                 continue
             if not time_text:
                 continue
