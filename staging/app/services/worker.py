@@ -31,7 +31,7 @@ from app.services.scraper import (
     summarize_history,
     is_second_half as scraper_is_second_half,
 )
-from app.services.telegram import edit_message_text, send_message
+from app.services.telegram import edit_message_text, get_updates, send_message
 from app.utils.time import now_sp
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "1"))
@@ -114,6 +114,181 @@ ENTRY_ENRICHMENT_QUEUED = set()
 ENTRY_ENRICHMENT_ATTEMPTED = set()
 ENTRY_ENRICHMENT_LOCK = threading.Lock()
 LIVE_GAME_CURSOR = 0
+TELEGRAM_REPLY_POLL_SECONDS = max(1.0, float(os.environ.get("TELEGRAM_REPLY_POLL_SECONDS", "2")))
+
+
+def parse_telegram_bet_reply(text: str | None):
+    """Parse the strict stake/odd shorthand accepted in alert replies."""
+    match = re.fullmatch(
+        r"\s*(\d+(?:[.,]\d{1,2})?)\s*/\s*(\d+(?:[.,]\d{1,3})?)(?:\s*/\s*(G2))?\s*",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    stake = float(match.group(1).replace(",", "."))
+    odd = float(match.group(2).replace(",", "."))
+    if stake <= 0 or odd <= 1:
+        return None
+    return round(stake, 2), round(odd, 3), (match.group(3) or "").upper() or None
+
+
+def _telegram_reply_text(stake: float, odd: float) -> str:
+    possible_return = round(stake * odd, 2)
+    possible_profit = round(stake * (odd - 1), 2)
+    return (
+        "✅ Aposta registrada\n"
+        f"Valor: R$ {stake:.2f}\n"
+        f"Odd: {odd:.3f}".rstrip("0").rstrip(".") + "\n"
+        f"Retorno possível: R$ {possible_return:.2f}\n"
+        f"Lucro possível: R$ {possible_profit:.2f}"
+    ).replace(".", ",")
+
+
+def _telegram_bet_help(alert) -> str:
+    score = alert.last_score or alert.initial_score or "0 x 0"
+    home, away = parse_score(score)
+    stage = ((alert.rule.outcome_green_stage if alert.rule else None) or "HT").upper()
+    period = "intervalo (HT)" if stage == "HT" else "fim do jogo (FT)"
+    return (
+        "Como registrar esta aposta:\n\n"
+        "• 15/3,42 — acompanha o GREEN ou RED da regra.\n"
+        "• 15/3,42/G2 — exige 2 gols adicionais.\n\n"
+        f"Placar de referência atual: {score} ({home + away} gols).\n"
+        "No modo G2: nenhum novo gol = RED; 1 novo gol = DEVOLVIDA; "
+        f"2 ou mais = GREEN. A conferência será feita no {period}."
+    )
+
+
+def g2_bet_outcome(new_goals: int, stake: float, odd: float):
+    if new_goals >= 2:
+        return "green", round(stake * (odd - 1), 2)
+    if new_goals == 1:
+        return "push", 0.0
+    return "red", -stake
+
+
+def _handle_telegram_reply(user, message: dict):
+    reply = message.get("reply_to_message") or {}
+    replied_message_id = reply.get("message_id")
+    if not replied_message_id:
+        return
+    alert = MatchAlert.query.filter_by(
+        user_id=user.id,
+        telegram_entry_message_id=replied_message_id,
+    ).first()
+    if not alert:
+        return
+    command = str(message.get("text") or "").strip().casefold()
+    if command in {"ajuda", "?"}:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            _telegram_bet_help(alert),
+            context=f"bet_reply_help_{alert.id}",
+        )
+        return
+    parsed = parse_telegram_bet_reply(message.get("text"))
+    if not parsed:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            "Formato não reconhecido. Use 15/3,42, 15/3,42/G2 ou responda ajuda.",
+            context=f"bet_reply_invalid_{alert.id}",
+        )
+        return
+    if alert.stake_amount is not None or alert.stake_odd is not None:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            "Esta aposta já foi registrada. Para corrigir os valores, use o Histórico no site.",
+            context=f"bet_reply_duplicate_{alert.id}",
+        )
+        return
+    stake, odd, tracking_type = parsed
+    alert.stake_amount = stake
+    alert.stake_odd = odd
+    alert.bet_recorded_at = now_sp()
+    alert.bet_tracking_type = tracking_type
+    alert.bet_status = "pending" if tracking_type else None
+    alert.bet_profit = None
+    alert.bet_settled_at = None
+    if tracking_type == "G2":
+        home, away = parse_score(alert.last_score or alert.initial_score or "0 x 0")
+        alert.bet_initial_goal_total = home + away
+        alert.bet_settlement_stage = (
+            ((alert.rule.outcome_green_stage if alert.rule else None) or "HT").upper()
+        )
+    else:
+        alert.bet_initial_goal_total = None
+        alert.bet_settlement_stage = None
+    alert.bet_note = "Registrada pelo Telegram" + (" · G2" if tracking_type else "")
+    db.session.commit()
+    confirmation = _telegram_reply_text(stake, odd)
+    if tracking_type == "G2":
+        period = "intervalo (HT)" if alert.bet_settlement_stage == "HT" else "fim do jogo (FT)"
+        confirmation += (
+            "\nModo G2: 2 gols adicionais para GREEN; 1 para DEVOLVIDA; 0 para RED."
+            f"\nLiquidação: {period}."
+        )
+    _send_message_safe(
+        user.telegram_token,
+        user.telegram_chat_id,
+        confirmation,
+        context=f"bet_reply_saved_{alert.id}",
+    )
+
+
+def run_telegram_replies_worker(app):
+    """Consume replies once per configured bot and link them to sent alerts."""
+    with app.app_context():
+        while True:
+            try:
+                users = User.query.filter(
+                    User.telegram_verified.is_(True),
+                    User.telegram_token.isnot(None),
+                    User.telegram_chat_id.isnot(None),
+                ).all()
+                users_by_token = {}
+                for user in users:
+                    users_by_token.setdefault(user.telegram_token, []).append(user)
+                for token, token_users in users_by_token.items():
+                    known_offsets = [u.telegram_update_offset for u in token_users if u.telegram_update_offset is not None]
+                    if not known_offsets:
+                        ok, detail, updates = get_updates(token, offset=-1)
+                        if not ok:
+                            print(f"[telegram_replies] inicializacao falhou: {detail}")
+                            continue
+                        next_offset = max((int(item.get("update_id", -1)) for item in updates), default=-1) + 1
+                        for user in token_users:
+                            user.telegram_update_offset = next_offset
+                        db.session.commit()
+                        continue
+                    offset = max(known_offsets)
+                    ok, detail, updates = get_updates(token, offset=offset)
+                    if not ok:
+                        print(f"[telegram_replies] consulta falhou: {detail}")
+                        continue
+                    user_by_chat = {str(user.telegram_chat_id): user for user in token_users}
+                    next_offset = offset
+                    for update in updates:
+                        next_offset = max(next_offset, int(update.get("update_id", -1)) + 1)
+                        message = update.get("message") or {}
+                        chat_id = str((message.get("chat") or {}).get("id") or "")
+                        user = user_by_chat.get(chat_id)
+                        if user:
+                            _handle_telegram_reply(user, message)
+                    if next_offset != offset:
+                        for user in token_users:
+                            user.telegram_update_offset = next_offset
+                        db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[telegram_replies] erro: {exc}")
+            finally:
+                db.session.rollback()
+                db.session.remove()
+            time.sleep(TELEGRAM_REPLY_POLL_SECONDS)
 
 def get_api_status() -> dict:
     return {
@@ -192,7 +367,11 @@ def _send_message_result(token: str, chat_id: str, text: str, context: str = "")
 
 
 def _append_premium_analysis_link(message: str, alert) -> str:
-    return message
+    return (
+        f"{message}\n\n"
+        "Registrar: valor/odd ou valor/odd/G2 (ex.: 15/3,42/G2). "
+        "Responda ajuda para ver como funciona."
+    )
 
 
 def _edit_message_safe(token: str, chat_id: str, message_id: int, text: str, context: str = "") -> bool:
@@ -1989,6 +2168,7 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
 def start_worker(app):
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
+    threading.Thread(target=run_telegram_replies_worker, args=(app,), daemon=True).start()
     if ENTRY_ENRICHMENT_ENABLED:
         threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
     prewarm_enabled = os.environ.get("MATCHDAY_PREWARM_ENABLED", "1").strip().lower() in (
@@ -2770,9 +2950,12 @@ def process_live_games(session):
                         continue
                 if not user:
                     continue
-                if rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
+                if not user.is_premium_user:
+                    today_start = now_sp().replace(hour=0, minute=0, second=0, microsecond=0)
+                    if MatchAlert.query.filter(MatchAlert.user_id == user.id, MatchAlert.created_at >= today_start).count() >= 10:
+                        continue
+                if user.is_premium_user and rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
                     print(f"[worker] regra {rule.id} sem token/chat_id para envio telegram (user={getattr(user, 'id', None)})")
-                    continue
 
                 effective_minute = stats_payload.get("minute") if stats_payload else minute
                 if effective_minute is None:
@@ -2850,7 +3033,7 @@ def process_live_games(session):
                     existing_pairs.add(pair_key)
                     
                     # Send entry alert immediately after rule hit to reduce latency.
-                    if rule.notify_telegram:
+                    if user.is_premium_user and rule.notify_telegram:
                         if REALTIME_ENTRY_ALERTS and ENTRY_GROUP_WINDOW_SECONDS <= 0:
                             message = _append_premium_analysis_link(
                                 render_fast_entry_message(rule, stats_payload, game, stats_for_rule),
@@ -2995,6 +3178,53 @@ def _looks_like_stale_exact_score(rule, alert, minute, score, stats) -> bool:
         return False
     return True
 
+
+def _settle_g2_bet(alert, stats_payload) -> None:
+    if alert.bet_tracking_type != "G2" or alert.bet_status != "pending":
+        return
+    stage = (alert.bet_settlement_stage or "HT").upper()
+    time_text = stats_payload.get("time_text", "")
+    minute = stats_payload.get("minute") or 0
+    score = stats_payload.get("score") or alert.last_score or alert.initial_score
+    settlement_score = score
+    if stage == "HT":
+        at_half = is_half_time_text(time_text)
+        past_half = is_second_half(time_text, minute) or _is_confirmed_full_time(time_text)
+        if not at_half and not past_half:
+            return
+        if past_half and not at_half:
+            settlement_score = _half_time_score_from_events(alert, stats_payload.get("events"))
+            if not settlement_score:
+                return
+    elif not _is_confirmed_full_time(time_text):
+        return
+
+    home, away = parse_score(settlement_score or "0 x 0")
+    new_goals = max(0, home + away - int(alert.bet_initial_goal_total or 0))
+    status, profit = g2_bet_outcome(
+        new_goals,
+        float(alert.stake_amount or 0),
+        float(alert.stake_odd or 0),
+    )
+    result_label = {"green": "GREEN", "push": "DEVOLVIDA", "red": "RED"}[status]
+    alert.bet_status = status
+    alert.bet_profit = profit
+    alert.bet_settled_at = now_sp()
+    db.session.commit()
+    if alert.user and alert.user.telegram_token and alert.user.telegram_chat_id:
+        _send_message_safe(
+            alert.user.telegram_token,
+            alert.user.telegram_chat_id,
+            (
+                f"Aposta G2: {result_label}\n"
+                f"{alert.home_team} vs {alert.away_team}\n"
+                f"Placar da liquidação: {settlement_score}\n"
+                f"Novos gols: {new_goals}\n"
+                f"Resultado financeiro: R$ {profit:.2f}"
+            ).replace(".", ","),
+            context=f"g2_settlement_{alert.id}",
+        )
+
 def follow_alerts(session):
     # Priorize alertas atuais. A ordem implícita do SQLite era crescente e uma
     # fila histórica grande atrasava por muitos minutos os resultados novos.
@@ -3003,7 +3233,18 @@ def follow_alerts(session):
         .order_by(MatchAlert.created_at.desc(), MatchAlert.id.desc())
         .all()
     )
-    active_alerts = pending_alerts + _recently_settled_alerts_query()
+    tracked_bets = (
+        MatchAlert.query.filter_by(bet_tracking_type="G2", bet_status="pending")
+        .order_by(MatchAlert.created_at.desc(), MatchAlert.id.desc())
+        .all()
+    )
+    active_alerts = []
+    active_ids = set()
+    for candidate in pending_alerts + tracked_bets + _recently_settled_alerts_query():
+        if candidate.id in active_ids:
+            continue
+        active_ids.add(candidate.id)
+        active_alerts.append(candidate)
     stats_cache = {}
     for alert in active_alerts:
         rule = alert.rule
@@ -3043,6 +3284,8 @@ def follow_alerts(session):
         if minute <= 0:
             _close_pending_without_live_payload(alert, rule)
             continue
+
+        _settle_g2_bet(alert, stats_payload)
 
         exact_target = _exact_score_target(rule, alert)
         if exact_target:

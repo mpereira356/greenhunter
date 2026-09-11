@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Premium | GreenHunter{% endblock %}
+{% block page_title %}GreenHunter Premium{% endblock %}
+{% block content %}
+<section class="premium-page">
+  <div class="premium-hero">
+    <div class="premium-hero-copy">
+      <span class="premium-hero-badge"><i aria-hidden="true">♛</i> GREENHUNTER PRO</span>
+      {% if current_user.is_premium_user %}
+      <h1>Sua experiência Pro está ativa.</h1>
+      <p>Todos os recursos avançados do GreenHunter estão disponíveis na sua conta. Consulte abaixo seus benefícios e os detalhes da assinatura.</p>
+      {% else %}
+      <h1>Mais inteligência para cada decisão.</h1>
+      <p>Monitore mais estratégias, receba sinais em tempo real e use análises completas para montar seus bilhetes com mais agilidade.</p>
+      {% endif %}
+      <div class="premium-hero-highlights">
+        <span><i>✓</i> Cancele quando quiser</span>
+        <span><i>✓</i> Ativação automática</span>
+        <span><i>✓</i> Pagamento seguro</span>
+      </div>
+    </div>
+    <div class="premium-offer-card">
+      {% if current_user.is_premium_user %}
+      <div class="premium-hero-active-icon" aria-hidden="true">♛</div>
+      <small>CONTA PREMIUM</small>
+      <strong class="premium-hero-active-title">Todos os recursos liberados</strong>
+      {% if current_user.paid_until %}<span>Ativo até {{ current_user.paid_until.strftime('%d/%m/%Y') }}</span>{% endif %}
+      <b class="premium-offer-current">✓ Premium ativo</b>
+      {% else %}
+      <small>PLANO MENSAL</small>
+      <div class="premium-price"><sup>R$</sup> 14<em>,90</em></div>
+      <span>por mês</span>
+      <b>Todos os recursos Pro</b>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if current_user.is_premium_user %}
+  <div class="premium-account-card">
+    <div class="premium-account-icon" aria-hidden="true">♛</div>
+    <div class="premium-account-copy">
+      <span>ASSINATURA ATIVA</span>
+      <h2>Sua conta já possui acesso Premium</h2>
+      {% if current_user.paid_until %}<p>Todos os benefícios estão liberados até <strong>{{ current_user.paid_until.strftime('%d/%m/%Y') }}</strong>.</p>{% endif %}
+    </div>
+    <div class="premium-account-actions">
+      <span class="premium-active-pill"><i></i> Premium ativo</span>
+      {% if not current_user.is_admin_user and current_user.mercadopago_subscription_id and current_user.mercadopago_subscription_status in ['authorized', 'approved'] %}
+        <form method="post" action="{{ url_for('main.premium_cancel') }}" class="premium-cancel-form" id="premium-cancel-form" data-premium-cancel-form>
+          <button type="button" class="premium-cancel-button" data-premium-cancel-open>Cancelar renovação automática</button>
+        </form>
+      {% elif not current_user.is_admin_user and current_user.mercadopago_subscription_status in ['cancelled', 'canceled'] %}
+        <small class="premium-renewal-cancelled">Renovação automática cancelada</small>
+      {% elif current_user.is_admin_user %}
+        <small class="premium-admin-access">Acesso administrativo ilimitado</small>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="premium-section-heading">
+    <span>RECURSOS PREMIUM</span>
+    <h2>Tudo que você precisa em um só plano</h2>
+    <p>Mais alcance, profundidade e velocidade para acompanhar suas estratégias.</p>
+  </div>
+  <div class="premium-benefit-grid">
+    {% for icon, title, text in [
+      ('◎','Até 20 regras','Mantenha mais estratégias monitorando partidas simultaneamente.'),
+      ('↗','Telegram em tempo real','Receba seus alertas imediatamente onde estiver.'),
+      ('▤','Bilhetes avançados','Monte bilhetes com até 10 jogos e adicione novas sugestões.'),
+      ('◷','Histórico ampliado','Analise amostras maiores e encontre padrões com mais segurança.'),
+      ('◫','Análise por período','Consulte dados do jogo todo, primeiro e segundo tempo.'),
+      ('◆','Odds detalhadas','Compare rapidamente as odds disponíveis nas casas consultadas.')
+    ] %}<article class="premium-benefit"><i aria-hidden="true">{{ icon }}</i><div><b>{{ title }}</b><span>{{ text }}</span></div><em>PRO</em></article>{% endfor %}
+  </div>
+
+  {% if not current_user.is_premium_user %}
+  <div class="premium-status-box">
+    <div class="premium-checkout-heading"><span aria-hidden="true">♛</span><div><strong>Comece agora com o GreenHunter Pro</strong><p>Pagamento mensal processado com segurança pelo Mercado Pago.</p></div></div>
+    <div class="premium-checkout-content">
+      <strong>Assine o GreenHunter Pro</strong>
+      {% if pending_checkout_url %}
+        <a href="{{ pending_checkout_url }}" class="premium-checkout-button">
+          <span>Continuar assinatura por R$ 14,90/mês</span><small>Abrir o Mercado Pago →</small>
+        </a>
+        <details class="premium-email-change">
+          <summary>Usar outra conta do Mercado Pago</summary>
+          <form method="post" action="{{ url_for('main.premium_checkout') }}" class="premium-checkout-form">
+            <input type="hidden" name="replace_pending" value="1">
+            <label for="mercadopago-payer-email-replace">E-mail da conta Mercado Pago</label>
+            <input id="mercadopago-payer-email-replace" type="email" name="payer_email" value="{{ current_user.email or '' }}" autocomplete="email" required>
+            <small>Pode ser diferente do e-mail cadastrado no GreenHunter.</small>
+            <button type="submit" class="premium-checkout-button"><span>Gerar checkout com este e-mail</span><small>Substituir tentativa anterior →</small></button>
+          </form>
+        </details>
+      {% else %}
+        <form method="post" action="{{ url_for('main.premium_checkout') }}" class="premium-checkout-form">
+          <label for="mercadopago-payer-email">E-mail da conta Mercado Pago</label>
+          <input id="mercadopago-payer-email" type="email" name="payer_email" value="{{ current_user.email or '' }}" autocomplete="email" required>
+          <small>Pode ser diferente do e-mail cadastrado no GreenHunter.</small>
+          <button type="submit" class="premium-checkout-button"><span>Assinar por R$ 14,90/mês</span><small>Ir para o Mercado Pago →</small></button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% if current_user.is_premium_user and not current_user.is_admin_user and current_user.mercadopago_subscription_id and current_user.mercadopago_subscription_status in ['authorized', 'approved'] %}
+<div class="premium-cancel-modal" data-premium-cancel-modal hidden>
+  <div class="premium-cancel-backdrop" data-premium-cancel-close></div>
+  <section class="premium-cancel-dialog" role="dialog" aria-modal="true" aria-labelledby="premium-cancel-title" aria-describedby="premium-cancel-description">
+    <button type="button" class="premium-cancel-dialog-close" data-premium-cancel-close aria-label="Fechar">×</button>
+    <div class="premium-cancel-dialog-icon" aria-hidden="true">♛</div>
+    <span class="premium-cancel-kicker">GERENCIAR ASSINATURA</span>
+    <h2 id="premium-cancel-title">Cancelar renovação automática?</h2>
+    <p id="premium-cancel-description">Não haverá novas cobranças. Você continuará usando todos os recursos Premium até{% if current_user.paid_until %} <strong>{{ current_user.paid_until.strftime('%d/%m/%Y') }}</strong>{% else %} o fim do período já pago{% endif %}.</p>
+    <div class="premium-cancel-notice"><i aria-hidden="true">✓</i><span>Seus dados, regras, alertas e bilhetes continuarão salvos.</span></div>
+    <div class="premium-cancel-dialog-actions">
+      <button type="button" class="premium-cancel-keep" data-premium-cancel-close>Manter assinatura</button>
+      <button type="button" class="premium-cancel-confirm" data-premium-cancel-confirm>Sim, cancelar renovação</button>
+    </div>
+  </section>
+</div>
+<script>
+(() => {
+  const modal = document.querySelector('[data-premium-cancel-modal]');
+  const openButton = document.querySelector('[data-premium-cancel-open]');
+  const form = document.getElementById('premium-cancel-form');
+  if (!modal || !openButton || !form) return;
+  const open = () => {
+    modal.hidden = false;
+    document.body.classList.add('premium-modal-open');
+    requestAnimationFrame(() => {
+      modal.classList.add('is-visible');
+      modal.querySelector('[data-premium-cancel-close]')?.focus();
+    });
+  };
+  const close = () => {
+    modal.classList.remove('is-visible');
+    document.body.classList.remove('premium-modal-open');
+    window.setTimeout(() => { modal.hidden = true; openButton.focus(); }, 180);
+  };
+  openButton.addEventListener('click', open);
+  modal.querySelectorAll('[data-premium-cancel-close]').forEach((button) => button.addEventListener('click', close));
+  modal.querySelector('[data-premium-cancel-confirm]')?.addEventListener('click', () => {
+    modal.classList.remove('is-visible');
+    window.GreenHunterLoading?.show('Cancelando renovação...', 'Aguarde a confirmação do Mercado Pago.');
+    form.requestSubmit();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.hidden) close();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

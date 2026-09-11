@@ -5,13 +5,14 @@ import unicodedata
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, Rule, SavedTicket, SavedTicketLeg, UserMatchdayPreference
+from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, MercadoPagoWebhookEvent, Rule, SavedTicket, SavedTicketLeg, User, UserMatchdayPreference
+from ..services.mercadopago import cancel_subscription, create_subscription, get_authorized_payment, get_payment, get_subscription, user_id_from_reference, valid_webhook_signature
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
 from ..services.qualplacar_odds import attach_qualplacar_odds, bookmaker_selection_odds
@@ -31,6 +32,202 @@ from ..utils.time import now_sp
 
 main_bp = Blueprint("main", __name__)
 _matchday_analysis_slots = threading.BoundedSemaphore(2)
+
+
+@main_bp.route("/premium")
+@login_required
+def premium():
+    pending_checkout_url = None
+    checkout_url = str(current_user.mercadopago_checkout_url or "").strip()
+    checkout_host = (urlparse(checkout_url).hostname or "").lower()
+    if (
+        current_user.mercadopago_subscription_status == "pending"
+        and checkout_url
+        and (checkout_host == "mercadopago.com.br" or checkout_host.endswith(".mercadopago.com.br"))
+    ):
+        pending_checkout_url = checkout_url
+    return render_template("premium.html", pending_checkout_url=pending_checkout_url)
+
+
+def _activate_mercadopago_user(user, status="authorized", extend=False):
+    now = now_sp()
+    user.subscription_plan = "pro"
+    user.rule_limit = max(int(user.rule_limit or 0), 20)
+    user.mercadopago_subscription_status = status
+    if extend:
+        candidate = now + timedelta(days=31)
+        if not user.paid_until or user.paid_until < candidate:
+            user.paid_until = candidate
+    elif not user.paid_until or user.paid_until <= now:
+        user.paid_until = now + timedelta(days=31)
+
+
+def _sync_subscription(payload, extend=False):
+    subscription_id = str(payload.get("id") or payload.get("preapproval_id") or "")
+    reference = payload.get("external_reference")
+    user = User.query.get(user_id_from_reference(reference)) if user_id_from_reference(reference) else None
+    if not user and subscription_id:
+        user = User.query.filter_by(mercadopago_subscription_id=subscription_id).first()
+    if not user:
+        return None
+    if subscription_id:
+        user.mercadopago_subscription_id = subscription_id
+    status = str(payload.get("status") or "").lower()
+    user.mercadopago_subscription_status = status or user.mercadopago_subscription_status
+    if status in {"authorized", "approved"}:
+        _activate_mercadopago_user(user, status=status, extend=extend)
+    elif status in {"cancelled", "canceled"}:
+        user.mercadopago_checkout_url = None
+        if not user.paid_until or user.paid_until <= now_sp():
+            user.subscription_plan = "starter"
+            user.rule_limit = 2
+    elif status == "rejected":
+        user.subscription_plan = "starter"
+        user.rule_limit = 2
+        user.paid_until = now_sp()
+    return user
+
+
+@main_bp.route("/premium/assinar", methods=["POST"])
+@login_required
+def premium_checkout():
+    if current_user.is_admin_user:
+        flash("A conta de administrador já possui acesso completo.", "info")
+        return redirect(url_for("main.premium"))
+    payer_email = str(request.form.get("payer_email") or current_user.email or "").strip().lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", payer_email):
+        flash("Informe um e-mail válido da conta Mercado Pago.", "warning")
+        return redirect(url_for("main.premium"))
+    replace_pending = request.form.get("replace_pending") == "1"
+    existing_checkout = str(current_user.mercadopago_checkout_url or "").strip()
+    existing_host = (urlparse(existing_checkout).hostname or "").lower()
+    if (
+        not replace_pending
+        and current_user.mercadopago_subscription_status == "pending"
+        and existing_checkout
+        and (existing_host == "mercadopago.com.br" or existing_host.endswith(".mercadopago.com.br"))
+    ):
+        return redirect(existing_checkout, code=303)
+    try:
+        if replace_pending and current_user.mercadopago_subscription_status == "pending" and current_user.mercadopago_subscription_id:
+            previous = get_subscription(current_user.mercadopago_subscription_id)
+            previous_status = str(previous.get("status") or "").lower()
+            if previous_status not in {"cancelled", "canceled"}:
+                cancel_subscription(current_user.mercadopago_subscription_id)
+            current_user.mercadopago_subscription_id = None
+            current_user.mercadopago_subscription_status = "cancelled"
+            current_user.mercadopago_checkout_url = None
+            db.session.commit()
+        payload = create_subscription(
+            current_user,
+            url_for("main.premium_return", _external=True, _scheme="https"),
+            payer_email=payer_email,
+        )
+        current_user.mercadopago_subscription_id = str(payload.get("id") or "") or None
+        current_user.mercadopago_subscription_status = str(payload.get("status") or "pending")
+        current_user.mercadopago_checkout_url = payload.get("init_point") or payload.get("sandbox_init_point")
+        db.session.commit()
+        if not current_user.mercadopago_checkout_url:
+            raise RuntimeError("O checkout não foi retornado pelo Mercado Pago.")
+        return redirect(current_user.mercadopago_checkout_url, code=303)
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.warning("Falha ao criar assinatura Mercado Pago: %s", exc)
+        flash(str(exc), "warning")
+        return redirect(url_for("main.premium"))
+
+
+@main_bp.route("/premium/retorno")
+@login_required
+def premium_return():
+    if current_user.mercadopago_subscription_id:
+        try:
+            payload = get_subscription(current_user.mercadopago_subscription_id)
+            _sync_subscription(payload)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.warning("Falha ao conferir retorno Mercado Pago: %s", exc)
+    if current_user.is_premium_user:
+        flash("Pagamento confirmado. Sua conta Premium está ativa!", "success")
+    else:
+        flash("Assinatura recebida e aguardando confirmação do pagamento.", "info")
+    return redirect(url_for("main.premium"))
+
+
+@main_bp.route("/premium/cancelar", methods=["POST"])
+@login_required
+def premium_cancel():
+    if current_user.is_admin_user:
+        flash("A conta de administrador não possui assinatura para cancelar.", "info")
+        return redirect(url_for("main.premium"))
+    subscription_id = str(current_user.mercadopago_subscription_id or "").strip()
+    if not subscription_id:
+        flash("Nenhuma assinatura do Mercado Pago foi encontrada.", "warning")
+        return redirect(url_for("main.premium"))
+    try:
+        verified = cancel_subscription(subscription_id)
+        current_user.mercadopago_subscription_status = str(verified.get("status") or "cancelled").lower()
+        current_user.mercadopago_checkout_url = None
+        db.session.commit()
+        if current_user.paid_until and current_user.paid_until > now_sp():
+            flash(f"Renovação cancelada. Seu Premium continua até {current_user.paid_until.strftime('%d/%m/%Y')}.", "success")
+        else:
+            current_user.subscription_plan = "starter"
+            current_user.rule_limit = 2
+            db.session.commit()
+            flash("Assinatura cancelada. Não haverá novas cobranças.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.warning("Falha ao cancelar assinatura Mercado Pago: %s", exc)
+        flash("Não foi possível cancelar agora. Tente novamente em alguns instantes.", "warning")
+    return redirect(url_for("main.premium"))
+
+
+@main_bp.route("/api/payments/mercadopago/webhook", methods=["POST"])
+def mercadopago_webhook():
+    payload = request.get_json(silent=True) or {}
+    signature_data_id = request.args.get("data.id")
+    if not valid_webhook_signature(
+        request.headers.get("X-Signature"),
+        request.headers.get("X-Request-Id"),
+        signature_data_id,
+    ):
+        current_app.logger.warning("Webhook Mercado Pago rejeitado: assinatura invalida.")
+        return jsonify({"ok": False}), 401
+    event_type = str(payload.get("type") or request.args.get("type") or "")
+    resource_id = str((payload.get("data") or {}).get("id") or request.args.get("data.id") or "")
+    action = str(payload.get("action") or "")
+    if not event_type or not resource_id:
+        return jsonify({"ok": True}), 200
+    event_key = f"{event_type}:{resource_id}:{action}"
+    if MercadoPagoWebhookEvent.query.filter_by(event_key=event_key).first():
+        return jsonify({"ok": True, "duplicate": True}), 200
+    try:
+        if event_type == "subscription_preapproval":
+            verified = get_subscription(resource_id)
+            _sync_subscription(verified)
+        elif event_type == "subscription_authorized_payment":
+            verified = get_authorized_payment(resource_id)
+            subscription_id = str(verified.get("preapproval_id") or "")
+            user = User.query.filter_by(mercadopago_subscription_id=subscription_id).first()
+            if user and str(verified.get("status") or "").lower() == "approved":
+                _activate_mercadopago_user(user, status="authorized", extend=True)
+        elif event_type == "payment":
+            verified = get_payment(resource_id)
+            user_id = user_id_from_reference(verified.get("external_reference"))
+            user = User.query.get(user_id) if user_id else None
+            if user and str(verified.get("status") or "").lower() == "approved":
+                _activate_mercadopago_user(user, status="authorized", extend=True)
+        else:
+            return jsonify({"ok": True, "ignored": True}), 200
+        db.session.add(MercadoPagoWebhookEvent(event_key=event_key, event_type=event_type, resource_id=resource_id))
+        db.session.commit()
+        return jsonify({"ok": True}), 200
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha no webhook Mercado Pago: %s", exc)
+        return jsonify({"ok": False}), 503
 
 RELEVANT_MATCHDAY_LEAGUES = {
     "uefa champions league", "uefa champions league qualifying",
@@ -210,6 +407,8 @@ def _favorite_live_leagues() -> list[str]:
 def _alert_profit(alert) -> float:
     if alert.stake_amount is None or alert.stake_odd is None:
         return 0.0
+    if alert.bet_tracking_type:
+        return float(alert.bet_profit or 0)
     if alert.status == "green":
         return float(alert.stake_amount) * (float(alert.stake_odd) - 1)
     if alert.status == "red":
@@ -278,6 +477,12 @@ def dashboard():
     start_day = datetime(now.year, now.month, now.day)
     end_day = start_day + timedelta(days=1)
 
+    def percentage(part, total, digits=1):
+        """Return a database-backed rate that is always a valid percentage."""
+        if not total:
+            return 0
+        return round(max(0.0, min(100.0, float(part) / float(total) * 100)), digits)
+
     total_rules = 0
     active_rules = 0
     today_rows = db.session.query(MatchAlert.status, func.count(MatchAlert.id)).filter(
@@ -327,7 +532,7 @@ def dashboard():
         max_count = max(max_count, total)
         chart_days.append({"day": day[5:], "counts": counts, "total": total})
         resolved_day = counts["green"] + counts["red"]
-        chart_days[-1]["win_rate"] = round(counts["green"] / resolved_day * 100, 1) if resolved_day else 0
+        chart_days[-1]["win_rate"] = percentage(counts["green"], resolved_day)
 
     finance_alerts = MatchAlert.query.filter(
         MatchAlert.user_id == current_user.id,
@@ -398,27 +603,24 @@ def dashboard():
     market_rates = []
     for label, _, color in market_definitions:
         bucket = market_buckets[label]
-        rate = round(bucket["green"] / bucket["resolved"] * 100, 1) if bucket["resolved"] else 0
+        rate = percentage(bucket["green"], bucket["resolved"])
         market_rates.append((label, rate, color))
     market_resolved = sum(row_count for _, _, row_count in market_rows)
     market_greens = sum(row_count for status, _, row_count in market_rows if status == "green")
-    market_win_rate = round(market_greens / market_resolved * 100, 1) if market_resolved else 0
+    market_win_rate = percentage(market_greens, market_resolved)
     recent_green = sum(1 for alert in recent_alerts if alert.status == "green")
     recent_red = sum(1 for alert in recent_alerts if alert.status == "red")
     recent_pending = sum(1 for alert in recent_alerts if alert.status == "pending")
     status_totals = {status: count for _, status, count in daily_rows}
     recent_greens = sum(count for _, status, count in daily_rows if status == "green")
     recent_resolved = recent_greens + sum(count for _, status, count in daily_rows if status == "red")
-    dashboard_win_rate = round(recent_greens / recent_resolved * 100, 1) if recent_resolved else 0
-
-    def real_change(current, previous):
-        if previous == 0:
-            return None
-        return round((current - previous) / previous * 100)
+    dashboard_win_rate = percentage(recent_greens, recent_resolved)
 
     dashboard_changes = {
-        "alerts": real_change(alerts_today, alerts_yesterday),
-        "greens": real_change(greens, greens_yesterday),
+        # These are count differences, not success rates. Showing them as a
+        # percentage produced misleading values such as 300% and 400%.
+        "alerts": alerts_today - alerts_yesterday,
+        "greens": greens - greens_yesterday,
     }
     worker_status = get_api_status()
 
@@ -557,7 +759,7 @@ def api_status():
 def saved_tickets():
     tickets = (
         SavedTicket.query.filter_by(user_id=current_user.id)
-        .order_by(SavedTicket.created_at.desc()).limit(200).all()
+        .order_by(SavedTicket.created_at.desc()).limit(current_user.saved_ticket_limit).all()
     )
     return render_template("tickets/list.html", tickets=tickets)
 
@@ -651,6 +853,8 @@ def edit_saved_ticket(ticket_id):
 @login_required
 def save_ticket():
     payload = request.get_json(silent=True) or {}
+    if not current_user.is_premium_user and SavedTicket.query.filter_by(user_id=current_user.id).count() >= current_user.saved_ticket_limit:
+        return jsonify(ok=False, message="O plano Free permite até 5 bilhetes salvos. Assine o Pro para continuar."), 403
     try:
         odd = float(str(payload.get("odd", "")).replace(",", "."))
         stake = float(str(payload.get("stake", "")).replace(",", "."))
@@ -661,6 +865,9 @@ def save_ticket():
     items = payload.get("items")
     if not isinstance(items, list) or not items:
         return jsonify(ok=False, message="O bilhete está vazio."), 400
+    game_count = len({str(item.get("gameId") or "") for item in items})
+    if game_count > current_user.generated_ticket_game_limit:
+        return jsonify(ok=False, message=f"Seu plano permite até {current_user.generated_ticket_game_limit} jogos por bilhete."), 403
 
     ticket = SavedTicket(
         user_id=current_user.id,
@@ -669,7 +876,8 @@ def save_ticket():
     )
     db.session.add(ticket)
     db.session.flush()
-    for item in items[:100]:
+    item_limit = 500 if current_user.is_admin_user else 100
+    for item in items[:item_limit]:
         market_key = str(item.get("generatedMarket") or item.get("marketKey") or "").strip()
         label = str(item.get("market") or "Mercado").strip()[:160]
         line = item.get("selectedLine")
@@ -864,14 +1072,23 @@ def matchday():
         trend_group = "best"
     trend_min = max(0, min(100, request.args.get("trend_min", 0, type=int)))
     trend_max = max(trend_min, min(100, request.args.get("trend_max", 100, type=int)))
-    trend_limit = max(4, min(10, request.args.get("trend_limit", 6, type=int)))
+    sample_cap = current_user.matchday_sample_limit
+    trend_limit = max(1, min(sample_cap, request.args.get("trend_limit", sample_cap, type=int)))
     trend_active = bool(trend_market)
     ticket_generator_active = request.args.get("ticket_generator") == "1"
+    if ticket_generator_active and not current_user.is_premium_user:
+        generation_key = f"free_ticket_generation:{current_user.id}"
+        usage = session.get(generation_key)
+        used_today = int(usage.get("count") or 0) if isinstance(usage, dict) and usage.get("day") == today else 0
+        if used_today >= 2:
+            flash("O plano Free permite duas gerações de bilhete por dia.", "warning")
+            return redirect(url_for("main.matchday", day=day))
+        session[generation_key] = {"day": today, "count": used_today + 1}
     trend_prefetch = {}
     generated_goal_suggestions = {}
     if ticket_generator_active:
-        generator_samples = max(3, min(10, request.args.get("generator_samples", 6, type=int)))
-        generator_count = max(1, min(500, request.args.get("generator_count", 3, type=int)))
+        generator_samples = max(3, min(sample_cap, request.args.get("generator_samples", sample_cap, type=int)))
+        generator_count = max(1, min(current_user.generated_ticket_game_limit, request.args.get("generator_count", 3, type=int)))
         generator_markets = set(request.args.getlist("generator_market"))
         goal_markets = generator_markets & {"over15", "over25"}
         trend_index = load_matchday_trend_index(day)
@@ -909,6 +1126,20 @@ def matchday():
     # apenas os 12 cards da paginação comum.
     if not trend_active and not ticket_generator_active:
         matches = matches[start : start + per_page]
+    card_sample_limit = (
+        generator_samples if ticket_generator_active
+        else trend_limit if trend_active
+        else min(6, sample_cap)
+    )
+    # Entrega no HTML os resumos que o servidor já calculou. O cache é
+    # compartilhado entre contas, portanto outro usuário não precisa iniciar
+    # uma nova requisição/animação para cada card pronto.
+    summary_prefetch = {}
+    if not ticket_generator_active and not trend_active:
+        for match in matches:
+            cached = load_matchday_summary_cache(day, str(match.get("game_id")), card_sample_limit)
+            if cached:
+                summary_prefetch[str(match.get("game_id"))] = cached
     pagination_args = request.args.to_dict(flat=False)
     pagination_args.pop("page", None)
     trend_clear_args = request.args.to_dict(flat=False)
@@ -948,6 +1179,11 @@ def matchday():
         trend_prefetch=trend_prefetch,
         ticket_generator_active=ticket_generator_active,
         generated_goal_suggestions=generated_goal_suggestions,
+        summary_prefetch=summary_prefetch,
+        card_sample_limit=card_sample_limit,
+        premium_access=current_user.is_premium_user,
+        admin_access=current_user.is_admin_user,
+        ticket_game_limit=current_user.generated_ticket_game_limit,
         day=day,
         page=page,
         has_prev=not trend_active and not ticket_generator_active and page > 1,
@@ -1039,7 +1275,7 @@ def save_matchday_preferences():
 @login_required
 def matchday_analysis(game_id):
     day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
-    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    sample_limit = max(1, min(current_user.matchday_sample_limit, request.args.get("limit", current_user.matchday_sample_limit, type=int)))
     match = _find_matchday_match(day, game_id)
     if not match:
         flash("Jogo não encontrado na agenda selecionada.", "warning")
@@ -1063,7 +1299,7 @@ def matchday_analysis(game_id):
 @login_required
 def matchday_analysis_loading(game_id):
     day = (request.args.get("day") or now_sp().strftime("%Y-%m-%d")).strip()
-    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    sample_limit = max(1, min(current_user.matchday_sample_limit, request.args.get("limit", current_user.matchday_sample_limit, type=int)))
     match = _find_matchday_match(day, game_id)
     if not match:
         flash("Jogo não encontrado na agenda selecionada.", "warning")
@@ -1088,7 +1324,7 @@ def matchday_summary(game_id):
     match = _find_matchday_match(day, game_id)
     if not match:
         return jsonify({"ok": False, "error": "Jogo não encontrado."}), 404
-    sample_limit = max(1, min(10, request.args.get("limit", 6, type=int)))
+    sample_limit = max(1, min(current_user.matchday_sample_limit, request.args.get("limit", current_user.matchday_sample_limit, type=int)))
     force_refresh = request.args.get("refresh") in {"1", "true", "yes"}
     cached_summary = None if force_refresh else load_matchday_summary_cache(day, str(game_id), sample_limit)
     if cached_summary and all(

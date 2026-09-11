@@ -1,0 +1,1362 @@
+{% extends "base.html" %}
+{% block title %}Configurar Regra | GreenHunter{% endblock %}
+{% block meta_description %}Configure regras de sinais no GreenHunter com filtros por placar, minuto, estatisticas, ligas e leitura inteligente.{% endblock %}
+{% block content %}
+{% set form = form_data if form_data is defined and form_data else None %}
+{% set default_message = 'ALERTA DE ENTRADA\n\nRegra: {rule}\nLiga: {league}\nMinuto: {minute}\'\nJogo: {home_team} vs {away_team}\nPlacar: {score}\n\nLeitura do jogo\nChutes no alvo: {on_target_home} x {on_target_away} (total: {on_target_total})\nAtaques perigosos: {dangerous_attacks_home} x {dangerous_attacks_away} (total: {dangerous_attacks_total})\nEscanteios: {corners_home} x {corners_away} (total: {corners_total})\n\nContexto\nH2H: {history_h2h}\nMandante: {history_home}\nVisitante: {history_away}\nConf. H2H: {history_confidence}\nConf. Regra: {rule_confidence}\nConf. Liga: {league_rule_confidence}\n\nAnalise IA e ML\nIA: {ai_commentary}\nVeredito IA: {ai_verdict} ({ai_score}/100)\nVeredito ML: {ml_verdict} ({ml_score}/100)\nVariaveis ML: {ml_feature_count}\nAmostras ML: {ml_samples}\nUltimo treino ML: {ml_trained_at}\n\nLink: {url}' %}
+
+<div class="builder-shell rule-editor{% if rule %} is-editing{% endif %}">
+  <div class="rule-builder-hero mb-4">
+    <div class="rule-builder-hero-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M12 3v3M4.2 7.5l2.6 1.5M19.8 7.5 17.2 9M4.2 16.5 6.8 15M19.8 16.5 17.2 15"/><circle cx="12" cy="12" r="4"/><path d="m10.5 12 1 1 2-2"/><path d="M9 19h6M10 22h4"/></svg>
+    </div>
+    <div class="rule-builder-hero-copy">
+      <span class="rule-builder-eyebrow">Construtor de estratégias</span>
+      <h1>{{ 'Editar' if rule else 'Criar' }} Hipótese de Aposta</h1>
+      <p>Transforme sua leitura de jogo em uma regra automática, com critérios claros para entrada, GREEN e RED.</p>
+      <div class="rule-builder-tags" aria-label="Recursos da regra">
+        <span>Estatísticas ao vivo</span>
+        <span>Alertas automáticos</span>
+        <span>Telegram</span>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" id="rule-form" class="rule-form" novalidate>
+    <input type="hidden" name="allowed_leagues_json" id="allowed-leagues-json" value="">
+    
+    <!-- PASSO 1: IDENTIFICAÇÃO -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-lg-7">
+            <label class="form-label fw-bold">Nome da sua Estratégia</label>
+            <input class="form-control form-control-lg border-2" name="name" id="rule-name" value="{{ form.name if form is not none else (rule.name if rule else '') }}" placeholder="Ex: Funil de Escanteios HT" required>
+          </div>
+          <div class="col-lg-5">
+            <div class="rule-toggle-grid">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if form is not none %}{% if form.is_active %}checked{% endif %}{% elif rule is none or rule.is_active %}checked{% endif %}>
+              <label class="form-check-label" for="is_active"><b>Regra ativa</b><small>Monitorar jogos</small></label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="second_half_only" id="second_half_only" {% if form is not none %}{% if form.second_half_only %}checked{% endif %}{% elif rule and rule.second_half_only %}checked{% endif %}>
+              <label class="form-check-label" for="second_half_only"><b>Somente 2º tempo</b><small>Zerar estatísticas no intervalo</small></label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="notify_telegram" id="notify_telegram" {% if form is not none %}{% if form.notify_telegram %}checked{% endif %}{% elif rule is none or rule.notify_telegram %}checked{% endif %}>
+              <label class="form-check-label" for="notify_telegram"><b>Telegram</b><small>Enviar o alerta</small></label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="alert_on_penalty" id="alert_on_penalty" {% if form is not none %}{% if form.alert_on_penalty %}checked{% endif %}{% elif rule and rule.alert_on_penalty %}checked{% endif %}>
+              <label class="form-check-label" for="alert_on_penalty"><b>Alerta de pênalti</b><small>Dentro do limite da regra</small></label>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 2: REGRAS DE ESTATÍSTICAS (GRUPOS) -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-primary">📊 Regras de Estatísticas</h6>
+        <button type="button" class="btn btn-sm btn-primary" id="add-condition-group">+ Adicionar Grupo (OU)</button>
+      </div>
+      <div class="card-body">
+        <div id="groups-container"></div>
+        <div class="rule-help-callout mt-3">
+          <span class="rule-help-icon" aria-hidden="true">i</span>
+          <div>
+            <strong>Como os grupos funcionam</strong>
+            <p>Condições do mesmo grupo usam <b>E (AND)</b>; grupos diferentes usam <b>OU (OR)</b>.</p>
+            <p>Para filtrar o placar, escolha <b>Gols</b> e selecione o lado <b>Casa</b> ou <b>Visitante</b>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 4: RESULTADO (GREEN/RED) -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-primary">✅ Condições do Resultado</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="p-3 border rounded-3 bg-light h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-success">GREEN</h6>
+                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-group="green">+ Adicionar Grupo (OU)</button>
+              </div>
+              <div id="outcome-green-container"></div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 border rounded-3 bg-light h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-danger">RED</h6>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Adicionar Grupo (OU)</button>
+              </div>
+              <div id="outcome-red-container"></div>
+            </div>
+          </div>
+        </div>
+        <div class="form-text mt-2 small">
+          Condições dentro do mesmo grupo de resultado funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 4.1: LIMITE DE TEMPO -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-primary">⏱️ Limite de Tempo</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-6">
+            <label class="small text-muted">GREEN até o minuto (opcional)</label>
+            <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
+          </div>
+          <div class="col-md-6">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
+              <label class="form-check-label small text-muted" for="outcome-red-if-no-green">
+                Virar RED se o GREEN não bater
+              </label>
+            </div>
+            <div id="outcome-red-minute-wrap">
+              <label class="small text-muted">Minuto do RED</label>
+              <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
+            </div>
+          </div>
+        </div>
+        <div class="form-text mt-2 small">O limite define até quando o GREEN precisa ocorrer.</div>
+      </div>
+    </div>
+
+    <!-- PASSO 5: MENSAGEM -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-primary">💬 Mensagem do Alerta</h6>
+      </div>
+      <div class="card-body">
+        <textarea class="form-control font-monospace" name="message_template" rows="6" placeholder="Sua mensagem personalizada...">{{ form.message_template if form is not none else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
+        <details class="rule-tag-guide mt-2">
+          <summary>Ver tags disponíveis para personalizar a mensagem</summary>
+          <div class="rule-tag-guide-body">
+          <div class="fw-semibold mb-2">Guia rápido das tags</div>
+          <div class="row g-2 small">
+            <div class="col-md-6">
+              <div><code>{rule}</code> - nome da regra.</div>
+              <div><code>{home_team}</code> - time da casa.</div>
+              <div><code>{away_team}</code> - time visitante.</div>
+              <div><code>{minute}</code> - minuto atual do jogo.</div>
+              <div><code>{score}</code> - placar atual.</div>
+              <div><code>{url}</code> - link do jogo.</div>
+              <div><code>{league}</code> - liga/campeonato.</div>
+              <div><code>{time_limit}</code> - limite da regra (min).</div>
+              <div><code>{corners_home}</code> - escanteios da casa.</div>
+              <div><code>{corners_away}</code> - escanteios do visitante.</div>
+              <div><code>{corners_total}</code> - escanteios totais.</div>
+            </div>
+            <div class="col-md-6">
+              <div><code>{goals_home}</code> - gols da casa.</div>
+              <div><code>{goals_away}</code> - gols do visitante.</div>
+              <div><code>{goals_total}</code> - gols totais.</div>
+              <div><code>{on_target_home}</code> - chutes no alvo (casa).</div>
+              <div><code>{on_target_away}</code> - chutes no alvo (visitante).</div>
+              <div><code>{on_target_total}</code> - chutes no alvo (total).</div>
+              <div><code>{off_target_home}</code> - chutes para fora (casa).</div>
+              <div><code>{off_target_away}</code> - chutes para fora (visitante).</div>
+              <div><code>{off_target_total}</code> - chutes para fora (total).</div>
+              <div><code>{dangerous_attacks_home}</code> - ataques perigosos (casa).</div>
+              <div><code>{dangerous_attacks_away}</code> - ataques perigosos (visitante).</div>
+              <div><code>{dangerous_attacks_total}</code> - ataques perigosos (total).</div>
+              <div><code>{history_h2h}</code> - resumo H2H.</div>
+              <div><code>{history_home}</code> - resumo do historico do mandante.</div>
+              <div><code>{history_away}</code> - resumo do historico do visitante.</div>
+              <div><code>{history_confidence}</code> - confianca baseada no H2H (gols).</div>
+              <div><code>{rule_confidence}</code> - confianca da regra (greens/reds pos-alerta).</div>
+              <div><code>{league_rule_confidence}</code> - confianca da regra nesta liga.</div>
+              <div><code>{ai_commentary}</code> - comentario automatico da IA para o jogo.</div>
+              <div><code>{ai_verdict}</code> - recomendacao da IA (entrada/cautela/evitar).</div>
+              <div><code>{ai_score}</code> - nota da IA de 0 a 100.</div>
+              <div><code>{ml_verdict}</code> - recomendacao do modelo de ML.</div>
+              <div><code>{ml_score}</code> - score do modelo de ML (0 a 100).</div>
+              <div><code>{ml_samples}</code> - total de amostras usadas no treino.</div>
+              <div><code>{ml_trained_at}</code> - data/hora do ultimo treino do ML.</div>
+              <div><code>{ml_feature_count}</code> - quantidade de variaveis aprendidas pelo modelo.</div>
+            </div>
+          </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="rule-form-actions d-grid gap-2 d-md-flex justify-content-md-end mb-3">
+      <a href="{{ url_for('rules.list_rules') }}" class="btn btn-light px-4">Cancelar</a>
+      <button type="button" class="btn btn-outline-info px-3" id="open-ai-hint" data-bs-toggle="modal" data-bs-target="#aiHintModal">Dica IA</button>
+      <button type="button" class="btn btn-outline-secondary px-4" id="test-rule">Testar bot</button>
+      <button type="button" class="btn btn-outline-dark px-4" id="copy-debug">Copiar debug</button>
+      <button type="submit" class="btn btn-primary px-5">Salvar Estratégia</button>
+    </div>
+    <div id="test-rule-result" class="test-rule-result mb-5" role="status" aria-live="polite"></div>
+  </form>
+</div>
+
+<div class="modal fade" id="secondHalfNoticeModal" tabindex="-1" aria-labelledby="secondHalfNoticeLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered second-half-notice-dialog">
+    <div class="modal-content second-half-notice">
+      <div class="second-half-notice-head">
+        <span class="second-half-notice-icon" aria-hidden="true">45′</span>
+        <div>
+          <small>Atenção à contagem do tempo</small>
+          <h5 id="secondHalfNoticeLabel">Leitura reiniciada no 2º tempo</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>Ao ativar esta opção, as estatísticas são zeradas no intervalo e o segundo tempo passa a ser tratado de <strong>1 a 45 minutos</strong>.</p>
+        <div class="second-half-time-map" aria-label="Equivalência dos minutos">
+          <span><b>1′</b><small>46′ real</small></span>
+          <i aria-hidden="true">→</i>
+          <span><b>15′</b><small>60′ real</small></span>
+          <i aria-hidden="true">→</i>
+          <span><b>45′</b><small>90′ real</small></span>
+        </div>
+        <div class="second-half-notice-tip"><b>Exemplo:</b> para receber um alerta até os 60 minutos reais, configure o limite como <strong>15 minutos</strong>.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi, continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="aiHintModal" tabindex="-1" aria-labelledby="aiHintModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="aiHintModalLabel">Dica IA para montar regra</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <label for="ai-hint-objective" class="form-label">Qual mercado/objetivo voce quer testar?</label>
+        <textarea id="ai-hint-objective" class="form-control" rows="3" placeholder="Ex: quero buscar 1 gol HT com entrada ate 20 minutos"></textarea>
+        <div id="ai-hint-result" class="mt-3 small text-muted"></div>
+      </div>
+      <div class="modal-footer rule-ai-hint-actions">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" class="btn btn-primary" id="ai-hint-generate">Gerar sugestão</button>
+        <button type="button" class="btn btn-outline-success" id="ai-hint-apply" disabled>Aplicar na regra</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TEMPLATES -->
+<template id="group-template">
+  <div class="condition-group mb-4 p-3 border rounded-3 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0 fw-bold text-secondary group-title">Grupo de Condições</h6>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-group">Remover Grupo</button>
+    </div>
+    <div class="conditions-list"></div>
+    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-group mt-2">+ Condição</button>
+  </div>
+</template>
+
+<template id="condition-template">
+  <div class="condition-row mb-2 p-2 border rounded bg-light position-relative">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <select class="form-select stat-select">
+          <optgroup label="📊 Estatísticas">
+            <option value="corners">🚩 Escanteios</option>
+            <option value="dangerous-attacks">⚡ Ataques Perigosos</option>
+            <option value="on-target">🎯 Chutes no Alvo</option>
+            <option value="attacks">⚔️ Ataques</option>
+            <option value="off-target">❌ Chutes para Fora</option>
+            <option value="possession">🔄 Posse de Bola (%)</option>
+            <option value="goals">⚽ Gols</option>
+            <option value="penalties">⚽ Pênaltis</option>
+            <option value="yellow-cards">🟨 Cartões Amarelos</option>
+            <option value="red-cards">🔴 Cartões Vermelhos</option>
+            <option value="League">🏆 Liga/Campeonato</option>
+            <option value="Minute">⏱️ Minutos</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="col-md-2 side-wrap">
+        <select class="form-select stat-side">
+          <option value="total">Total</option>
+          <option value="home">Casa</option>
+          <option value="away">Visitante</option>
+        </select>
+      </div>
+      <div class="col-md-2 operator-wrap">
+        <select class="form-select stat-operator">
+          <option value=">=">&gt;=</option>
+          <option value="<=">&lt;=</option>
+          <option value="==">=</option>
+          <option value=">">></option>
+          <option value="<"><</option>
+        </select>
+      </div>
+      <div class="col-md-2 value-wrap">
+        <input class="form-control stat-value" type="number" value="0">
+      </div>
+      <div class="col-md-2 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-condition">✕</button>
+      </div>
+    </div>
+    <div class="league-wrap mt-2" style="display:none;">
+      <div class="d-flex gap-2 justify-content-between align-items-center mb-1">
+        <div class="small text-muted">Selecione as ligas/campeonatos para esta regra:</div>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="small text-muted league-count"></div>
+          <button type="button" class="btn btn-sm btn-outline-secondary league-toggle" aria-expanded="true">Recolher campeonatos</button>
+        </div>
+      </div>
+      <div class="league-panel-body">
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <button type="button" class="btn btn-sm btn-outline-primary league-select-all">Marcar todas</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary league-select-none">Desmarcar todas</button>
+        </div>
+        <input type="text" class="form-control form-control-sm league-search" placeholder="Filtrar ligas...">
+        <div class="league-list mt-2" style="max-height: 220px; overflow:auto;"></div>
+      </div>
+      <input type="hidden" class="league-selected-json" value="[]">
+    </div>
+  </div>
+</template>
+
+<template id="outcome-group-template">
+  <div class="outcome-group mb-3 p-3 border rounded-3 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0 fw-bold text-secondary outcome-group-title">Grupo 1 (OU)</h6>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-group">Remover Grupo</button>
+    </div>
+    <div class="outcome-conditions-list"></div>
+    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-outcome-group mt-2">+ Condição</button>
+  </div>
+</template>
+
+<template id="outcome-condition-template">
+  <div class="outcome-condition-block mb-2 p-2 border rounded bg-white">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <select class="form-select outcome-stat-select">
+          <option value="goals">⚽ Gols</option>
+          <option value="penalties">⚽ Pênaltis</option>
+          <option value="corners">🚩 Escanteios</option>
+          <option value="on-target">🎯 Chutes no Alvo</option>
+          <option value="Minute">⏱️ Minutos</option>
+        </select>
+      </div>
+      <div class="col-md-3 outcome-side-wrap">
+        <select class="form-select outcome-stat-side">
+          <option value="total">Total</option>
+          <option value="home">Casa</option>
+          <option value="away">Visitante</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select outcome-stat-operator">
+          <option value=">=">&gt;=</option>
+          <option value="<=">&lt;=</option>
+          <option value="==">=</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control outcome-stat-value" type="number" value="1">
+      </div>
+      <div class="col-md-1 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-condition">✕</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  const secondHalfOnlyToggle = document.getElementById('second_half_only');
+  const secondHalfNoticeElement = document.getElementById('secondHalfNoticeModal');
+  secondHalfOnlyToggle?.addEventListener('change', () => {
+    if (!secondHalfOnlyToggle.checked || !secondHalfNoticeElement) return;
+    if (window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(secondHalfNoticeElement).show();
+    }
+  });
+
+  const groupsContainer = document.getElementById('groups-container');
+  const groupTemplate = document.getElementById('group-template');
+  const conditionTemplate = document.getElementById('condition-template');
+  const outcomeGreenContainer = document.getElementById('outcome-green-container');
+  const outcomeRedContainer = document.getElementById('outcome-red-container');
+  const outcomeGroupTemplate = document.getElementById('outcome-group-template');
+  const outcomeTemplate = document.getElementById('outcome-condition-template');
+
+  const existingConditions = {{ (form_conditions if form_conditions else (rule.conditions if rule else [])) | tojson }};
+  const existingOutcomeGreen = {{ (form_outcome_green if form_outcome_green else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'green') | list if rule else [])) | tojson }};
+  const existingOutcomeRed = {{ (form_outcome_red if form_outcome_red else (rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'red') | list if rule else [])) | tojson }};
+  const availableLeagues = {{ (available_leagues if available_leagues is defined else []) | tojson }};
+  const initialAllowedLeagues = {{ (allowed_leagues if allowed_leagues is defined else []) | tojson }};
+
+  const allowedLeaguesHidden = document.getElementById('allowed-leagues-json');
+  const aiHintObjective = document.getElementById('ai-hint-objective');
+  const aiHintGenerateBtn = document.getElementById('ai-hint-generate');
+  const aiHintApplyBtn = document.getElementById('ai-hint-apply');
+  const aiHintResult = document.getElementById('ai-hint-result');
+  let lastAiHint = null;
+
+  function normalizeLeagueName(value) {
+    return (value || '').toString().trim().replace(/\s+/g, ' ');
+  }
+
+  function parseJsonList(value) {
+    try {
+      const data = JSON.parse(value || '[]');
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function escapeHtml(value) {
+    return (value || '').toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getAllowedLeagues() {
+    const raw = allowedLeaguesHidden ? allowedLeaguesHidden.value : '[]';
+    const items = parseJsonList(raw);
+    const out = [];
+    const seen = new Set();
+    items.forEach(x => {
+      const name = normalizeLeagueName(x);
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(name);
+    });
+    return out;
+  }
+
+  function setAllowedLeagues(leagues) {
+    if (!allowedLeaguesHidden) return;
+    const list = Array.isArray(leagues) ? leagues : [];
+    allowedLeaguesHidden.value = JSON.stringify(list.map(normalizeLeagueName).filter(Boolean));
+  }
+
+  // Initialize hidden field with persisted value.
+  setAllowedLeagues(initialAllowedLeagues);
+
+  function addGroup(groupId = null) {
+    const group = groupTemplate.content.firstElementChild.cloneNode(true);
+    const id = groupId !== null ? groupId : groupsContainer.children.length;
+    group.dataset.groupId = id;
+    group.querySelector('.group-title').textContent = `Grupo ${id + 1} (OU)`;
+    
+    group.querySelector('.remove-group').addEventListener('click', () => {
+      group.remove();
+      refreshGroupIndices();
+    });
+
+    group.querySelector('.add-condition-to-group').addEventListener('click', () => {
+      addConditionToGroup(group);
+    });
+
+    groupsContainer.appendChild(group);
+    return group;
+  }
+
+  function clearAllConditionsAndOutcomes() {
+    groupsContainer.innerHTML = '';
+    outcomeGreenContainer.innerHTML = '';
+    outcomeRedContainer.innerHTML = '';
+    setAllowedLeagues([]);
+  }
+
+  function renderAiHint(hint) {
+    if (!aiHintResult) return;
+    if (!hint || !hint.suggestion) {
+      aiHintResult.innerHTML = '<div class="text-danger">Nao foi possivel gerar a sugestao.</div>';
+      return;
+    }
+    const notes = Array.isArray(hint.suggestion.notes) ? hint.suggestion.notes : [];
+    const notesHtml = notes.length ? `<ul class="mb-0 mt-2">${notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
+    aiHintResult.innerHTML = `
+      <div class="border rounded-3 p-3 bg-light">
+        <div class="fw-bold mb-1">${escapeHtml(hint.title || 'Sugestao')}</div>
+        <div class="text-muted">${escapeHtml(hint.rationale || '')}</div>
+        ${notesHtml}
+      </div>
+    `;
+  }
+
+  function applyAiHintSuggestion(hint) {
+    if (!hint || !hint.suggestion) return;
+    const s = hint.suggestion;
+    clearAllConditionsAndOutcomes();
+
+    const nameInput = document.getElementById('rule-name');
+    const msgInput = document.querySelector('textarea[name="message_template"]');
+    const greenMinuteInput = document.querySelector('input[name="outcome_green_minute"]');
+    const redMinuteInput = document.querySelector('input[name="outcome_red_minute"]');
+    const redToggleInput = document.getElementById('outcome-red-if-no-green');
+    const secondHalfOnlyInput = document.getElementById('second_half_only');
+
+    if (nameInput && s.name) nameInput.value = s.name;
+    if (msgInput && s.message_template) msgInput.value = s.message_template;
+    if (greenMinuteInput) greenMinuteInput.value = s.outcome_green_minute ?? '';
+    if (redMinuteInput) redMinuteInput.value = s.outcome_red_minute ?? '';
+    if (redToggleInput) redToggleInput.checked = !!s.outcome_red_if_no_green;
+    if (secondHalfOnlyInput && Object.prototype.hasOwnProperty.call(s, 'second_half_only')) {
+      secondHalfOnlyInput.checked = !!s.second_half_only;
+    }
+
+    const grouped = {};
+    (s.conditions || []).forEach(cond => {
+      const gid = Number.isInteger(cond.group_id) ? cond.group_id : 0;
+      if (!grouped[gid]) grouped[gid] = [];
+      grouped[gid].push(cond);
+    });
+    const groupIds = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
+    if (groupIds.length) {
+      groupIds.forEach(gid => {
+        const group = addGroup(Number(gid));
+        grouped[gid].forEach(c => addConditionToGroup(group, c));
+      });
+    } else {
+      const group = addGroup();
+      addConditionToGroup(group);
+    }
+
+    loadOutcomeGroupsForType('green', s.outcome_green || []);
+    loadOutcomeGroupsForType('red', s.outcome_red || []);
+
+    setAllowedLeagues(Array.isArray(s.allowed_leagues) ? s.allowed_leagues : []);
+    syncAllowedLeaguesFromRows();
+    refreshGroupIndices();
+    refreshNames();
+    if (typeof syncRedMinute === 'function') syncRedMinute();
+  }
+
+  function normalizeStatKey(value) {
+    const raw = (value || '').toString();
+    const lowered = raw.toLowerCase();
+    const map = {
+      'corners': 'corners',
+      'corner': 'corners',
+      'dangerous attacks': 'dangerous-attacks',
+      'dangerous-attacks': 'dangerous-attacks',
+      'on target': 'on-target',
+      'on-target': 'on-target',
+      'attacks': 'attacks',
+      'off target': 'off-target',
+      'off-target': 'off-target',
+      'possession': 'possession',
+      'goals': 'goals',
+      'goal': 'goals',
+      'penalty': 'penalties',
+      'penalties': 'penalties',
+      'penalti': 'penalties',
+      'penaltis': 'penalties',
+      'pênalti': 'penalties',
+      'pênaltis': 'penalties',
+      'yellow cards': 'yellow-cards',
+      'yellow-cards': 'yellow-cards',
+      'red cards': 'red-cards',
+      'red-cards': 'red-cards',
+      'league': 'League',
+      'liga': 'League',
+      'minute': 'Minute',
+    };
+    return map[lowered] || raw;
+  }
+
+  function syncAllowedLeaguesFromRows() {
+    const selected = new Map(); // lower -> original
+    document.querySelectorAll('.league-selected-json').forEach((el) => {
+      const items = parseJsonList(el.value);
+      items.forEach(x => {
+        const name = normalizeLeagueName(x);
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (!selected.has(key)) selected.set(key, name);
+      });
+    });
+    setAllowedLeagues(Array.from(selected.values()));
+  }
+
+  function addConditionToGroup(group, prefill = null) {
+    const list = group.querySelector('.conditions-list');
+    const cond = conditionTemplate.content.firstElementChild.cloneNode(true);
+
+    const statSelect = cond.querySelector('.stat-select');
+    const sideWrap = cond.querySelector('.side-wrap');
+    const operatorWrap = cond.querySelector('.operator-wrap');
+    const valueWrap = cond.querySelector('.value-wrap');
+    const valueInput = cond.querySelector('.stat-value');
+    const operatorSelect = cond.querySelector('.stat-operator');
+
+    const leagueWrap = cond.querySelector('.league-wrap');
+    const leaguePanelBody = cond.querySelector('.league-panel-body');
+    const leagueToggleBtn = cond.querySelector('.league-toggle');
+    const leagueList = cond.querySelector('.league-list');
+    const leagueSearch = cond.querySelector('.league-search');
+    const leagueHidden = cond.querySelector('.league-selected-json');
+    const leagueSelectAllBtn = cond.querySelector('.league-select-all');
+    const leagueSelectNoneBtn = cond.querySelector('.league-select-none');
+    const leagueCountEl = cond.querySelector('.league-count');
+
+    function updateLeagueCount() {
+      if (!leagueCountEl) return;
+      const selected = getRowLeagues().length;
+      const total = Array.isArray(availableLeagues) ? availableLeagues.length : 0;
+      leagueCountEl.textContent = total ? `Selecionadas: ${selected} / ${total}` : `Selecionadas: ${selected}`;
+    }
+
+    function getRowLeagues() {
+      return parseJsonList(leagueHidden ? leagueHidden.value : '[]')
+        .map(normalizeLeagueName)
+        .filter(Boolean);
+    }
+
+    function setRowLeagues(items) {
+      if (!leagueHidden) return;
+      const list = Array.isArray(items) ? items : [];
+      const out = [];
+      const seen = new Set();
+      list.forEach(x => {
+        const name = normalizeLeagueName(x);
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(name);
+      });
+      leagueHidden.value = JSON.stringify(out);
+      syncAllowedLeaguesFromRows();
+      updateLeagueCount();
+    }
+
+    function renderLeagueList() {
+      if (!leagueList) return;
+      const filter = (leagueSearch ? leagueSearch.value : '').toString().trim().toLowerCase();
+      if (leagueSelectAllBtn) leagueSelectAllBtn.textContent = filter ? 'Marcar exibidas' : 'Marcar todas';
+      if (leagueSelectNoneBtn) leagueSelectNoneBtn.textContent = filter ? 'Desmarcar exibidas' : 'Desmarcar todas';
+      const selected = new Set(getRowLeagues().map(x => x.toLowerCase()));
+      const items = (availableLeagues || []).filter(x => normalizeLeagueName(x));
+      const filtered = filter
+        ? items.filter(x => normalizeLeagueName(x).toLowerCase().includes(filter))
+        : items;
+
+      if (filtered.length === 0) {
+        leagueList.innerHTML = `<div class="small text-muted">Nenhuma liga disponivel.</div>`;
+        return;
+      }
+
+      leagueList.innerHTML = filtered.map((name, idx) => {
+        const clean = normalizeLeagueName(name);
+        const esc = clean
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+        const checked = selected.has(clean.toLowerCase()) ? 'checked' : '';
+        const id = `lg_${Math.random().toString(16).slice(2)}_${idx}`;
+        return `
+          <div class="form-check">
+            <input class="form-check-input league-check" type="checkbox" id="${id}" data-league="${esc}" ${checked}>
+            <label class="form-check-label small" for="${id}">${esc}</label>
+          </div>
+        `.trim();
+      }).join('');
+
+      leagueList.querySelectorAll('.league-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const league = normalizeLeagueName(cb.getAttribute('data-league'));
+          const current = getRowLeagues();
+          const map = new Map(current.map(x => [x.toLowerCase(), x]));
+          if (cb.checked) map.set(league.toLowerCase(), league);
+          else map.delete(league.toLowerCase());
+          setRowLeagues(Array.from(map.values()));
+        });
+      });
+      updateLeagueCount();
+    }
+
+    function getFilteredLeagues() {
+      const fold = value => value.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const filter = fold((leagueSearch ? leagueSearch.value : '').toString().trim());
+      const items = (availableLeagues || []).map(normalizeLeagueName).filter(Boolean);
+      if (!filter) return items;
+      const femaleQueries = new Set(['women', 'woman', 'female', 'feminino', 'feminina', 'femenil', 'femenina', 'feminin']);
+      if (femaleQueries.has(filter)) {
+        const femaleMarkers = ['women', 'woman', 'female', 'feminin', 'femenil', 'femenin', 'femminil', 'frauen', 'vrouwen', 'dames', 'reina'];
+        return items.filter(name => femaleMarkers.some(marker => fold(name).includes(marker)));
+      }
+      return items.filter(name => fold(name).includes(filter));
+    }
+
+    function syncStatMode() {
+      const v = statSelect ? statSelect.value : '';
+      const isMinute = v === 'Minute';
+      const isLeague = v === 'League';
+
+      if (sideWrap) sideWrap.style.visibility = (isMinute || isLeague) ? 'hidden' : 'visible';
+      if (operatorWrap) operatorWrap.style.display = isLeague ? 'none' : '';
+      if (valueWrap) valueWrap.style.display = isLeague ? 'none' : '';
+      if (leagueWrap) leagueWrap.style.display = isLeague ? '' : 'none';
+
+      if (isMinute) {
+        // Minute ignores side; keep it stable.
+        const side = cond.querySelector('.stat-side');
+        if (side) side.value = 'total';
+      }
+
+      if (isLeague) {
+        // League filter is persisted separately.
+        const side = cond.querySelector('.stat-side');
+        if (side) side.value = 'total';
+        if (operatorSelect) operatorSelect.value = '==';
+        if (valueInput) valueInput.value = 0;
+        if (leagueHidden && leagueHidden.value === '[]') {
+          setRowLeagues(getAllowedLeagues());
+        }
+        renderLeagueList();
+      }
+    }
+
+    if (leagueSearch) leagueSearch.addEventListener('input', renderLeagueList);
+    if (leagueToggleBtn && leaguePanelBody) {
+      leagueToggleBtn.addEventListener('click', () => {
+        const expanded = leagueToggleBtn.getAttribute('aria-expanded') === 'true';
+        leagueToggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        leagueToggleBtn.textContent = expanded ? 'Mostrar campeonatos' : 'Recolher campeonatos';
+        leaguePanelBody.style.display = expanded ? 'none' : '';
+      });
+    }
+    if (leagueSelectAllBtn) {
+      leagueSelectAllBtn.addEventListener('click', () => {
+        const current = getRowLeagues();
+        const map = new Map(current.map(x => [x.toLowerCase(), x]));
+        getFilteredLeagues().forEach(name => {
+          map.set(name.toLowerCase(), name);
+        });
+        setRowLeagues(Array.from(map.values()));
+        renderLeagueList();
+      });
+    }
+    if (leagueSelectNoneBtn) {
+      leagueSelectNoneBtn.addEventListener('click', () => {
+        const filteredKeys = new Set(getFilteredLeagues().map(name => name.toLowerCase()));
+        const remaining = getRowLeagues().filter(name => !filteredKeys.has(name.toLowerCase()));
+        setRowLeagues(remaining);
+        renderLeagueList();
+      });
+    }
+
+    let prevStatValue = statSelect ? statSelect.value : '';
+    if (statSelect) {
+      statSelect.addEventListener('change', () => {
+        const next = statSelect.value;
+        if (prevStatValue === 'League' && next !== 'League') {
+          // User left the League filter condition: drop its selection.
+          setRowLeagues([]);
+        }
+        // When switching into League, prefill from global allowed list.
+        if (next === 'League') setRowLeagues(getAllowedLeagues());
+        prevStatValue = next;
+        syncStatMode();
+      });
+    }
+
+    if (prefill) {
+      cond.querySelector('.stat-select').value = normalizeStatKey(prefill.stat_key);
+      cond.querySelector('.stat-side').value = prefill.side;
+      cond.querySelector('.stat-operator').value = prefill.operator;
+      cond.querySelector('.stat-value').value = prefill.value;
+    }
+
+    cond.querySelector('.remove-condition').addEventListener('click', () => {
+      cond.remove();
+      syncAllowedLeaguesFromRows();
+    });
+
+    syncStatMode();
+
+    list.appendChild(cond);
+    refreshNames();
+    return cond;
+  }
+
+  function outcomeContainerByType(type) {
+    return type === 'green' ? outcomeGreenContainer : outcomeRedContainer;
+  }
+
+  function addOutcomeGroup(type, groupId = null) {
+    const container = outcomeContainerByType(type);
+    const group = outcomeGroupTemplate.content.firstElementChild.cloneNode(true);
+    const nextIndex = groupId !== null ? groupId : container.children.length;
+
+    group.dataset.groupId = nextIndex;
+    group.querySelector('.outcome-group-title').textContent = `Grupo ${nextIndex + 1} (OU)`;
+
+    group.querySelector('.remove-outcome-group').addEventListener('click', () => {
+      group.remove();
+      refreshOutcomeGroupIndices(type);
+    });
+    group.querySelector('.add-condition-to-outcome-group').addEventListener('click', () => {
+      addOutcomeCondition(type, group);
+    });
+
+    container.appendChild(group);
+    return group;
+  }
+
+  function addOutcomeCondition(type, group, prefill = null) {
+    const list = group.querySelector('.outcome-conditions-list');
+    const cond = outcomeTemplate.content.firstElementChild.cloneNode(true);
+
+    const statSelect = cond.querySelector('.outcome-stat-select');
+    const sideWrap = cond.querySelector('.outcome-side-wrap');
+    const sideSelect = cond.querySelector('.outcome-stat-side');
+    const opSelect = cond.querySelector('.outcome-stat-operator');
+
+    // Keep outcome condition options in sync with the main "Regras de Estatisticas".
+    if (statSelect) {
+      statSelect.innerHTML = `
+        <optgroup label="Estatisticas">
+          <option value="corners">Escanteios</option>
+          <option value="dangerous-attacks">Ataques Perigosos</option>
+          <option value="on-target">Chutes no Alvo</option>
+          <option value="attacks">Ataques</option>
+          <option value="off-target">Chutes para Fora</option>
+          <option value="possession">Posse de Bola (%)</option>
+          <option value="goals">Gols</option>
+          <option value="penalties">Pênaltis</option>
+          <option value="yellow-cards">Cartoes Amarelos</option>
+          <option value="red-cards">Cartoes Vermelhos</option>
+          <option value="Minute">Minutos</option>
+        </optgroup>
+      `.trim();
+    }
+
+    if (opSelect) {
+      opSelect.innerHTML = `
+        <option value=">=">&gt;=</option>
+        <option value="<=">&lt;=</option>
+        <option value="==">=</option>
+        <option value=">">></option>
+        <option value="<"><</option>
+      `.trim();
+    }
+
+    if (prefill) {
+      if (statSelect) statSelect.value = normalizeStatKey(prefill.stat_key);
+      if (sideSelect) sideSelect.value = prefill.side;
+      if (opSelect) opSelect.value = prefill.operator;
+      const v = cond.querySelector('.outcome-stat-value');
+      if (v) v.value = prefill.value;
+    }
+
+    function syncOutcomeSideVisibility() {
+      const isMinute = statSelect && statSelect.value === 'Minute';
+      if (sideWrap) sideWrap.style.visibility = isMinute ? 'hidden' : 'visible';
+      if (isMinute && sideSelect) sideSelect.value = 'total';
+    }
+    if (statSelect) statSelect.addEventListener('change', syncOutcomeSideVisibility);
+    syncOutcomeSideVisibility();
+
+    cond.querySelector('.remove-outcome-condition').addEventListener('click', () => {
+      cond.remove();
+      refreshNames();
+    });
+    list.appendChild(cond);
+    refreshNames();
+    return cond;
+  }
+
+  function addOutcome(type, prefill = null, targetGroup = null) {
+    let group = targetGroup;
+    if (!group) {
+      const container = outcomeContainerByType(type);
+      group = container.children[0] || addOutcomeGroup(type);
+    }
+    return addOutcomeCondition(type, group, prefill);
+  }
+
+  function refreshOutcomeGroupIndices(type) {
+    const container = outcomeContainerByType(type);
+    Array.from(container.children).forEach((group, i) => {
+      group.dataset.groupId = i;
+      group.querySelector('.outcome-group-title').textContent = `Grupo ${i + 1} (OU)`;
+    });
+    refreshNames();
+  }
+
+  function loadOutcomeGroupsForType(type, conditions) {
+    const container = outcomeContainerByType(type);
+    container.innerHTML = '';
+
+    const byGroup = {};
+    (conditions || []).forEach((cond) => {
+      const gid = Number.isInteger(cond.group_id) ? cond.group_id : 0;
+      if (!byGroup[gid]) byGroup[gid] = [];
+      byGroup[gid].push(cond);
+    });
+
+    const ids = Object.keys(byGroup).sort((a, b) => Number(a) - Number(b));
+    if (!ids.length) {
+      return;
+    }
+
+    ids.forEach((gid) => {
+      const group = addOutcomeGroup(type, Number(gid));
+      byGroup[gid].forEach((cond) => addOutcomeCondition(type, group, cond));
+    });
+    refreshOutcomeGroupIndices(type);
+  }
+
+
+  function refreshGroupIndices() {
+    Array.from(groupsContainer.children).forEach((group, i) => {
+      group.dataset.groupId = i;
+      group.querySelector('.group-title').textContent = `Grupo ${i + 1} (OU)`;
+    });
+    refreshNames();
+  }
+
+  function refreshNames() {
+    // Regras de Estatísticas
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const conditions = group.querySelectorAll('.condition-row');
+      conditions.forEach((cond, cIdx) => {
+        cond.querySelector('.stat-select').name = `group-${gIdx}-cond-${cIdx}-stat_key`;
+        cond.querySelector('.stat-side').name = `group-${gIdx}-cond-${cIdx}-side`;
+        cond.querySelector('.stat-operator').name = `group-${gIdx}-cond-${cIdx}-operator`;
+        cond.querySelector('.stat-value').name = `group-${gIdx}-cond-${cIdx}-value`;
+        const leagues = cond.querySelector('.league-selected-json');
+        if (leagues) leagues.name = `group-${gIdx}-cond-${cIdx}-leagues_json`;
+      });
+    });
+
+    // Outcomes
+    ['green', 'red'].forEach(type => {
+      const container = outcomeContainerByType(type);
+      Array.from(container.children).forEach((group, gIdx) => {
+        const conditions = group.querySelectorAll('.outcome-condition-block');
+        conditions.forEach((cond, cIdx) => {
+          cond.querySelector('.outcome-stat-select').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-stat_key`;
+          cond.querySelector('.outcome-stat-side').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-side`;
+          cond.querySelector('.outcome-stat-operator').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-operator`;
+          cond.querySelector('.outcome-stat-value').name = `outcome-${type}-group-${gIdx}-cond-${cIdx}-value`;
+        });
+      });
+    });
+  }
+
+  // Inicialização
+  document.getElementById('add-condition-group').addEventListener('click', () => {
+    const group = addGroup();
+    addConditionToGroup(group);
+  });
+
+  document.querySelectorAll('[data-add-outcome-group]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.addOutcomeGroup;
+      const group = addOutcomeGroup(type);
+      addOutcomeCondition(type, group);
+      refreshOutcomeGroupIndices(type);
+    });
+  });
+
+  // Carregar dados existentes
+  if (existingConditions.length > 0) {
+    const groups = {};
+    existingConditions.forEach(c => {
+      const gid = c.group_id || 0;
+      if (!groups[gid]) groups[gid] = [];
+      groups[gid].push(c);
+    });
+    Object.keys(groups).forEach(gid => {
+      const group = addGroup(parseInt(gid));
+      groups[gid].forEach(c => addConditionToGroup(group, c));
+    });
+  } else {
+    const group = addGroup();
+    addConditionToGroup(group);
+  }
+
+  // Restore league filter when editing (rule.allowed_leagues_json) or after validation errors.
+  const persistedLeagues = getAllowedLeagues();
+  if (persistedLeagues.length) {
+    let hasLeagueRow = false;
+    document.querySelectorAll('.stat-select').forEach(sel => {
+      if (sel && sel.value === 'League') hasLeagueRow = true;
+    });
+    if (!hasLeagueRow && groupsContainer.children.length) {
+      const row = addConditionToGroup(groupsContainer.children[0]);
+      const sel = row ? row.querySelector('.stat-select') : null;
+      if (sel) {
+        sel.value = 'League';
+        sel.dispatchEvent(new Event('change'));
+      }
+    } else {
+      document.querySelectorAll('.stat-select').forEach(sel => {
+        if (sel && sel.value === 'League') sel.dispatchEvent(new Event('change'));
+      });
+    }
+  }
+
+  loadOutcomeGroupsForType('green', existingOutcomeGreen);
+  loadOutcomeGroupsForType('red', existingOutcomeRed);
+
+  document.getElementById('rule-form').addEventListener('submit', () => {
+    syncAllowedLeaguesFromRows();
+    refreshNames();
+  });
+
+  const redToggle = document.getElementById('outcome-red-if-no-green');
+  const redMinuteWrap = document.getElementById('outcome-red-minute-wrap');
+  function syncRedMinute() {
+    const show = redToggle && redToggle.checked;
+    if (redMinuteWrap) redMinuteWrap.style.display = show ? '' : 'none';
+  }
+  if (redToggle) {
+    redToggle.addEventListener('change', syncRedMinute);
+    syncRedMinute();
+  }
+  function formatOperator(op) {
+    if (op === '==') return '=';
+    return op || '';
+  }
+
+  function buildConditionsSummary() {
+    const groups = [];
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const parts = [];
+      const rows = group.querySelectorAll('.condition-row');
+      rows.forEach((row, cIdx) => {
+        const stat = row.querySelector('.stat-select')?.value || '';
+        const side = row.querySelector('.stat-side')?.value || '';
+        const op = row.querySelector('.stat-operator')?.value || '';
+        const val = row.querySelector('.stat-value')?.value || '';
+        if (stat === 'League') return;
+        if (!stat || !op || val === '') return;
+        const sideLabel = stat === 'Minute' ? '' : ` ${side}`;
+        parts.push(`${stat}${sideLabel} ${formatOperator(op)} ${val}`.trim());
+      });
+      if (parts.length) {
+        groups.push(`Grupo ${gIdx + 1}: ${parts.join(' AND ')}`);
+      }
+    });
+    return groups.join(' OR ');
+  }
+
+  function buildDebugPayload() {
+    const form = document.getElementById('rule-form');
+    const fd = new FormData(form);
+    const data = {
+      name: fd.get('name') || '',
+      is_active: !!fd.get('is_active'),
+      second_half_only: !!fd.get('second_half_only'),
+      notify_telegram: !!fd.get('notify_telegram'),
+      alert_on_penalty: !!fd.get('alert_on_penalty'),
+      score_home: fd.get('score_home') || '',
+      score_away: fd.get('score_away') || '',
+      allowed_leagues: getAllowedLeagues(),
+      outcome_green_minute: fd.get('outcome_green_minute') || '',
+      outcome_red_minute: fd.get('outcome_red_minute') || '',
+      outcome_red_if_no_green: !!fd.get('outcome_red_if_no_green'),
+      message_template: fd.get('message_template') || '',
+      conditions: [],
+      outcome_green: [],
+      outcome_red: [],
+      created_at: new Date().toISOString(),
+    };
+
+    Array.from(groupsContainer.children).forEach((group, gIdx) => {
+      const rows = group.querySelectorAll('.condition-row');
+      rows.forEach((row, cIdx) => {
+        const stat = row.querySelector('.stat-select')?.value || '';
+        const side = row.querySelector('.stat-side')?.value || '';
+        const op = row.querySelector('.stat-operator')?.value || '';
+        const val = row.querySelector('.stat-value')?.value || '';
+        if (stat === 'League') return;
+        if (!stat || !op || val === '') return;
+        data.conditions.push({
+          group_id: gIdx,
+          stat_key: stat,
+          side: stat === 'Minute' ? 'total' : side,
+          operator: op,
+          value: Number(val),
+        });
+      });
+    });
+
+    ['green', 'red'].forEach((type) => {
+      const container = outcomeContainerByType(type);
+      Array.from(container.children).forEach((group, gIdx) => {
+        const rows = group.querySelectorAll('.outcome-condition-block');
+        rows.forEach((row) => {
+          const stat = row.querySelector('.outcome-stat-select')?.value || '';
+          const side = row.querySelector('.outcome-stat-side')?.value || '';
+          const op = row.querySelector('.outcome-stat-operator')?.value || '';
+          const val = row.querySelector('.outcome-stat-value')?.value || '';
+          if (!stat || !op || val === '') return;
+          data[type === 'green' ? 'outcome_green' : 'outcome_red'].push({
+            group_id: gIdx,
+            stat_key: stat,
+            side: stat === 'Minute' ? 'total' : side,
+            operator: op,
+            value: Number(val),
+          });
+        });
+      });
+    });
+
+    return data;
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.position = 'absolute';
+    temp.style.left = '-9999px';
+    document.body.appendChild(temp);
+    temp.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(temp);
+    return ok;
+  }
+
+  document.getElementById('copy-debug').addEventListener('click', async () => {
+    refreshNames();
+    const payload = buildDebugPayload();
+    const pretty = JSON.stringify(payload, null, 2);
+    try {
+      await copyTextToClipboard(pretty);
+      renderTestResult({
+        badgeClass: 'text-bg-info',
+        badgeText: 'COPIADO',
+        title: 'Debug copiado para a área de transferência.',
+        subtitle: 'Cole aqui no chat para analisarmos.',
+      });
+    } catch (err) {
+      renderTestResult({
+        badgeClass: 'text-bg-danger',
+        badgeText: 'ERRO',
+        title: 'Não foi possível copiar o debug.',
+        subtitle: 'Tente novamente ou copie manualmente.',
+      });
+    }
+  });
+
+  if (aiHintGenerateBtn) {
+    aiHintGenerateBtn.addEventListener('click', async () => {
+      const objective = (aiHintObjective ? aiHintObjective.value : '').trim();
+      if (!objective) {
+        if (aiHintResult) aiHintResult.innerHTML = '<div class="text-danger">Descreva seu objetivo antes de gerar.</div>';
+        return;
+      }
+      aiHintGenerateBtn.disabled = true;
+      aiHintApplyBtn.disabled = true;
+      if (aiHintResult) aiHintResult.innerHTML = '<div class="text-muted">Gerando sugestao...</div>';
+      try {
+        const response = await fetch('{{ url_for("rules.ai_hint") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ objective }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          const msg = (data && data.message) ? data.message : 'Falha ao gerar sugestao.';
+          if (aiHintResult) {
+            aiHintResult.innerHTML = '';
+            const message = document.createElement('div');
+            message.className = 'text-danger';
+            message.textContent = msg;
+            aiHintResult.appendChild(message);
+          }
+          return;
+        }
+        lastAiHint = data.hint || null;
+        renderAiHint(lastAiHint);
+        aiHintApplyBtn.disabled = !lastAiHint;
+      } catch (err) {
+        if (aiHintResult) aiHintResult.innerHTML = '<div class="text-danger">Erro de comunicacao ao gerar sugestao.</div>';
+      } finally {
+        aiHintGenerateBtn.disabled = false;
+      }
+    });
+  }
+
+  if (aiHintApplyBtn) {
+    aiHintApplyBtn.addEventListener('click', () => {
+      if (!lastAiHint) return;
+      applyAiHintSuggestion(lastAiHint);
+      if (aiHintResult) aiHintResult.innerHTML = '<div class="text-success">Sugestao aplicada ao formulario. Revise e salve.</div>';
+    });
+  }
+
+  function renderTestResult(state) {
+    const result = document.getElementById('test-rule-result');
+    result.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'card border-0 shadow-sm test-rule-card';
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const header = document.createElement('div');
+    header.className = 'd-flex align-items-center gap-2 mb-2';
+    const badge = document.createElement('span');
+    badge.className = `badge ${state.badgeClass || 'text-bg-secondary'}`;
+    badge.textContent = state.badgeText || 'INFO';
+    const title = document.createElement('div');
+    title.className = 'fw-bold';
+    title.textContent = state.title || '';
+    header.append(badge, title);
+    body.append(header);
+
+    if (state.subtitle) {
+      const subtitle = document.createElement('div');
+      subtitle.className = 'small text-muted mb-2';
+      subtitle.textContent = state.subtitle;
+      body.append(subtitle);
+    }
+
+    if (state.items && state.items.length) {
+      const list = document.createElement('ul');
+      list.className = 'list-unstyled mb-0';
+      state.items.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'd-flex justify-content-between align-items-center py-2 border-top';
+        const left = document.createElement('div');
+        left.className = 'd-flex flex-column';
+        const teams = document.createElement('div');
+        teams.className = 'fw-semibold';
+        teams.textContent = item.teams;
+        left.append(teams);
+        const extras = [];
+        if (item.confidence) extras.push(`Conf: ${item.confidence}`);
+        if (item.history_h2h) extras.push(item.history_h2h);
+        if (item.history_home) extras.push(item.history_home);
+        if (item.history_away) extras.push(item.history_away);
+        if (extras.length) {
+          const meta = document.createElement('div');
+          meta.className = 'small text-muted';
+          meta.textContent = extras.join(' | ');
+          left.append(meta);
+        }
+        const minute = document.createElement('span');
+        minute.className = 'badge text-bg-light';
+        minute.textContent = item.minute;
+        li.append(left, minute);
+        list.append(li);
+      });
+      body.append(list);
+    }
+
+    card.append(body);
+    result.append(card);
+  }
+
+  function renderLoading() {
+    const result = document.getElementById('test-rule-result');
+    result.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'card border-0 shadow-sm test-rule-card';
+    const body = document.createElement('div');
+    body.className = 'card-body d-flex align-items-center gap-2';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm text-primary';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('div');
+    text.className = 'fw-semibold';
+    text.textContent = 'Testando...';
+    body.append(spinner, text);
+    card.append(body);
+    result.append(card);
+  }
+
+  document.getElementById('test-rule').addEventListener('click', async () => {
+    refreshNames();
+    const conditionsSummary = buildConditionsSummary();
+    renderLoading();
+    try {
+      const response = await fetch('{{ url_for("rules.test_rule") }}', {
+        method: 'POST',
+        body: new FormData(document.getElementById('rule-form')),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        renderTestResult({
+          badgeClass: 'text-bg-danger',
+          badgeText: 'ERRO',
+          title: data.message || 'Falha ao testar.',
+        });
+        return;
+      }
+      if (!data.matches || data.matches.length === 0) {
+        renderTestResult({
+          badgeClass: 'text-bg-warning',
+          badgeText: 'VAZIO',
+          title: 'Nenhuma partida encontrada com esta regra agora.',
+          subtitle: conditionsSummary ? `Condicoes: ${conditionsSummary}` : '',
+        });
+        return;
+      }
+      const items = data.matches.map(m => {
+        const minute = m.minute !== null && m.minute !== undefined ? `${m.minute}'` : '-';
+        const teams = `${m.home_team} vs ${m.away_team}`;
+        return {
+          teams,
+          minute,
+          confidence: m.history_confidence || '',
+          history_h2h: m.history_h2h || '',
+          history_home: m.history_home || '',
+          history_away: m.history_away || '',
+        };
+      });
+      renderTestResult({
+        badgeClass: 'text-bg-success',
+        badgeText: 'OK',
+        title: `Encontradas ${data.matches.length} partida(s)`,
+        subtitle: conditionsSummary ? `Condicoes: ${conditionsSummary}` : '',
+        items,
+      });
+    } catch (err) {
+      renderTestResult({
+        badgeClass: 'text-bg-danger',
+        badgeText: 'ERRO',
+        title: 'Falha ao testar. Tente novamente.',
+      });
+    }
+  });
+</script>
+
+<style>
+  .condition-group { border-left: 5px solid #0d6efd !important; }
+  .group-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+  .font-monospace { font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85rem; }
+  .test-rule-result .test-rule-card { border-left: 4px solid #0d6efd; }
+</style>
+{% endblock %}

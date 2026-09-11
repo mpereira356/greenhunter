@@ -1,0 +1,179 @@
+﻿{% extends "base.html" %}
+{% block title %}Minhas Regras | GreenHunter{% endblock %}
+{% block meta_description %}Gerencie suas regras de sinais GreenHunter, acompanhe filtros ativos, desempenho e estrategias de monitoramento ao vivo.{% endblock %}
+{% block content %}
+<div class="rules-page">
+<div class="page-header rules-page-header">
+  <div>
+    <h1 class="page-title">Minhas Regras</h1>
+    <p class="page-subtitle">Gerencie seus bots e acompanhe o desempenho individual.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline-secondary" href="{{ url_for('rules.export_rules') }}">Exportar Regras</a>
+    <form id="rules-import-form" method="post" action="{{ url_for('rules.import_rules') }}" enctype="multipart/form-data" class="d-inline">
+      <input id="rules-file-input" type="file" name="rules_file" accept=".json,application/json" hidden>
+      <button type="button" id="rules-import-btn" class="btn btn-outline-secondary">Importar Regras</button>
+    </form>
+    <a class="btn btn-primary shadow-sm rules-new-button" href="{{ url_for('rules.create_rule') }}">
+      <span aria-hidden="true">+</span> Criar hipótese
+    </a>
+  </div>
+</div>
+
+<div class="rules-filter-bar">
+  <span>Exibir regras</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por tempo">
+    <a class="btn {% if stage_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='all') }}">Todas</a>
+    <a class="btn {% if stage_filter == 'ht' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='ht') }}">1º tempo</a>
+    <a class="btn {% if stage_filter == 'ft' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='ft') }}">2º tempo</a>
+  </div>
+</div>
+
+{% if rules %}
+  <div class="rules-board">
+    {% for rule in rules %}
+    {% set greens_count = rule_stats.get(rule.id, {}).get("green", 0) %}
+    {% set reds_count = rule_stats.get(rule.id, {}).get("red", 0) %}
+    {% set resolved_count = greens_count + reds_count %}
+    {% set win_pct = ((greens_count * 100) / resolved_count)|round(1) if resolved_count > 0 else 0 %}
+    <article class="rule-card">
+      <div class="rule-card-top">
+        <div class="rule-main">
+          <span class="rule-dot {{ 'rule-dot-on' if rule.is_active else 'rule-dot-off' }}"></span>
+          <div>
+            <div class="rule-name">{{ rule.name }}</div>
+            <div class="rule-meta">{{ rule.conditions|length }} condições configuradas</div>
+          </div>
+        </div>
+        <div>
+          {% if rule.is_active %}
+            <span class="badge-status badge-on">Ativa</span>
+          {% else %}
+            <span class="badge-status badge-off">Inativa</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="rule-card-stats">
+        <span class="rule-pill rule-pill-green">Greens: {{ greens_count }}</span>
+        <span class="rule-pill rule-pill-red">Reds: {{ reds_count }}</span>
+        <span class="rule-pill rule-pill-win">Acerto: {{ win_pct }}%</span>
+        <span class="rule-last">{{ rule.last_alert_at.strftime('%d/%m %H:%M') if rule.last_alert_at else 'Nenhum alerta' }}</span>
+      </div>
+
+      <div class="rule-card-actions">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
+        <button class="btn btn-sm rule-more-btn" type="button" data-bs-toggle="modal" data-bs-target="#ruleMore{{ rule.id }}">Ver mais</button>
+        <form method="post" action="{{ url_for('rules.toggle_rule', rule_id=rule.id) }}" class="d-inline">
+          <button class="btn btn-sm btn-outline-secondary">
+            {% if rule.is_active %}Pausar{% else %}Ativar{% endif %}
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" class="d-inline rule-delete-form" data-alert-count="{{ rule_alert_counts.get(rule.id, 0) }}">
+          <input type="hidden" name="confirm_password" value="">
+          <button class="btn btn-sm btn-outline-danger">Excluir</button>
+        </form>
+      </div>
+    </article>
+
+    <div class="modal fade" id="ruleMore{{ rule.id }}" tabindex="-1" aria-labelledby="ruleMoreLabel{{ rule.id }}" aria-hidden="true" data-rule-ranking-url="{{ url_for('rules.rule_rankings', rule_id=rule.id) }}">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="ruleMoreLabel{{ rule.id }}">Ranking da regra</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body" data-rule-ranking-body>
+            <div class="text-muted py-4 text-center"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Carregando ranking...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card border-0 shadow-sm p-5 text-center">
+    {% if has_any_rules %}
+      <div class="mb-3" style="font-size: 2.6rem;">🔎</div>
+      <h4 class="fw-bold">Nenhuma regra nesse filtro</h4>
+      <p class="text-muted">Troque para "Todas" ou selecione outro tempo.</p>
+      <div class="mt-3">
+        <a class="btn btn-outline-primary px-4" href="{{ url_for('rules.list_rules', stage='all') }}">Ver todas</a>
+      </div>
+    {% else %}
+      <div class="mb-3" style="font-size: 3rem;">🤖</div>
+      <h4 class="fw-bold">Nenhuma regra criada</h4>
+      <p class="text-muted">Você ainda não possui bots monitorando partidas. Comece agora mesmo!</p>
+      <div class="mt-4">
+        <a class="btn btn-primary px-4" href="{{ url_for('rules.create_rule') }}">Criar Minha Primeira Regra</a>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+</div>
+
+<script>
+  document.querySelectorAll('.rule-delete-form').forEach(form => {
+    form.addEventListener('submit', (event) => {
+      const count = parseInt(form.dataset.alertCount || '0', 10);
+      if (!confirm('Tem certeza que deseja excluir esta regra?')) {
+        event.preventDefault();
+        return;
+      }
+      const isAdmin = {{ 'true' if current_user.is_admin_user else 'false' }};
+      if (count > 20 && !isAdmin) {
+        const password = prompt('Regra com muitos jogos no histórico. Digite sua senha para excluir:');
+        if (!password) {
+          event.preventDefault();
+          return;
+        }
+        form.querySelector('input[name="confirm_password"]').value = password;
+      }
+    });
+  });
+
+  const importBtn = document.getElementById('rules-import-btn');
+  const fileInput = document.getElementById('rules-file-input');
+  const importForm = document.getElementById('rules-import-form');
+  if (importBtn && fileInput && importForm) {
+    importBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        importForm.submit();
+      }
+    });
+  }
+
+  const escapeRankingText = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+  const rankingList = (items, spacing = '') => {
+    const rows = (items || []).map((item) => `<li class="list-group-item d-flex justify-content-between"><span>${escapeRankingText(item.name)}</span><span>${Number(item.count) || 0}</span></li>`);
+    if (!rows.length) rows.push('<li class="list-group-item text-muted">Sem dados</li>');
+    const first = rows.slice(0, 5).join('');
+    const remaining = rows.slice(5);
+    return `<ul class="list-group rule-rank-list ${spacing}">${first}</ul>${remaining.length ? `<details class="rule-rank-more mt-2 ${spacing}"><summary>Ver mais</summary><ul class="list-group rule-rank-list mt-2">${remaining.join('')}</ul></details>` : ''}`;
+  };
+  document.querySelectorAll('[data-rule-ranking-url]').forEach((modal) => {
+    modal.addEventListener('show.bs.modal', async () => {
+      if (modal.dataset.rankingLoaded === 'true' || modal.dataset.rankingLoading === 'true') return;
+      modal.dataset.rankingLoading = 'true';
+      const body = modal.querySelector('[data-rule-ranking-body]');
+      try {
+        const response = await fetch(modal.dataset.ruleRankingUrl, {headers: {'Accept': 'application/json'}});
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error('Ranking indisponível.');
+        body.innerHTML = `<div class="row g-3">
+          <div class="col-md-6"><h6 class="fw-bold">Campeonatos</h6><div class="mb-2"><span class="badge bg-success">Greens</span></div>${rankingList(result.leagues.green, 'mb-3')}<div class="mb-2"><span class="badge bg-danger">Reds</span></div>${rankingList(result.leagues.red)}</div>
+          <div class="col-md-6"><h6 class="fw-bold">Times</h6><div class="mb-2"><span class="badge bg-success">Greens</span></div>${rankingList(result.teams.green, 'mb-3')}<div class="mb-2"><span class="badge bg-danger">Reds</span></div>${rankingList(result.teams.red)}</div>
+        </div>`;
+        modal.dataset.rankingLoaded = 'true';
+      } catch (_) {
+        body.innerHTML = '<div class="alert alert-warning mb-0">Não foi possível carregar o ranking agora. Feche e tente novamente.</div>';
+      } finally {
+        modal.dataset.rankingLoading = 'false';
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -28,9 +28,18 @@
   const parseAnimatedNumber = (text) => {
     const match = String(text).match(/-?[\d.]+(?:,\d+)?/);
     if (!match) return null;
-    const normalized = match[0].replace(/\./g, '').replace(',', '.');
+    const raw = match[0];
+    // Values rendered by Python use a decimal point (46.5), while monetary
+    // values localized by the templates use a decimal comma (46,50). Dots are
+    // thousands separators only when a comma is also present.
+    const normalized = raw.includes(',')
+      ? raw.replace(/\./g, '').replace(',', '.')
+      : raw;
     const value = Number(normalized);
-    return Number.isFinite(value) ? {value, raw: match[0]} : null;
+    if (!Number.isFinite(value)) return null;
+    const decimalSeparator = raw.includes(',') ? ',' : (raw.includes('.') ? '.' : null);
+    const decimals = decimalSeparator ? raw.split(decimalSeparator).pop().length : 0;
+    return {value, raw, decimals, decimalSeparator};
   };
   document.querySelectorAll('.gh-dashboard .gh-kpi-copy strong, .gh-dashboard .gh-mini-grid strong, .gh-dashboard .gh-donut strong').forEach((node) => {
     const parsed = parseAnimatedNumber(node.textContent);
@@ -38,11 +47,12 @@
     const original = node.textContent;
     const start = performance.now();
     const duration = 720;
-    const decimals = parsed.raw.includes(',') ? parsed.raw.split(',')[1].length : 0;
+    const decimals = parsed.decimals;
     const draw = (now) => {
       const progress = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const shown = (parsed.value * eased).toFixed(decimals).replace('.', ',');
+      let shown = (parsed.value * eased).toFixed(decimals);
+      if (parsed.decimalSeparator === ',') shown = shown.replace('.', ',');
       node.textContent = original.replace(parsed.raw, shown);
       if (progress < 1) requestAnimationFrame(draw);
     };

@@ -108,8 +108,8 @@
           {% for league in selected_leagues %}<input type="hidden" name="league" value="{{ league }}">{% endfor %}
           {% for team in selected_teams %}<input type="hidden" name="team" value="{{ team }}">{% endfor %}
           <div class="matchday-generator-grid">
-            <label><span>Quantidade de jogos</span><input class="form-control" type="number" inputmode="numeric" min="1" step="1" name="generator_count" value="3" required></label>
-            <label><span>Analisar até</span><select class="form-select" name="generator_samples">{% set generator_default_sample = [6, matchday_market_settings.minimum_samples|int]|max %}{% for n in range(3,11) %}<option value="{{ n }}"{% if n == generator_default_sample %} selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
+            <label><span>Quantidade de jogos</span><input class="form-control" type="number" inputmode="numeric" min="1" max="{{ ticket_game_limit }}" step="1" name="generator_count" value="3" required></label>
+            <label><span>Analisar até</span><select class="form-select" name="generator_samples">{% set generator_default_sample = (6 if premium_access else 3) %}{% for n in range(3,(11 if premium_access else 4)) %}<option value="{{ n }}"{% if n == generator_default_sample %} selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
           </div>
           <div class="matchday-generator-early">
             <div><strong>Jogos mais cedo</strong><small>Ative para priorizar os próximos horários que tiverem boas estatísticas.</small></div>
@@ -265,7 +265,7 @@
   {% if matches %}
   <div class="matchday-grid">
     {% for match in matches %}
-    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-bet365-odds="{{ url_for('main.matchday_bet365_odds', game_id=match.game_id) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-is-live="{{ '1' if match.is_live else '0' }}" data-sample-limit="{{ request.args.get('generator_samples', 6) if ticket_generator_active else (trend_limit if trend_active else 6) }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}{% if match.game_id|string in generated_goal_suggestions %} data-generator-suggestion="{{ generated_goal_suggestions[match.game_id|string]|tojson|forceescape }}"{% endif %}>
+    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-bet365-odds="{{ url_for('main.matchday_bet365_odds', game_id=match.game_id) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-is-live="{{ '1' if match.is_live else '0' }}" data-sample-limit="{{ card_sample_limit }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}{% if match.game_id|string in summary_prefetch %} data-summary-prefetch="{{ summary_prefetch[match.game_id|string]|tojson|forceescape }}"{% endif %}{% if match.game_id|string in generated_goal_suggestions %} data-generator-suggestion="{{ generated_goal_suggestions[match.game_id|string]|tojson|forceescape }}"{% endif %}>
       <div class="matchday-card-head">
         <span class="{% if match.is_live %}is-live{% endif %}" data-game-time data-live-prefix="{% if match.is_live %}AO VIVO · {% endif %}">{% if match.is_live %}AO VIVO · {% endif %}{{ match.time }}</span>
         <small>{{ match.league or "Liga não informada" }}</small>
@@ -625,6 +625,9 @@
     });
   }
   cards.forEach((card) => {
+    if (card.dataset.summaryPrefetch) {
+      try { card._summaryPrefetch = JSON.parse(card.dataset.summaryPrefetch); } catch (_) { card._summaryPrefetch = null; }
+    }
     if (!card.dataset.trendPrefetch) return;
     try { card._trendGroups = JSON.parse(card.dataset.trendPrefetch); } catch (_) { card._trendGroups = null; }
   });
@@ -1574,7 +1577,12 @@
   });
   ticket.querySelector('[data-ticket-add-game]').addEventListener('click', () => {
     const previous = ticketSnapshot();
-    if (!addNextGeneratedCandidate()) return;
+    ensureStableTicketGameOrder();
+    const lastPosition = ticketItems.reduce((maximum, item) => {
+      const position = Number(item.gamePosition);
+      return Number.isFinite(position) ? Math.max(maximum, position) : maximum;
+    }, -1);
+    if (!addNextGeneratedCandidate(lastPosition + 1)) return;
     saveTicket();
     renderTicket(false);
     showTicketUndo(previous, 'Jogo adicionado', 'Mais uma sugestão aprovada foi incluída no final do bilhete.');
@@ -1724,9 +1732,13 @@
     const summaryCacheKey = `greenhunter-summary:${summaryCacheVersion}:${card.dataset.gameDay}:${card.dataset.gameId}:${limit}`;
     try {
       let data = null;
+      if (!forceRefresh && card._summaryPrefetch) {
+        data = card._summaryPrefetch;
+        card._summaryPrefetch = null;
+      }
       try {
         const cached = JSON.parse(localStorage.getItem(summaryCacheKey) || 'null');
-        if (cached && Date.now() - Number(cached.savedAt || 0) < 12 * 60 * 60 * 1000) data = cached.data;
+        if (!data && cached && Date.now() - Number(cached.savedAt || 0) < 12 * 60 * 60 * 1000) data = cached.data;
       } catch (_) {}
       if (forceRefresh) {
         try { localStorage.removeItem(summaryCacheKey); } catch (_) {}
@@ -1820,8 +1832,7 @@
         box.innerHTML = `
           <div class="matchday-period-switch" role="group" aria-label="Período das estatísticas">
             <button type="button" data-period="total" class="${period === 'total' ? 'is-active' : ''}">Total</button>
-            <button type="button" data-period="first" class="${period === 'first' ? 'is-active' : ''}">1º tempo</button>
-            <button type="button" data-period="second" class="${period === 'second' ? 'is-active' : ''}">2º tempo</button>
+            {{ "<button type=\"button\" data-period=\"first\" class=\"${period === 'first' ? 'is-active' : ''}\">1º tempo</button><button type=\"button\" data-period=\"second\" class=\"${period === 'second' ? 'is-active' : ''}\">2º tempo</button>"|safe if premium_access else "" }}
           </div>
           <table class="matchday-mini-table matchday-compare-table">
             <thead><tr><th>Mercado</th><th>H2H</th><th>Casa</th><th>Fora</th></tr></thead>

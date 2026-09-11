@@ -70,9 +70,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260911-add-game-v4') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260911-premium-v7') }}">
   </head>
-  <body data-page="{{ request.endpoint or '' }}">
+  <body data-page="{{ request.endpoint or '' }}"{% if current_user.is_authenticated and current_user.is_premium_user %} class="is-premium-user"{% endif %}>
     <script>
       if (document.documentElement.dataset.initialTheme === 'dark') document.body.classList.add('theme-dark');
       window.addEventListener('DOMContentLoaded', () => {
@@ -110,6 +110,12 @@
             <div class="brand-sub">Bet Intelligence</div>
           </div>
         </div>
+        {% if current_user.is_premium_user %}
+        <div class="premium-plan-card" title="Conta Premium" aria-label="Conta Premium">
+          <span class="premium-crown" aria-hidden="true">♛</span>
+          <span><b>GREENHUNTER PRO</b><small>Acesso Premium</small></span>
+        </div>
+        {% endif %}
 
         <nav class="sidebar-nav">
           <span class="nav-section">Menu</span>
@@ -163,6 +169,15 @@
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 1 21 12a10 10 0 0 1-2 5.92M4.93 4.93A10 10 0 0 0 3 12a10 10 0 0 0 2 5.92"/></svg>
             </span>
             <span>Configuracoes</span>
+          </a>
+
+          <a class="sidebar-premium-cta{% if current_user.is_premium_user %} is-active-premium{% endif %}{% if request.endpoint == 'main.premium' %} active{% endif %}" href="{{ url_for('main.premium') }}">
+            <span aria-hidden="true">♛</span>
+            {% if current_user.is_premium_user %}
+            <span><b>MINHA CONTA PREMIUM</b><small>Veja vantagens e assinatura</small></span>
+            {% else %}
+            <span><b>SEJA PREMIUM</b><small>Desbloqueie todos os recursos</small></span>
+            {% endif %}
           </a>
 
           <div class="sidebar-footer">
@@ -262,7 +277,7 @@
     {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/motion.js', v='20260911') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/motion.js', v='20260911-decimal-fix') }}" defer></script>
     <script>
       const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
       document.querySelectorAll('form[method="post"], form[method="POST"]').forEach((form) => {
@@ -294,6 +309,7 @@
           globalLoadingMessage.textContent = message;
           globalLoadingToast.hidden = false;
           requestAnimationFrame(() => globalLoadingToast.classList.add('is-visible'));
+          globalLoadingTimer = window.setTimeout(() => window.GreenHunterLoading.hide(), 30000);
         },
         hide() {
           globalLoadingToast.classList.remove('is-visible');
@@ -304,7 +320,9 @@
       document.addEventListener('submit', (event) => {
         const form = event.target;
         if (!(form instanceof HTMLFormElement)) return;
-        if (form.matches('[data-ticket-generator-form]')) {
+        if (form.matches('[data-premium-cancel-form]')) {
+          window.GreenHunterLoading.show('Cancelando renovação...', 'Aguarde a confirmação do Mercado Pago.');
+        } else if (form.matches('[data-ticket-generator-form]')) {
           window.GreenHunterLoading.show('Analisando jogos...', 'Buscando as melhores opções para montar o bilhete.');
         } else if (form.matches('.matchday-filters')) {
           const trend = form.querySelector('[name="trend_market"]')?.value;

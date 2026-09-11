@@ -1,0 +1,381 @@
+from datetime import datetime
+
+from flask_login import UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from .extensions import db
+from .utils.time import now_sp
+
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    telegram_token = db.Column(db.String(255))
+    telegram_chat_id = db.Column(db.String(64))
+    telegram_verified = db.Column(db.Boolean, default=False, nullable=False)
+    telegram_update_offset = db.Column(db.Integer)
+    mercadopago_subscription_id = db.Column(db.String(80), index=True)
+    mercadopago_subscription_status = db.Column(db.String(30))
+    mercadopago_checkout_url = db.Column(db.Text)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    subscription_plan = db.Column(db.String(20), default="starter", nullable=False)
+    rule_limit = db.Column(db.Integer, default=2, nullable=False)
+    paid_until = db.Column(db.DateTime)
+    trial_until = db.Column(db.DateTime)
+    favorite_live_leagues_json = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+
+    rules = db.relationship("Rule", backref="user", cascade="all, delete-orphan")
+    alerts = db.relationship("MatchAlert", backref="user", cascade="all, delete-orphan")
+    saved_tickets = db.relationship("SavedTicket", backref="user", cascade="all, delete-orphan")
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password, method="pbkdf2:sha256", salt_length=16)
+
+    def check_password(self, password: str) -> bool:
+        try:
+            return check_password_hash(self.password_hash, password)
+        except ValueError:
+            return False
+
+    @property
+    def is_admin_user(self) -> bool:
+        if self.is_admin:
+            return True
+        return (self.username or "").lower() == "admin"
+
+    @property
+    def has_premium_analysis(self) -> bool:
+        if self.is_admin_user:
+            return True
+        return self.has_paid_access
+
+    @property
+    def is_premium_user(self) -> bool:
+        return self.is_admin_user or self.has_paid_access
+
+    @property
+    def matchday_sample_limit(self) -> int:
+        return 10 if self.is_premium_user else 3
+
+    @property
+    def generated_ticket_game_limit(self) -> int:
+        if self.is_admin_user:
+            return 500
+        return 10 if self.is_premium_user else 5
+
+    @property
+    def saved_ticket_limit(self) -> int:
+        if self.is_admin_user:
+            return 10000
+        return 200 if self.is_premium_user else 5
+
+    @property
+    def trial_active(self) -> bool:
+        return bool(self.trial_until and self.trial_until > now_sp())
+
+    @property
+    def paid_active(self) -> bool:
+        plan = (self.subscription_plan or "starter").lower()
+        return bool(plan in ("pro", "custom") and self.paid_until and self.paid_until > now_sp())
+
+    @property
+    def paid_days_left(self) -> int:
+        if not self.paid_active:
+            return 0
+        delta = self.paid_until - now_sp()
+        return max(1, int((delta.total_seconds() + 86399) // 86400))
+
+    @property
+    def trial_days_left(self) -> int:
+        if not self.trial_active:
+            return 0
+        delta = self.trial_until - now_sp()
+        return max(1, int((delta.total_seconds() + 86399) // 86400))
+
+    @property
+    def has_paid_access(self) -> bool:
+        if self.paid_active:
+            return True
+        return self.trial_active
+
+    @property
+    def plan_label(self) -> str:
+        plan = (self.subscription_plan or "starter").lower()
+        if self.paid_active:
+            labels = {"pro": "Pro", "custom": "Custom"}
+            return f"{labels.get(plan, 'Pago')} ({self.paid_days_left}d)"
+        if self.trial_active and (self.subscription_plan or "starter").lower() == "starter":
+            return f"Trial Pro ({self.trial_days_left}d)"
+        labels = {
+            "starter": "Starter",
+            "pro": "Pro",
+            "custom": "Custom",
+        }
+        return labels.get((self.subscription_plan or "starter").lower(), "Starter")
+
+    @property
+    def effective_rule_limit(self) -> int:
+        if self.is_admin_user:
+            return 1000000
+        if not self.is_admin_user and not self.has_paid_access:
+            return 2
+        if self.trial_active and (self.subscription_plan or "starter").lower() == "starter":
+            return 20
+        try:
+            limit = int(self.rule_limit or 0)
+        except (TypeError, ValueError):
+            limit = 0
+        return max(0, limit)
+
+
+class MatchdayLeaguePreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    normalized_name = db.Column(db.String(160), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(160), nullable=False)
+    is_relevant = db.Column(db.Boolean, default=True, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+
+class UserMatchdayPreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
+    relevant_leagues_json = db.Column(db.Text)
+    market_settings_json = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+    user = db.relationship("User", backref=db.backref("matchday_preference", uselist=False, cascade="all, delete-orphan"))
+
+
+class Rule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    time_limit_min = db.Column(db.Integer, nullable=False, default=30)
+    message_template = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    second_half_only = db.Column(db.Boolean, default=False, nullable=False)
+    follow_ht = db.Column(db.Boolean, default=True, nullable=False)
+    follow_ft = db.Column(db.Boolean, default=True, nullable=False)
+    outcome_green_stage = db.Column(db.String(5), default="HT", nullable=False)
+    outcome_red_stage = db.Column(db.String(5), default="HT", nullable=False)
+    outcome_green_minute = db.Column(db.Integer)
+    outcome_red_minute = db.Column(db.Integer)
+    outcome_red_if_no_green = db.Column(db.Boolean, default=False, nullable=False)
+    notify_telegram = db.Column(db.Boolean, default=True, nullable=False)
+    alert_on_penalty = db.Column(db.Boolean, default=False, nullable=False)
+    score_home = db.Column(db.Integer)
+    score_away = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    last_checked_at = db.Column(db.DateTime)
+    last_match_desc = db.Column(db.String(255))
+    last_alert_at = db.Column(db.DateTime)
+    last_alert_desc = db.Column(db.String(255))
+    # Optional league filter (JSON list of league names). If set, alerts are emitted only for matching leagues.
+    allowed_leagues_json = db.Column(db.Text)
+
+    conditions = db.relationship(
+        "RuleCondition", backref="rule", cascade="all, delete-orphan", order_by="RuleCondition.id"
+    )
+    outcome_conditions = db.relationship(
+        "RuleOutcomeCondition",
+        backref="rule",
+        cascade="all, delete-orphan",
+        order_by="RuleOutcomeCondition.id",
+    )
+    alerts = db.relationship("MatchAlert", backref="rule", cascade="all, delete-orphan")
+
+
+class MercadoPagoWebhookEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_key = db.Column(db.String(180), unique=True, nullable=False, index=True)
+    event_type = db.Column(db.String(80))
+    resource_id = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+
+
+class RuleCondition(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("rule.id"), nullable=False)
+    stat_key = db.Column(db.String(120), nullable=False)
+    side = db.Column(db.String(10), nullable=False)
+    operator = db.Column(db.String(4), nullable=False)
+    value = db.Column(db.Integer, nullable=False)
+    group_id = db.Column(db.Integer, default=0, nullable=False)
+
+
+class RuleOutcomeCondition(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("rule.id"), nullable=False)
+    outcome_type = db.Column(db.String(10), nullable=False)
+    stat_key = db.Column(db.String(120), nullable=False)
+    side = db.Column(db.String(10), nullable=False)
+    operator = db.Column(db.String(4), nullable=False)
+    value = db.Column(db.Integer, nullable=False)
+    group_id = db.Column(db.Integer, default=0, nullable=False)
+
+
+class MatchAlert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("rule.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    game_id = db.Column(db.String(32), nullable=False)
+    url = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    alert_minute = db.Column(db.Integer)
+    result_minute = db.Column(db.Integer)
+    result_time_hhmm = db.Column(db.String(8))
+    initial_score = db.Column(db.String(20))
+    last_score = db.Column(db.String(20))
+    last_score_minute = db.Column(db.Integer)
+    ht_score = db.Column(db.String(20))
+    ft_score = db.Column(db.String(20))
+    initial_stats_json = db.Column(db.Text)
+    ht_stats_json = db.Column(db.Text)
+    ft_stats_json = db.Column(db.Text)
+    penalty_last_total = db.Column(db.Integer, default=0, nullable=False)
+    penalty_notified = db.Column(db.Boolean, default=False, nullable=False)
+    penalty_baseline_set = db.Column(db.Boolean, default=False, nullable=False)
+    league = db.Column(db.String(120))
+    home_team = db.Column(db.String(120))
+    away_team = db.Column(db.String(120))
+    ai_score = db.Column(db.Integer)
+    ai_verdict = db.Column(db.String(40))
+    ai_commentary = db.Column(db.Text)
+    ml_pred_score = db.Column(db.Integer)
+    ml_pred_verdict = db.Column(db.String(40))
+    ml_pred_prob_green = db.Column(db.Float)
+    ml_model_samples = db.Column(db.Integer)
+    ml_model_trained_at = db.Column(db.String(32))
+    market_key = db.Column(db.String(64))
+    market_label = db.Column(db.String(120))
+    outcome_signature = db.Column(db.Text)
+    target_side = db.Column(db.String(20))
+    target_operator = db.Column(db.String(8))
+    target_value = db.Column(db.Integer)
+    target_text = db.Column(db.String(255))
+    initial_events_json = db.Column(db.Text)
+    result_events_json = db.Column(db.Text)
+    ft_events_json = db.Column(db.Text)
+    initial_event_metrics_json = db.Column(db.Text)
+    result_event_metrics_json = db.Column(db.Text)
+    ft_event_metrics_json = db.Column(db.Text)
+    ft_completed = db.Column(db.Boolean, default=False, nullable=False)
+    telegram_entry_message_id = db.Column(db.Integer)
+    telegram_entry_enriched = db.Column(db.Boolean, default=False, nullable=False)
+    stake_amount = db.Column(db.Float)
+    stake_odd = db.Column(db.Float)
+    bet_note = db.Column(db.Text)
+    bet_recorded_at = db.Column(db.DateTime)
+    bet_tracking_type = db.Column(db.String(20))
+    bet_initial_goal_total = db.Column(db.Integer)
+    bet_settlement_stage = db.Column(db.String(5))
+    bet_status = db.Column(db.String(20))
+    bet_profit = db.Column(db.Float)
+    bet_settled_at = db.Column(db.DateTime)
+
+    __table_args__ = (db.UniqueConstraint("rule_id", "game_id", name="uix_rule_game"),)
+
+
+class LiveGameState(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    url = db.Column(db.String(255))
+    league = db.Column(db.String(120))
+    home_team = db.Column(db.String(120))
+    away_team = db.Column(db.String(120))
+    time_text = db.Column(db.String(40))
+    minute = db.Column(db.Integer)
+    score = db.Column(db.String(20))
+    stats_json = db.Column(db.Text)
+    events_json = db.Column(db.Text)
+    first_half_snapshot_json = db.Column(db.Text)
+    first_half_snapshot_minute = db.Column(db.Integer)
+    ht_seen_at = db.Column(db.DateTime)
+    second_half_baseline_json = db.Column(db.Text)
+    second_half_started = db.Column(db.Boolean, default=False, nullable=False)
+    second_half_started_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    updated_at = db.Column(db.DateTime, default=now_sp, onupdate=now_sp, nullable=False)
+
+
+class SavedTicket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    total_odd = db.Column(db.Float, nullable=False)
+    stake_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False, index=True)
+    profit = db.Column(db.Float, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    resolved_at = db.Column(db.DateTime)
+    telegram_notified_at = db.Column(db.DateTime)
+
+    legs = db.relationship(
+        "SavedTicketLeg", backref="ticket", cascade="all, delete-orphan", order_by="SavedTicketLeg.id"
+    )
+
+
+class SavedTicketLeg(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("saved_ticket.id"), nullable=False, index=True)
+    game_id = db.Column(db.String(32), nullable=False, index=True)
+    game_day = db.Column(db.String(10))
+    game_time = db.Column(db.String(40))
+    league = db.Column(db.String(120))
+    home_team = db.Column(db.String(120), nullable=False)
+    away_team = db.Column(db.String(120), nullable=False)
+    market_key = db.Column(db.String(64), nullable=False)
+    market_label = db.Column(db.String(160), nullable=False)
+    target_side = db.Column(db.String(20), default="total", nullable=False)
+    target_line = db.Column(db.Float)
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    result_value = db.Column(db.Float)
+    samples = db.Column(db.Integer)
+    source_group = db.Column(db.String(120))
+    checked_at = db.Column(db.DateTime)
+
+
+class LoginAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80))
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    ip_address = db.Column(db.String(64))
+    success = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+
+    __table_args__ = (
+        db.Index("ix_login_attempt_ip_success_created", "ip_address", "success", "created_at"),
+    )
+
+
+class AdminBroadcast(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+
+
+class AdminBroadcastView(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    broadcast_id = db.Column(db.Integer, db.ForeignKey("admin_broadcast.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    seen_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("broadcast_id", "user_id", name="uix_broadcast_user"),
+    )
+
+
+class UndoAction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    action_type = db.Column(db.String(64), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime)

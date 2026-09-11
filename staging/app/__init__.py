@@ -261,6 +261,10 @@ def _ensure_rule_outcome_condition_columns():
 
 def _ensure_user_columns():
     columns = {
+        "telegram_update_offset": "INTEGER",
+        "mercadopago_subscription_id": "VARCHAR(80)",
+        "mercadopago_subscription_status": "VARCHAR(30)",
+        "mercadopago_checkout_url": "TEXT",
         "email": "VARCHAR(120)",
         "is_admin": "BOOLEAN DEFAULT 0",
         "telegram_verified": "BOOLEAN DEFAULT 0",
@@ -318,6 +322,12 @@ def _ensure_alert_columns():
         "stake_odd": "FLOAT",
         "bet_note": "TEXT",
         "bet_recorded_at": "DATETIME",
+        "bet_tracking_type": "VARCHAR(20)",
+        "bet_initial_goal_total": "INTEGER",
+        "bet_settlement_stage": "VARCHAR(5)",
+        "bet_status": "VARCHAR(20)",
+        "bet_profit": "FLOAT",
+        "bet_settled_at": "DATETIME",
     }
 
     with db.engine.connect() as conn:
