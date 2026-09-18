@@ -11,6 +11,7 @@ import ctypes
 import subprocess
 import resource
 import signal
+from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import tempfile
 from urllib.parse import unquote
@@ -41,6 +42,13 @@ _CF_CONSECUTIVE_CHALLENGES = 0
 _CF_RESTART_SCHEDULED = False
 _BROWSER_DRIVER = None
 _BROWSER_PROFILE_DIR = None
+
+_BLOCKED_YOUTH_PATTERN = re.compile(r"\b(?:u|sub|under)[\s._-]?(?:17|18|19|20|21|22)\b", re.IGNORECASE)
+
+
+def is_excluded_match(league: str | None, home_team: str | None = None, away_team: str | None = None) -> bool:
+    text = " ".join(str(value or "") for value in (league, home_team, away_team))
+    return bool(_BLOCKED_YOUTH_PATTERN.search(text))
 _PROFILE_LAST_CLEANUP_AT = 0.0
 _SELENIUM_CACHE_LAST_CLEANUP_AT = 0.0
 _PROFILE_COOKIES_LOADED = False
@@ -1839,6 +1847,8 @@ def fetch_live_games(session):
                 minute_value = 45
             home_team, away_team = _extract_row_teams(tr, game_url)
             score = _extract_row_score(tr)
+            if is_excluded_match(league_name, home_team, away_team):
+                continue
 
             candidate = {
                 "game_id": game_id,
@@ -1912,6 +1922,17 @@ def fetch_match_stats(session, url):
 
     home_team = _clean_team_name(home_team)
     away_team = _clean_team_name(away_team)
+    home_external_id = None
+    away_external_id = None
+    for anchor in soup.find_all("a", href=True):
+        team_id = re.search(r"(?:/[a-z]+)?/t/(\d+)", urlparse(anchor.get("href") or "").path)
+        if not team_id:
+            continue
+        anchor_name = _clean_team_name(anchor.get_text(" ", strip=True))
+        if not home_external_id and _team_names_match(anchor_name, home_team):
+            home_external_id = team_id.group(1)
+        elif not away_external_id and _team_names_match(anchor_name, away_team):
+            away_external_id = team_id.group(1)
     events = _extract_match_events(soup, home_team, away_team)
 
     archived_ht_goals = None
@@ -2042,6 +2063,8 @@ def fetch_match_stats(session, url):
         "league": league,
         "home_team": home_team,
         "away_team": away_team,
+        "home_external_id": home_external_id,
+        "away_external_id": away_external_id,
         "score": score,
         "time_text": time_text,
         "minute": minute_value,
@@ -2053,6 +2076,8 @@ def fetch_match_stats(session, url):
 
 
 HISTORY_LIMITS = {"h2h": 8, "home": 6, "away": 6}
+_HISTORY_DETAIL_CACHE = {}
+_HISTORY_DETAIL_CACHE_MAX = 5000
 HISTORY_LABELS = {
     "head to head": "h2h",
     "h2h": "h2h",
@@ -2201,10 +2226,58 @@ def _parse_history_table(table):
             "home": home_goals,
             "away": away_goals,
             "total": home_goals + away_goals,
+            "source": "betsapi",
+            "historical_date_available": False,
         }
         match_url = _history_match_url(row)
         if match_url:
             item["url"] = match_url
+            external = re.search(r"/r/(\d+)", urlparse(match_url).path)
+            item["external_id"] = external.group(1) if external else None
+        home_team, away_team = _extract_row_teams(row, match_url or "")
+        if home_team:
+            item["history_home_team"] = home_team
+        if away_team:
+            item["history_away_team"] = away_team
+        team_links = []
+        for anchor in row.find_all("a", href=True):
+            team_id = re.search(r"(?:/[a-z]+)?/t/(\d+)", urlparse(anchor.get("href") or "").path)
+            if not team_id:
+                continue
+            name = anchor.get_text(" ", strip=True)
+            team_links.append((team_id.group(1), name))
+        for team_id, name in team_links:
+            if home_team and _team_names_match(name, home_team):
+                item["history_home_external_id"] = team_id
+            elif away_team and _team_names_match(name, away_team):
+                item["history_away_external_id"] = team_id
+        league_cell = row.find("td", class_="league_n")
+        league_link = league_cell.find("a") if league_cell else None
+        league = league_link.get_text(" ", strip=True) if league_link else ""
+        if league:
+            item["league"] = league
+        row_text = row.get_text(" ", strip=True)
+        temporal = re.search(
+            r"\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+([01]?\d|2[0-3]):([0-5]\d))?\b",
+            row_text,
+        )
+        if temporal:
+            original = temporal.group(0)
+            try:
+                parsed = datetime(
+                    int(temporal.group(1)), int(temporal.group(2)), int(temporal.group(3)),
+                    int(temporal.group(4) or 0), int(temporal.group(5) or 0),
+                )
+                item.update({
+                    "kickoff_at": parsed.isoformat(timespec="minutes"),
+                    "kickoff_original": original,
+                    # A listagem histórica não declara timezone. Preservar a
+                    # incerteza é mais seguro do que converter como UTC.
+                    "kickoff_timezone": "SOURCE_LOCAL_UNKNOWN",
+                    "historical_date_available": True,
+                })
+            except ValueError:
+                pass
         items.append(item)
     return items
 
@@ -2316,8 +2389,58 @@ def _history_event_in_second_half(event: dict) -> bool:
 def enrich_history_with_ht_goals(session, history_data, limits=None):
     if not isinstance(history_data, dict):
         return history_data
+    # Reuse already persisted, identity-safe observations before touching the
+    # remote detail page. This reduces duplicate traffic during recollection.
+    from app.models import HistoricalMatch, TeamIdentity
+
     limits = limits or {"h2h": 8, "home": 6, "away": 6}
     seen_urls = {}
+    external_ids = {
+        str(item.get("external_id"))
+        for items in history_data.values() if isinstance(items, list)
+        for item in items if isinstance(item, dict) and item.get("external_id")
+    }
+    persisted = {
+        row.external_id: row for row in HistoricalMatch.query.filter(
+            HistoricalMatch.source == "betsapi", HistoricalMatch.external_id.in_(external_ids)
+        ).all()
+    } if external_ids else {}
+    wanted_identity_ids = {identity_id for row in persisted.values()
+                           for identity_id in (row.home_team_identity_id, row.away_team_identity_id) if identity_id}
+    identity_ids = {row.id: row.external_id for row in TeamIdentity.query.filter(
+        TeamIdentity.id.in_(wanted_identity_ids)).all()} if wanted_identity_ids else {}
+
+    def persisted_detail(item):
+        match = persisted.get(str(item.get("external_id") or ""))
+        if not match or not match.home_team_identity_id or not match.away_team_identity_id:
+            return None
+        values = {(stat.period, stat.side, stat.stat_key): stat.value for stat in match.stats if stat.available}
+        detail = {
+            "history_home_team": match.home_team, "history_away_team": match.away_team,
+            "history_home_external_id": identity_ids.get(match.home_team_identity_id),
+            "history_away_external_id": identity_ids.get(match.away_team_identity_id),
+            "goals_ht": values.get(("first_half", "total", "goals_ht")),
+            "goals_2h": values.get(("second_half", "total", "goals_2h")),
+            "corners_ht": values.get(("first_half", "total", "corners")),
+            "corners_2h": values.get(("second_half", "total", "corners")),
+            "corners_home": values.get(("full_time", "home", "corners_home")),
+            "corners_away": values.get(("full_time", "away", "corners_away")),
+            "cards_home": values.get(("full_time", "home", "cards_home")),
+            "cards_away": values.get(("full_time", "away", "cards_away")),
+            "shots_total": values.get(("full_time", "total", "shots")),
+            "shots_home": values.get(("full_time", "home", "shots_home")),
+            "shots_away": values.get(("full_time", "away", "shots_away")),
+            "shots_on_target_total": values.get(("full_time", "total", "shots_on_target")),
+            "shots_on_target_home": values.get(("full_time", "home", "shots_on_target_home")),
+            "shots_on_target_away": values.get(("full_time", "away", "shots_on_target_away")),
+            "fouls_total": values.get(("full_time", "total", "fouls")),
+            "fouls_home": values.get(("full_time", "home", "fouls_home")),
+            "fouls_away": values.get(("full_time", "away", "fouls_away")),
+            "offsides_total": values.get(("full_time", "total", "offsides")),
+            "offsides_home": values.get(("full_time", "home", "offsides_home")),
+            "offsides_away": values.get(("full_time", "away", "offsides_away")),
+        }
+        return detail if detail["history_home_external_id"] and detail["history_away_external_id"] else None
     for key, items in history_data.items():
         if not isinstance(items, list):
             continue
@@ -2333,6 +2456,16 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             if url in seen_urls:
                 item.update(seen_urls[url])
                 continue
+            if url in _HISTORY_DETAIL_CACHE:
+                item.update(_HISTORY_DETAIL_CACHE[url])
+                seen_urls[url] = dict(_HISTORY_DETAIL_CACHE[url])
+                continue
+            stored = persisted_detail(item)
+            if stored:
+                item.update(stored)
+                seen_urls[url] = dict(stored)
+                _HISTORY_DETAIL_CACHE[url] = dict(stored)
+                continue
             # Uma partida arquivada indisponível não deve derrubar o
             # histórico inteiro do card.
             try:
@@ -2343,6 +2476,8 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
             match_stats = (payload or {}).get("stats") or {}
             item["history_home_team"] = (payload or {}).get("home_team") or ""
             item["history_away_team"] = (payload or {}).get("away_team") or ""
+            item["history_home_external_id"] = (payload or {}).get("home_external_id") or item.get("history_home_external_id")
+            item["history_away_external_id"] = (payload or {}).get("away_external_id") or item.get("history_away_external_id")
             if not events:
                 archived_ht_goals = (payload or {}).get("archived_ht_goals")
                 if archived_ht_goals is None:
@@ -2381,6 +2516,10 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                     "shots_on_target_total": None,
                     "fouls_total": None,
                 })
+                seen_urls[url] = dict(item)
+                if len(_HISTORY_DETAIL_CACHE) >= _HISTORY_DETAIL_CACHE_MAX:
+                    _HISTORY_DETAIL_CACHE.pop(next(iter(_HISTORY_DETAIL_CACHE)))
+                _HISTORY_DETAIL_CACHE[url] = dict(item)
                 continue
             ht_events = [
                 event
@@ -2555,6 +2694,9 @@ def enrich_history_with_ht_goals(session, history_data, limits=None):
                 "cards_away": cards_away if cards_have_sides else None,
             }
             seen_urls[url] = detail
+            if len(_HISTORY_DETAIL_CACHE) >= _HISTORY_DETAIL_CACHE_MAX:
+                _HISTORY_DETAIL_CACHE.pop(next(iter(_HISTORY_DETAIL_CACHE)))
+            _HISTORY_DETAIL_CACHE[url] = dict(detail)
             item.update(detail)
     return history_data
 

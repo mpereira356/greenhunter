@@ -46,7 +46,7 @@
           {% for row in users %}
           <tr>
             <td class="admin-user-identity" data-label="Usuário">{{ row.user.username }}</td>
-            <td data-label="E-mail">{{ row.user.email or '-' }}</td>
+            <td class="admin-user-email" data-label="E-mail" title="{{ row.user.email or '-' }}">{{ row.user.email or '-' }}</td>
             <td data-label="Plano">{{ row.user.plan_label }}</td>
             <td data-label="Acesso">
               {% if row.user.is_admin_user %}
@@ -61,7 +61,10 @@
             <td data-label="Criado em">{{ row.user.created_at.strftime('%d/%m/%Y') }}</td>
             <td data-label="Último login">{{ row.last_login.strftime('%d/%m/%Y %H:%M') if row.last_login else 'Nunca' }}</td>
             <td class="text-end admin-user-action">
-              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
+              <div class="admin-user-action-buttons">
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_detail', user_id=row.user.id) }}">Detalhes</a>
+                {% if row.user.id != current_user.id %}<button class="btn btn-sm admin-user-delete" type="button" data-user-delete data-user-id="{{ row.user.id }}" data-user-name="{{ row.user.username }}" data-delete-url="{{ url_for('admin.delete_user', user_id=row.user.id) }}">Excluir</button>{% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -73,5 +76,71 @@
     </div>
   </div>
 </div>
+<div class="admin-user-delete-backdrop" data-user-delete-modal hidden>
+  <section class="admin-user-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-user-delete-title">
+    <button type="button" class="admin-user-delete-close" data-user-delete-close aria-label="Fechar">×</button>
+    <div class="admin-user-delete-icon" aria-hidden="true">!</div>
+    <span>EXCLUSÃO PERMANENTE</span>
+    <h2 id="admin-user-delete-title">Excluir este usuário?</h2>
+    <p>A conta <strong data-user-delete-name></strong> e todos os seus dados, regras, alertas e bilhetes serão excluídos permanentemente.</p>
+    <div class="admin-user-delete-actions"><button type="button" class="btn btn-outline-secondary" data-user-delete-close>Cancelar</button><button type="button" class="btn btn-danger" data-user-delete-confirm>Sim, excluir permanentemente</button></div>
+  </section>
 </div>
+<div class="admin-user-undo" data-user-undo role="status" aria-live="polite" hidden>
+  <i aria-hidden="true">✓</i><span><b>Usuário excluído</b><small>Você tem 5 segundos para desfazer.</small></span><button type="button" data-user-undo-button>Desfazer</button>
+</div>
+</div>
+<script>
+(() => {
+  const modal = document.querySelector('[data-user-delete-modal]');
+  const confirmButton = document.querySelector('[data-user-delete-confirm]');
+  const undoToast = document.querySelector('[data-user-undo]');
+  const undoButton = document.querySelector('[data-user-undo-button]');
+  if (!modal || !confirmButton || !undoToast || !undoButton) return;
+  let selected = null;
+  let undoToken = null;
+  let hideTimer = null;
+  let fadeTimer = null;
+  const closeModal = () => { modal.classList.remove('is-visible'); window.setTimeout(() => { modal.hidden = true; }, 160); };
+  document.querySelectorAll('[data-user-delete-close]').forEach((button) => button.addEventListener('click', closeModal));
+  document.querySelectorAll('[data-user-delete]').forEach((button) => button.addEventListener('click', () => {
+    selected = button;
+    modal.querySelector('[data-user-delete-name]').textContent = button.dataset.userName || 'este usuário';
+    modal.hidden = false;
+    requestAnimationFrame(() => modal.classList.add('is-visible'));
+  }));
+  confirmButton.addEventListener('click', async () => {
+    if (!selected) return;
+    confirmButton.disabled = true;
+    try {
+      const response = await fetch(selected.dataset.deleteUrl, {method: 'POST', headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível excluir o usuário.');
+      const row = selected.closest('tr');
+      if (row) row.remove();
+      undoToken = result.token;
+      closeModal();
+      undoToast.hidden = false;
+      undoToast.classList.remove('is-fading');
+      requestAnimationFrame(() => undoToast.classList.add('is-visible'));
+      fadeTimer = window.setTimeout(() => undoToast.classList.add('is-fading'), 4400);
+      hideTimer = window.setTimeout(() => { undoToast.hidden = true; undoToast.classList.remove('is-visible', 'is-fading'); undoToken = null; }, 5000);
+    } catch (error) {
+      window.alert(error.message || 'Não foi possível excluir o usuário.');
+    } finally { confirmButton.disabled = false; }
+  });
+  undoButton.addEventListener('click', async () => {
+    if (!undoToken) return;
+    undoButton.disabled = true;
+    try {
+      const response = await fetch(`{{ url_for('admin.undo_delete_user', token='TOKEN') }}`.replace('TOKEN', encodeURIComponent(undoToken)), {method: 'POST', headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível desfazer.');
+      if (hideTimer) window.clearTimeout(hideTimer);
+      if (fadeTimer) window.clearTimeout(fadeTimer);
+      window.location.reload();
+    } catch (error) { window.alert(error.message || 'O prazo para desfazer terminou.'); undoButton.disabled = false; }
+  });
+})();
+</script>
 {% endblock %}

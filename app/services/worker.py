@@ -31,7 +31,7 @@ from app.services.scraper import (
     summarize_history,
     is_second_half as scraper_is_second_half,
 )
-from app.services.telegram import edit_message_text, send_message
+from app.services.telegram import edit_message_text, get_updates, send_message
 from app.utils.time import now_sp
 
 POLL_INTERVAL = int(os.environ.get("WORKER_INTERVAL", "1"))
@@ -41,6 +41,8 @@ FETCH_STATS_ATTEMPTS = max(1, int(os.environ.get("FETCH_STATS_ATTEMPTS", "2")))
 FETCH_STATS_DELAY = max(0.0, float(os.environ.get("FETCH_STATS_DELAY", "0.25")))
 ALERT_FETCH_STATS_ATTEMPTS = max(1, int(os.environ.get("ALERT_FETCH_STATS_ATTEMPTS", str(FETCH_STATS_ATTEMPTS))))
 ALERT_FETCH_STATS_DELAY = max(0.0, float(os.environ.get("ALERT_FETCH_STATS_DELAY", str(FETCH_STATS_DELAY))))
+ALERT_REALTIME_WINDOW_HOURS = max(1, int(os.environ.get("ALERT_REALTIME_WINDOW_HOURS", "4")))
+ALERT_BACKLOG_GAMES_PER_CYCLE = max(1, int(os.environ.get("ALERT_BACKLOG_GAMES_PER_CYCLE", "1")))
 FINALIZE_POLL_INTERVAL = max(5.0, float(os.environ.get("FINALIZE_POLL_INTERVAL", "60")))
 FOLLOW_SETTLED_WINDOW_MINUTES = max(5, int(os.environ.get("FOLLOW_SETTLED_WINDOW_MINUTES", "20")))
 FINALIZE_LOOKBACK_HOURS = max(1, int(os.environ.get("FINALIZE_LOOKBACK_HOURS", "12")))
@@ -68,12 +70,13 @@ HALFTIME_SEEN_AT = {}
 HALFTIME_CONFIRMED_AT = {}
 HALFTIME_CONFIRM_SECONDS = int(os.environ.get("HALFTIME_CONFIRM_SECONDS", "180"))
 RED_CONFIRM_PENDING = {}
-RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "15"))
+RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "3"))
 FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST_HALF", "0").strip().lower() in ("1", "true", "yes")
 NON_DELTA_KEYS = {"Minute", "Possession"}
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "1")))
+ALERT_ANALYSIS_THREADS = max(1, int(os.environ.get("ALERT_ANALYSIS_THREADS", "1")))
 WORKER_MAX_CANDIDATE_GAMES = max(1, int(os.environ.get("WORKER_MAX_CANDIDATE_GAMES", "8")))
 USE_SERIAL_PREFETCH = os.environ.get("WORKER_SERIAL_PREFETCH", "0").strip().lower() in ("1", "true", "yes")
 IA_SHADOW_ENABLED = os.environ.get("IA_SHADOW_ENABLED", "1").strip().lower() in ("1", "true", "yes")
@@ -91,14 +94,16 @@ IA_SHADOW_CONTROL_RULE_NAME = os.environ.get("IA_SHADOW_CONTROL_RULE_NAME", "REG
 YOUTH_TOKENS = (
     "u19", "u-19", "u 19", "sub19", "sub-19", "sub 19", "under 19",
     "u20", "u-20", "u 20", "sub20", "sub-20", "sub 20", "under 20",
+    "u21", "u-21", "u 21", "sub21", "sub-21", "sub 21", "under 21",
+    "u22", "u-22", "u 22", "sub22", "sub-22", "sub 22", "under 22",
 )
 IA_SHADOW_LAST_SENT = {}
 IA_SHADOW_PROFILE_CACHE = None
 IA_SHADOW_PROFILE_UPDATED_AT = None
 IA_SHADOW_LOCK = threading.Lock()
-GREEN_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("GREEN_GROUP_WINDOW_SECONDS", "8")))
+GREEN_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("GREEN_GROUP_WINDOW_SECONDS", "1")))
 GREEN_NOTIFICATION_PENDING = {}
-RED_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("RED_GROUP_WINDOW_SECONDS", "180")))
+RED_GROUP_WINDOW_SECONDS = max(1, int(os.environ.get("RED_GROUP_WINDOW_SECONDS", "1")))
 RED_NOTIFICATION_PENDING = {}
 ENTRY_GROUP_WINDOW_SECONDS = max(0, int(os.environ.get("ENTRY_GROUP_WINDOW_SECONDS", "0")))
 REALTIME_ENTRY_ALERTS = os.environ.get("REALTIME_ENTRY_ALERTS", "1").strip().lower() in ("1", "true", "yes")
@@ -112,6 +117,184 @@ ENTRY_ENRICHMENT_QUEUED = set()
 ENTRY_ENRICHMENT_ATTEMPTED = set()
 ENTRY_ENRICHMENT_LOCK = threading.Lock()
 LIVE_GAME_CURSOR = 0
+ALERT_BACKLOG_CURSOR = 0
+LATEST_LIVE_ROWS = {}
+LATEST_LIVE_ROWS_LOCK = threading.Lock()
+TELEGRAM_REPLY_POLL_SECONDS = max(1.0, float(os.environ.get("TELEGRAM_REPLY_POLL_SECONDS", "2")))
+
+
+def parse_telegram_bet_reply(text: str | None):
+    """Parse the strict stake/odd shorthand accepted in alert replies."""
+    match = re.fullmatch(
+        r"\s*(\d+(?:[.,]\d{1,2})?)\s*/\s*(\d+(?:[.,]\d{1,3})?)(?:\s*/\s*(G2))?\s*",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    stake = float(match.group(1).replace(",", "."))
+    odd = float(match.group(2).replace(",", "."))
+    if stake <= 0 or odd <= 1:
+        return None
+    return round(stake, 2), round(odd, 3), (match.group(3) or "").upper() or None
+
+
+def _telegram_reply_text(stake: float, odd: float) -> str:
+    possible_return = round(stake * odd, 2)
+    possible_profit = round(stake * (odd - 1), 2)
+    return (
+        "✅ Aposta registrada\n"
+        f"Valor: R$ {stake:.2f}\n"
+        f"Odd: {odd:.3f}".rstrip("0").rstrip(".") + "\n"
+        f"Retorno possível: R$ {possible_return:.2f}\n"
+        f"Lucro possível: R$ {possible_profit:.2f}"
+    ).replace(".", ",")
+
+
+def _telegram_bet_help(alert) -> str:
+    score = alert.last_score or alert.initial_score or "0 x 0"
+    home, away = parse_score(score)
+    stage = ((alert.rule.outcome_green_stage if alert.rule else None) or "HT").upper()
+    period = "intervalo (HT)" if stage == "HT" else "fim do jogo (FT)"
+    return (
+        "Como registrar esta aposta:\n\n"
+        "• 15/3,42 — acompanha o GREEN ou RED da regra.\n"
+        "• 15/3,42/G2 — exige 2 gols adicionais.\n\n"
+        f"Placar de referência atual: {score} ({home + away} gols).\n"
+        "No modo G2: nenhum novo gol = RED; 1 novo gol = DEVOLVIDA; "
+        f"2 ou mais = GREEN. A conferência será feita no {period}."
+    )
+
+
+def g2_bet_outcome(new_goals: int, stake: float, odd: float):
+    if new_goals >= 2:
+        return "green", round(stake * (odd - 1), 2)
+    if new_goals == 1:
+        return "push", 0.0
+    return "red", -stake
+
+
+def _handle_telegram_reply(user, message: dict):
+    reply = message.get("reply_to_message") or {}
+    replied_message_id = reply.get("message_id")
+    if not replied_message_id:
+        return
+    alert = MatchAlert.query.filter_by(
+        user_id=user.id,
+        telegram_entry_message_id=replied_message_id,
+    ).first()
+    if not alert:
+        return
+    command = str(message.get("text") or "").strip().casefold()
+    if command in {"ajuda", "?"}:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            _telegram_bet_help(alert),
+            context=f"bet_reply_help_{alert.id}",
+        )
+        return
+    parsed = parse_telegram_bet_reply(message.get("text"))
+    if not parsed:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            "Formato não reconhecido. Use 15/3,42, 15/3,42/G2 ou responda ajuda.",
+            context=f"bet_reply_invalid_{alert.id}",
+        )
+        return
+    if alert.stake_amount is not None or alert.stake_odd is not None:
+        _send_message_safe(
+            user.telegram_token,
+            user.telegram_chat_id,
+            "Esta aposta já foi registrada. Para corrigir os valores, use o Histórico no site.",
+            context=f"bet_reply_duplicate_{alert.id}",
+        )
+        return
+    stake, odd, tracking_type = parsed
+    alert.stake_amount = stake
+    alert.stake_odd = odd
+    alert.bet_recorded_at = now_sp()
+    alert.bet_tracking_type = tracking_type
+    alert.bet_status = "pending" if tracking_type else None
+    alert.bet_profit = None
+    alert.bet_settled_at = None
+    if tracking_type == "G2":
+        home, away = parse_score(alert.last_score or alert.initial_score or "0 x 0")
+        alert.bet_initial_goal_total = home + away
+        alert.bet_settlement_stage = (
+            ((alert.rule.outcome_green_stage if alert.rule else None) or "HT").upper()
+        )
+    else:
+        alert.bet_initial_goal_total = None
+        alert.bet_settlement_stage = None
+    alert.bet_note = "Registrada pelo Telegram" + (" · G2" if tracking_type else "")
+    db.session.commit()
+    confirmation = _telegram_reply_text(stake, odd)
+    if tracking_type == "G2":
+        period = "intervalo (HT)" if alert.bet_settlement_stage == "HT" else "fim do jogo (FT)"
+        confirmation += (
+            "\nModo G2: 2 gols adicionais para GREEN; 1 para DEVOLVIDA; 0 para RED."
+            f"\nLiquidação: {period}."
+        )
+    _send_message_safe(
+        user.telegram_token,
+        user.telegram_chat_id,
+        confirmation,
+        context=f"bet_reply_saved_{alert.id}",
+    )
+
+
+def run_telegram_replies_worker(app):
+    """Consume replies once per configured bot and link them to sent alerts."""
+    with app.app_context():
+        while True:
+            try:
+                users = User.query.filter(
+                    User.telegram_verified.is_(True),
+                    User.telegram_token.isnot(None),
+                    User.telegram_chat_id.isnot(None),
+                ).all()
+                users_by_token = {}
+                for user in users:
+                    users_by_token.setdefault(user.telegram_token, []).append(user)
+                for token, token_users in users_by_token.items():
+                    known_offsets = [u.telegram_update_offset for u in token_users if u.telegram_update_offset is not None]
+                    if not known_offsets:
+                        ok, detail, updates = get_updates(token, offset=-1)
+                        if not ok:
+                            print(f"[telegram_replies] inicializacao falhou: {detail}")
+                            continue
+                        next_offset = max((int(item.get("update_id", -1)) for item in updates), default=-1) + 1
+                        for user in token_users:
+                            user.telegram_update_offset = next_offset
+                        db.session.commit()
+                        continue
+                    offset = max(known_offsets)
+                    ok, detail, updates = get_updates(token, offset=offset)
+                    if not ok:
+                        print(f"[telegram_replies] consulta falhou: {detail}")
+                        continue
+                    user_by_chat = {str(user.telegram_chat_id): user for user in token_users}
+                    next_offset = offset
+                    for update in updates:
+                        next_offset = max(next_offset, int(update.get("update_id", -1)) + 1)
+                        message = update.get("message") or {}
+                        chat_id = str((message.get("chat") or {}).get("id") or "")
+                        user = user_by_chat.get(chat_id)
+                        if user:
+                            _handle_telegram_reply(user, message)
+                    if next_offset != offset:
+                        for user in token_users:
+                            user.telegram_update_offset = next_offset
+                        db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[telegram_replies] erro: {exc}")
+            finally:
+                db.session.rollback()
+                db.session.remove()
+            time.sleep(TELEGRAM_REPLY_POLL_SECONDS)
 
 def get_api_status() -> dict:
     return {
@@ -190,7 +373,11 @@ def _send_message_result(token: str, chat_id: str, text: str, context: str = "")
 
 
 def _append_premium_analysis_link(message: str, alert) -> str:
-    return message
+    return (
+        f"{message}\n\n"
+        "Registrar: valor/odd ou valor/odd/G2 (ex.: 15/3,42/G2). "
+        "Responda ajuda para ver como funciona."
+    )
 
 
 def _edit_message_safe(token: str, chat_id: str, message_id: int, text: str, context: str = "") -> bool:
@@ -758,12 +945,57 @@ def _is_confirmed_full_time(time_text: str) -> bool:
     return any(token in text for token in ("ft", "full time", "finished", "ended", "fim", "encerrado", "final"))
 
 
+def _exact_score_stage(rule) -> str:
+    stage = (getattr(rule, "outcome_green_stage", None) or "HT").upper()
+    green_minute = int(getattr(rule, "outcome_green_minute", None) or 0)
+    red_minute = int(getattr(rule, "outcome_red_minute", None) or 0)
+    return "FT" if stage == "HT" and max(green_minute, red_minute) > 45 else stage
+
+
+def _exact_score_has_hard_ht_deadline(rule) -> bool:
+    return bool(
+        getattr(rule, "outcome_red_if_no_green", False)
+        and int(getattr(rule, "outcome_green_minute", None) or 0) == 45
+        and int(getattr(rule, "outcome_red_minute", None) or 0) == 45
+    )
+
+
+def _exact_score_stage_reached(rule, time_text: str, minute: int) -> bool:
+    stage = _exact_score_stage(rule)
+    if stage == "HT":
+        # Não liquide no simples 45': acréscimos ainda podem mudar o placar.
+        # Exija o marcador explícito de intervalo retornado pelo provedor.
+        return is_half_time_text(time_text)
+    return _is_confirmed_full_time(time_text)
+
+
 def _exact_score_matches(rule, score: str, alert=None) -> bool:
     target = _exact_score_target(rule, alert)
     if target is None:
         return False
     actual = parse_score(score)
     return actual == target or actual == target[::-1]
+
+
+def _half_time_score_from_events(alert, events) -> str | None:
+    if not isinstance(events, list):
+        return None
+    home_key = _normalize_team_token(getattr(alert, "home_team", ""))
+    away_key = _normalize_team_token(getattr(alert, "away_team", ""))
+    home_goals = away_goals = 0
+    saw_timed_event = False
+    for event in events:
+        if not isinstance(event, dict) or not isinstance(event.get("minute"), int):
+            continue
+        saw_timed_event = True
+        if event.get("kind") != "goal" or not _event_in_first_half(event):
+            continue
+        team_key = _normalize_team_token(event.get("team"))
+        if team_key == home_key:
+            home_goals += 1
+        elif team_key == away_key:
+            away_goals += 1
+    return f"{home_goals} x {away_goals}" if saw_timed_event else None
 
 
 def _events_to_json(events) -> str | None:
@@ -1483,6 +1715,13 @@ def _apply_live_row_identity(game: dict, stats_payload: dict | None) -> dict | N
     payload_minute = stats_payload.get("minute")
     if isinstance(game_minute, int) and (not isinstance(payload_minute, int) or game_minute > payload_minute):
         stats_payload["minute"] = game_minute
+    canonical_minute = stats_payload.get("minute")
+    stats = stats_payload.get("stats")
+    if isinstance(canonical_minute, int) and isinstance(stats, dict):
+        # The page statistics table can retain an older Minute cell while the
+        # live row already advanced. Rule evaluation must always use the same
+        # canonical minute that is displayed and stored with the alert.
+        stats["Minute"] = {"home": canonical_minute, "away": canonical_minute, "total": canonical_minute}
     return stats_payload
 
 
@@ -1616,10 +1855,10 @@ def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
         HALFTIME_CONFIRMED_AT.pop(game_id, None)
         return
 
-    # Consider 45/HT for >= HALFTIME_CONFIRM_SECONDS as confirmed interval.
+    # The persistent state owns halftime confirmation and snapshot creation.
+    # Consuming confirmation here used to prevent persist_live_game_state from
+    # saving the real HT snapshot, leaving 2H rules with an earlier baseline.
     if minute == 45 or is_half_time_text(time_text):
-        if _ht_confirmed(game_id, time_text, minute):
-            return
         return
 
     # From 46+ onward:
@@ -1702,7 +1941,7 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     time_text = stats_payload.get("time_text", "")
     
     # Se o jogo ficou nos 45 por 3 min, salva o HT
-    if minute == 45 and not is_first_half_extra_time(time_text):
+    if (minute == 45 or is_half_time_text(time_text)) and not is_first_half_extra_time(time_text):
         if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed_with_state(state, time_text, minute):
             first_half_stats = copy_stats(stats_payload.get("stats", {}))
             if first_half_stats:
@@ -1745,35 +1984,12 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
                 if curr < base:
                     base_val[side] = curr
         SECOND_HALF_BASELINES[game_id] = baseline
-        # If baseline equals current for a while after 50', start counting from "now".
-        if minute >= 50:
-            zero_delta = True
-            for key in ("On Target", "Corners", "Dangerous Attacks"):
-                cur_val = stats_payload.get("stats", {}).get(key)
-                base_val = baseline.get(key)
-                if not isinstance(cur_val, dict) or not isinstance(base_val, dict):
-                    continue
-                for side in ("home", "away"):
-                    if _num(cur_val.get(side, 0)) != _num(base_val.get(side, 0)):
-                        zero_delta = False
-                        break
-                if not zero_delta:
-                    break
-            started_at = state.second_half_started_at
-            if zero_delta and (started_at is None or (now_sp() - started_at).total_seconds() > 120):
-                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-                baseline = SECOND_HALF_BASELINES[game_id]
-                state.second_half_started_at = now_sp()
-                SECOND_HALF_FROM_NOW[game_id] = True
-                # Drop HT snapshot so 2H deltas reflect from now on.
-                state.first_half_snapshot_json = None
-                state.first_half_snapshot_minute = None
         state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
         if not state.second_half_started:
             state.second_half_started = True
             state.second_half_started_at = now_sp()
     else:
-        if not state.second_half_baseline_json and minute >= 45:
+        if not state.second_half_baseline_json and (is_second_half(time_text, minute) or minute >= 46):
             snapshot = copy_stats(stats_payload.get("stats", {}))
             if snapshot:
                 state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)
@@ -1812,11 +2028,55 @@ def effective_minute(rule, minute: int | None) -> int | None:
         return max(0, minute - 45)
     return minute
 
-def should_time_red(rule, alert, minute: int | None, last_update_at=None, allow_wall_clock: bool = False) -> bool:
+
+def _first_half_has_ended(alert, time_text: str, minute: int | None) -> bool:
+    if is_half_time_text(time_text) or is_second_half(time_text, minute or 0) or _is_confirmed_full_time(time_text):
+        return True
+    if is_first_half_extra_time(time_text):
+        return False
+    game_id = getattr(alert, "game_id", None) if alert else None
+    if game_id:
+        state = LiveGameState.query.filter_by(game_id=game_id).first()
+        if state and state.second_half_started:
+            return True
+    # Some feeds keep returning only a numeric clock after the interval. At 50+
+    # it is no longer ambiguous with normal first-half stoppage time.
+    return isinstance(minute, int) and minute >= 50
+
+
+def _first_half_settlement_payload(alert, payload: dict) -> dict | None:
+    time_text = payload.get("time_text", "")
+    minute = payload.get("minute")
+    if not _first_half_has_ended(alert, time_text, minute):
+        return None
+    at_half = is_half_time_text(time_text) or is_first_half_boundary_text(time_text)
+    score = payload.get("score") if at_half else _half_time_score_from_events(alert, payload.get("events"))
+    if not score:
+        return None
+    snapshot = _load_persisted_first_half_snapshot(getattr(alert, "game_id", ""))
+    stats = snapshot.get("stats") if snapshot else payload.get("stats", {})
+    return {
+        "minute": 45,
+        "time_text": "HT",
+        "score": score,
+        "stats": stats or {},
+        "events": payload.get("events"),
+    }
+
+def should_time_red(rule, alert, minute: int | None, last_update_at=None, allow_wall_clock: bool = False, time_text: str = "") -> bool:
     if not rule or not rule.outcome_red_if_no_green or rule.outcome_red_minute is None:
         return False
     eff_minute = effective_minute(rule, minute)
     if eff_minute is not None and eff_minute >= rule.outcome_red_minute:
+        deadline = int(rule.outcome_red_minute or 0)
+        if deadline >= 45:
+            if getattr(rule, "second_half_only", False):
+                return _is_confirmed_full_time(time_text)
+            stage = (getattr(rule, "outcome_red_stage", None) or "HT").upper()
+            if stage == "HT":
+                return _first_half_has_ended(alert, time_text, minute)
+            if stage == "FT":
+                return _is_confirmed_full_time(time_text)
         return True
     if eff_minute is not None and eff_minute <= 1:
         return False
@@ -1839,6 +2099,10 @@ def should_time_red(rule, alert, minute: int | None, last_update_at=None, allow_
     if estimated_eff <= 1:
         return False
     if estimated_eff >= rule.outcome_red_minute:
+        # Never infer the end of a half from wall-clock time. Stoppage time can
+        # continue beyond 45/90; wait for an explicit phase marker from BetsAPI.
+        if int(rule.outcome_red_minute or 0) >= 45:
+            return False
         return True
     return False
 
@@ -1950,6 +2214,7 @@ def maybe_notify_penalty_for_game(game_id, stats_payload):
 def start_worker(app):
     threading.Thread(target=run_worker, args=(app,), daemon=True).start()
     threading.Thread(target=run_alerts_worker, args=(app,), daemon=True).start()
+    threading.Thread(target=run_telegram_replies_worker, args=(app,), daemon=True).start()
     if ENTRY_ENRICHMENT_ENABLED:
         threading.Thread(target=run_entry_enrichment_worker, args=(app,), daemon=True).start()
     prewarm_enabled = os.environ.get("MATCHDAY_PREWARM_ENABLED", "1").strip().lower() in (
@@ -2024,6 +2289,25 @@ def run_matchday_prewarm_worker(app):
                 and int(target_state.get("sample_limit") or 0) == sample_limit
                 and target_state.get("cache_variant") == cache_variant
             ):
+                # A cache may have been completed by an older process before
+                # the C3 observer was deployed. Do not rebuild it, but still
+                # guarantee the idempotent daily prospective snapshot/report.
+                try:
+                    with app.app_context():
+                        from app.services.prospective_shadow import collect_cached_prospective_shadow
+                        shadow_run = collect_cached_prospective_shadow(target, sample_limit=sample_limit)
+                        from app.services.prospective_reporting import write_report_files
+                        write_report_files(target)
+                        print(
+                            f"[prospective_shadow] {target} run={shadow_run.id} "
+                            f"fixtures={shadow_run.fixture_count} candidatos={shadow_run.candidate_count}"
+                        )
+                        db.session.remove()
+                except Exception as exc:
+                    print(
+                        f"[prospective_shadow] {target} falhou: "
+                        f"{type(exc).__name__}: {str(exc)[:180]}"
+                    )
                 continue
             try:
                 payload = get_matchday(target, force_refresh=scheduled)
@@ -2154,6 +2438,19 @@ def run_matchday_prewarm_worker(app):
             })
             _save_matchday_trend_index(target, trend_payload)
             print(f"[matchday_prewarm] {target} pronto={completed} falhas={failed}")
+            try:
+                with app.app_context():
+                    from app.services.prospective_shadow import collect_cached_prospective_shadow
+                    shadow_run = collect_cached_prospective_shadow(target, sample_limit=sample_limit)
+                    from app.services.prospective_reporting import write_report_files
+                    write_report_files(target)
+                    print(
+                        f"[prospective_shadow] {target} run={shadow_run.id} "
+                        f"fixtures={shadow_run.fixture_count} candidatos={shadow_run.candidate_count}"
+                    )
+                    db.session.remove()
+            except Exception as exc:
+                print(f"[prospective_shadow] {target} falhou: {type(exc).__name__}: {str(exc)[:180]}")
         if scheduled:
             state["scheduled_refresh"] = schedule_key
             save_state(state)
@@ -2174,7 +2471,7 @@ def run_worker(app):
                     maybe_retrain_model(force=False)
                 process_live_games(session)
                 from app.services.tickets import resolve_saved_tickets
-                resolve_saved_tickets()
+                resolve_saved_tickets(session)
                 _flush_entry_notification_queue(force=False)
                 now = now_sp()
                 if (
@@ -2182,6 +2479,11 @@ def run_worker(app):
                     or (now - LAST_FINALIZE_RUN_AT).total_seconds() >= FINALIZE_POLL_INTERVAL
                 ):
                     finalize_full_time(session)
+                    from app.services.shadow_settlement import settle_prospective_predictions
+                    shadow_settlement = settle_prospective_predictions()
+                    if any(shadow_settlement.get(state, 0) for state in ("GREEN", "RED", "VOID", "UNRESOLVED")):
+                        from app.services.prospective_reporting import write_report_files
+                        write_report_files(now.strftime("%Y-%m-%d"))
                     LAST_FINALIZE_RUN_AT = now
             except Exception as exc:
                 db.session.rollback()
@@ -2256,6 +2558,27 @@ def _is_women_league(league_name: str) -> bool:
             flags=re.IGNORECASE,
         )
     )
+
+
+def _women_blocked_user_ids() -> set[int]:
+    blocked = set()
+    for raw_id in os.environ.get("RULE_WOMEN_BLOCKED_USER_IDS", "1").split(","):
+        try:
+            blocked.add(int(raw_id.strip()))
+        except (TypeError, ValueError):
+            continue
+    return blocked
+
+
+def _is_women_game(*values: str) -> bool:
+    return _is_women_league(" ".join(str(value or "") for value in values))
+
+
+def _rule_blocks_women(rule) -> bool:
+    try:
+        return int(getattr(rule, "user_id", 0) or 0) in _women_blocked_user_ids()
+    except (TypeError, ValueError):
+        return False
 
 
 def _league_allowed(league_name: str, allowed_items: list[str]) -> bool:
@@ -2502,6 +2825,15 @@ def process_live_games(session):
     update_api_status(status_code == 200, status_code)
     if not games: return
 
+    # Keep the lightweight live-list minute/score available to the result
+    # follower. BetsAPI's match-detail page can lag behind this live list,
+    # especially immediately after a goal.
+    with LATEST_LIVE_ROWS_LOCK:
+        for live_game in games:
+            live_game_id = live_game.get("game_id")
+            if live_game_id is not None:
+                LATEST_LIVE_ROWS[str(live_game_id)] = dict(live_game)
+
     active_rules = Rule.query.filter_by(is_active=True).all()
     all_live_games = games
     games = _filter_candidate_games(games, active_rules)
@@ -2558,8 +2890,15 @@ def process_live_games(session):
         game_id = game.get("game_id")
         if game_id and game_id not in GAME_FIRST_SEEN_AT:
             GAME_FIRST_SEEN_AT[game_id] = now_sp()
-            # If bot starts mid-2H, count from now for this game.
-            if isinstance(minute, int) and minute >= 46:
+            # Only count from now when the bot truly has no saved HT/2H
+            # reference. A worker restart must keep the persisted baseline.
+            persisted_baseline = _load_persisted_second_half_baseline(game_id)
+            if (
+                isinstance(minute, int)
+                and minute >= 46
+                and not _has_first_half_context(game_id)
+                and not persisted_baseline
+            ):
                 SECOND_HALF_FROM_NOW[game_id] = True
                 SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
 
@@ -2596,11 +2935,28 @@ def process_live_games(session):
                 db.session.rollback()
         # Check penalty notifications as soon as this game's stats are fetched.
         maybe_notify_penalty_for_game(game["game_id"], stats_payload)
-        
+
+        # Every matching rule validates against the same current game snapshot.
+        # Keep at most one normal and one cache-busted revalidation per game so
+        # later rules do not wait behind repeated network reads.
+        rule_validation_loaded = False
+        rule_validation_payload = None
+        rule_forced_validation_loaded = False
+        rule_forced_validation_payload = None
+
         for rule in active_rules:
             user = rule.user
             pair_key = (str(game["game_id"]), rule.id)
             if pair_key in existing_pairs:
+                continue
+            if _rule_blocks_women(rule) and _is_women_game(
+                stats_payload.get("league"),
+                stats_payload.get("home_team"),
+                stats_payload.get("away_team"),
+                game.get("league"),
+                game.get("home_team"),
+                game.get("away_team"),
+            ):
                 continue
             # Optional league filter: if configured, only emit alerts for matching leagues.
             allowed_items = rule_allowed_items.get(rule.id)
@@ -2610,6 +2966,7 @@ def process_live_games(session):
                     continue
 
             stats_for_rule = stats_with_score_goals(stats_payload.get("stats", {}), stats_payload.get("score"))
+            stats_for_rule["Minute"] = {"home": minute, "away": minute, "total": minute}
             h_score, a_score = parse_score(stats_payload.get("score", ""))
             if (rule.score_home is not None and h_score != rule.score_home) or \
                (rule.score_away is not None and a_score != rule.score_away):
@@ -2633,11 +2990,16 @@ def process_live_games(session):
                     for cond in (rule.conditions or [])
                 )
                 if has_stat_cond or rule.score_home is not None or rule.score_away is not None:
-                    latest_payload = fetch_match_stats(session, game["url"])
+                    if not rule_validation_loaded:
+                        rule_validation_payload = fetch_match_stats(session, game["url"])
+                        rule_validation_loaded = True
+                    latest_payload = rule_validation_payload
                     if latest_payload:
                         latest_payload = _apply_live_row_identity(game, latest_payload)
                         latest_stats_for_rule = stats_with_score_goals(latest_payload.get("stats", {}), latest_payload.get("score"))
                         latest_minute = latest_payload.get("minute")
+                        if isinstance(latest_minute, int):
+                            latest_stats_for_rule["Minute"] = {"home": latest_minute, "away": latest_minute, "total": latest_minute}
                         latest_score = latest_payload.get("score", "")
                         lh_score, la_score = parse_score(latest_score)
                         latest_score_matches = not (
@@ -2662,12 +3024,17 @@ def process_live_games(session):
                         else:
                             # Retry once with cache-busted URL. If still false, keep initial match
                             # to avoid missing valid entries due feed jitter between reads.
-                            forced_payload = fetch_match_stats(session, _cache_bust_url(game["url"]))
+                            if not rule_forced_validation_loaded:
+                                rule_forced_validation_payload = fetch_match_stats(session, _cache_bust_url(game["url"]))
+                                rule_forced_validation_loaded = True
+                            forced_payload = rule_forced_validation_payload
                             forced_ok = False
                             if forced_payload:
                                 forced_payload = _apply_live_row_identity(game, forced_payload)
                                 forced_stats_for_rule = stats_with_score_goals(forced_payload.get("stats", {}), forced_payload.get("score"))
                                 forced_minute = forced_payload.get("minute")
+                                if isinstance(forced_minute, int):
+                                    forced_stats_for_rule["Minute"] = {"home": forced_minute, "away": forced_minute, "total": forced_minute}
                                 fs_home, fs_away = parse_score(forced_payload.get("score", ""))
                                 forced_score_matches = not (
                                     (rule.score_home is not None and fs_home != rule.score_home) or
@@ -2701,9 +3068,12 @@ def process_live_games(session):
                         continue
                 if not user:
                     continue
-                if rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
+                if not user.is_premium_user:
+                    today_start = now_sp().replace(hour=0, minute=0, second=0, microsecond=0)
+                    if MatchAlert.query.filter(MatchAlert.user_id == user.id, MatchAlert.created_at >= today_start).count() >= 10:
+                        continue
+                if user.is_premium_user and rule.notify_telegram and (not user.telegram_token or not user.telegram_chat_id):
                     print(f"[worker] regra {rule.id} sem token/chat_id para envio telegram (user={getattr(user, 'id', None)})")
-                    continue
 
                 effective_minute = stats_payload.get("minute") if stats_payload else minute
                 if effective_minute is None:
@@ -2781,7 +3151,7 @@ def process_live_games(session):
                     existing_pairs.add(pair_key)
                     
                     # Send entry alert immediately after rule hit to reduce latency.
-                    if rule.notify_telegram:
+                    if user.is_premium_user and rule.notify_telegram:
                         if REALTIME_ENTRY_ALERTS and ENTRY_GROUP_WINDOW_SECONDS <= 0:
                             message = _append_premium_analysis_link(
                                 render_fast_entry_message(rule, stats_payload, game, stats_for_rule),
@@ -2811,8 +3181,10 @@ def process_live_games(session):
                             message = _append_premium_analysis_link(render_message(rule, meta), alert)
                             _queue_entry_notification(alert, meta, message)
 
-                    # Refresh once without blocking the cycle with multiple sleeps.
-                    latest_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
+                    # Reuse the fresh snapshot already obtained for this game.
+                    # A network refresh here used to run once per matching rule,
+                    # delaying every subsequent Telegram alert from the same match.
+                    latest_payload = rule_validation_payload if rule_validation_loaded else stats_payload
                     if latest_payload:
                         latest_payload = _apply_live_row_identity(game, latest_payload)
                         stats_payload = latest_payload
@@ -2926,10 +3298,153 @@ def _looks_like_stale_exact_score(rule, alert, minute, score, stats) -> bool:
         return False
     return True
 
+
+def _settle_g2_bet(alert, stats_payload) -> None:
+    if alert.bet_tracking_type != "G2" or alert.bet_status != "pending":
+        return
+    stage = (alert.bet_settlement_stage or "HT").upper()
+    time_text = stats_payload.get("time_text", "")
+    minute = stats_payload.get("minute") or 0
+    score = stats_payload.get("score") or alert.last_score or alert.initial_score
+    settlement_score = score
+    if stage == "HT":
+        at_half = is_half_time_text(time_text)
+        past_half = is_second_half(time_text, minute) or _is_confirmed_full_time(time_text)
+        if not at_half and not past_half:
+            return
+        if past_half and not at_half:
+            settlement_score = _half_time_score_from_events(alert, stats_payload.get("events"))
+            if not settlement_score:
+                return
+    elif not _is_confirmed_full_time(time_text):
+        return
+
+    home, away = parse_score(settlement_score or "0 x 0")
+    new_goals = max(0, home + away - int(alert.bet_initial_goal_total or 0))
+    status, profit = g2_bet_outcome(
+        new_goals,
+        float(alert.stake_amount or 0),
+        float(alert.stake_odd or 0),
+    )
+    result_label = {"green": "GREEN", "push": "DEVOLVIDA", "red": "RED"}[status]
+    alert.bet_status = status
+    alert.bet_profit = profit
+    alert.bet_settled_at = now_sp()
+    db.session.commit()
+    if alert.user and alert.user.telegram_token and alert.user.telegram_chat_id:
+        _send_message_safe(
+            alert.user.telegram_token,
+            alert.user.telegram_chat_id,
+            (
+                f"Aposta G2: {result_label}\n"
+                f"{alert.home_team} vs {alert.away_team}\n"
+                f"Placar da liquidação: {settlement_score}\n"
+                f"Novos gols: {new_goals}\n"
+                f"Resultado financeiro: R$ {profit:.2f}"
+            ).replace(".", ","),
+            context=f"g2_settlement_{alert.id}",
+        )
+
 def follow_alerts(session):
-    pending_alerts = MatchAlert.query.filter_by(status="pending", ft_completed=False).all()
-    active_alerts = pending_alerts + _recently_settled_alerts_query()
+    global ALERT_BACKLOG_CURSOR
+    # Priorize alertas atuais. A ordem implícita do SQLite era crescente e uma
+    # fila histórica grande atrasava por muitos minutos os resultados novos.
+    realtime_cutoff = now_sp() - timedelta(hours=ALERT_REALTIME_WINDOW_HOURS)
+    pending_alerts = (
+        MatchAlert.query.filter_by(status="pending", ft_completed=False)
+        .filter(MatchAlert.created_at >= realtime_cutoff)
+        .order_by(MatchAlert.created_at.desc(), MatchAlert.id.desc())
+        .all()
+    )
+    backlog_rows = (
+        MatchAlert.query.filter_by(status="pending", ft_completed=False)
+        .filter(MatchAlert.created_at < realtime_cutoff)
+        .order_by(MatchAlert.created_at.desc(), MatchAlert.id.desc())
+        .all()
+    )
+    backlog_urls = list(dict.fromkeys(row.url for row in backlog_rows if row.url))
+    selected_backlog_urls = set()
+    if backlog_urls:
+        start = ALERT_BACKLOG_CURSOR % len(backlog_urls)
+        rotated_urls = backlog_urls[start:] + backlog_urls[:start]
+        selected_backlog_urls = set(rotated_urls[:ALERT_BACKLOG_GAMES_PER_CYCLE])
+        ALERT_BACKLOG_CURSOR = (start + ALERT_BACKLOG_GAMES_PER_CYCLE) % len(backlog_urls)
+        pending_alerts.extend(row for row in backlog_rows if row.url in selected_backlog_urls)
+    tracked_bets = (
+        MatchAlert.query.filter_by(bet_tracking_type="G2", bet_status="pending")
+        .order_by(MatchAlert.created_at.desc(), MatchAlert.id.desc())
+        .all()
+    )
+    active_alerts = []
+    active_ids = set()
+    for candidate in pending_alerts + tracked_bets + _recently_settled_alerts_query():
+        if candidate.id in active_ids:
+            continue
+        active_ids.add(candidate.id)
+        active_alerts.append(candidate)
+    # A rule alert is stored once per user/rule, so the same match can have many
+    # pending rows. Fetch the live match once per cycle and share that snapshot
+    # across every alert from the match. Previously each pending row performed a
+    # new BetsAPI read, making the cycle progressively slower as alerts accumulated.
     stats_cache = {}
+    forced_stats_cache = {}
+    validation_stats_cache = {}
+    with LATEST_LIVE_ROWS_LOCK:
+        live_rows_by_url = {
+            row.get("url"): dict(row)
+            for row in LATEST_LIVE_ROWS.values()
+            if row.get("url")
+        }
+
+    def reconcile_with_live_row(url, payload):
+        live_row = live_rows_by_url.get(url)
+        return _apply_live_row_identity(live_row, payload) if live_row and payload else payload
+
+    def prefetch_alert_match(url):
+        prefetch_session = make_session()
+        try:
+            payload = fetch_match_stats_fresh(
+                prefetch_session,
+                url,
+                attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                delay=ALERT_FETCH_STATS_DELAY,
+            )
+            return url, reconcile_with_live_row(url, payload)
+        except Exception as exc:
+            print(f"[alerts] erro no prefetch url={url}: {exc}")
+            return url, None
+        finally:
+            try:
+                prefetch_session.close()
+            except Exception:
+                pass
+
+    urls_to_fetch = list(dict.fromkeys(alert.url for alert in active_alerts if alert.url))
+    max_workers = min(len(urls_to_fetch), ALERT_ANALYSIS_THREADS)
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="alerts") as executor:
+            futures = [executor.submit(prefetch_alert_match, url) for url in urls_to_fetch]
+            for future in as_completed(futures):
+                url, payload = future.result()
+                stats_cache[url] = payload
+
+    def get_forced_stats(url):
+        if url not in forced_stats_cache:
+            payload = fetch_match_stats(session, _cache_bust_url(url))
+            forced_stats_cache[url] = reconcile_with_live_row(url, payload)
+        return forced_stats_cache[url]
+
+    def get_validation_stats(url):
+        if url not in validation_stats_cache:
+            payload = fetch_match_stats_fresh(
+                session,
+                url,
+                attempts=ALERT_FETCH_STATS_ATTEMPTS,
+                delay=ALERT_FETCH_STATS_DELAY,
+            )
+            validation_stats_cache[url] = reconcile_with_live_row(url, payload)
+        return validation_stats_cache[url]
+
     for alert in active_alerts:
         rule = alert.rule
         # Pending alerts must keep being checked even if live_state became stale,
@@ -2937,7 +3452,9 @@ def follow_alerts(session):
         if alert.status != "pending" and not _is_recent_game_update(alert.game_id):
             continue
         cache_key = alert.url
-        if alert.status == "pending":
+        if cache_key in stats_cache:
+            stats_payload = stats_cache[cache_key]
+        elif alert.status == "pending":
             # Double-check with multiple reads to catch recent score changes.
             stats_payload = fetch_match_stats_fresh(
                 session,
@@ -2945,15 +3462,18 @@ def follow_alerts(session):
                 attempts=ALERT_FETCH_STATS_ATTEMPTS,
                 delay=ALERT_FETCH_STATS_DELAY,
             )
+            stats_cache[cache_key] = stats_payload
         else:
-            if cache_key in stats_cache:
-                stats_payload = stats_cache[cache_key]
-            else:
-                stats_payload = fetch_match_stats(session, alert.url)
-                stats_cache[cache_key] = stats_payload
+            stats_payload = fetch_match_stats(session, alert.url)
+            stats_cache[cache_key] = stats_payload
         if not stats_payload:
             _close_pending_without_live_payload(alert, rule)
             continue
+
+        with LATEST_LIVE_ROWS_LOCK:
+            latest_live_row = dict(LATEST_LIVE_ROWS.get(str(alert.game_id)) or {})
+        if latest_live_row:
+            stats_payload = _apply_live_row_identity(latest_live_row, stats_payload)
 
         ensure_second_half_baseline(alert.game_id, stats_payload)
         remember_game_snapshot(alert.game_id, stats_payload)
@@ -2969,29 +3489,53 @@ def follow_alerts(session):
             _close_pending_without_live_payload(alert, rule)
             continue
 
+        _settle_g2_bet(alert, stats_payload)
+
         exact_target = _exact_score_target(rule, alert)
         if exact_target:
             if alert.status != "pending":
                 continue
-            # Reaching minute 90 is not enough: stoppage-time goals can still
-            # change an exact-score result. Wait for an explicit final marker.
-            if not _is_confirmed_full_time(stats_payload.get("time_text", "")):
+            exact_stage = _exact_score_stage(rule)
+            settlement_score = current_score
+            settlement_minute = minute
+            hard_ht_green_now = bool(
+                exact_stage == "HT"
+                and _exact_score_has_hard_ht_deadline(rule)
+                and int(minute or 0) <= 45
+                and _exact_score_matches(rule, current_score, alert)
+            )
+            if exact_stage == "HT" and not hard_ht_green_now and not is_half_time_text(stats_payload.get("time_text", "")):
+                already_past_half = _first_half_has_ended(alert, stats_payload.get("time_text", ""), minute)
+                if not already_past_half:
+                    continue
+                if already_past_half:
+                    settlement_score = _half_time_score_from_events(alert, stats_payload.get("events"))
+                    if settlement_score is None:
+                        continue
+            elif exact_stage == "FT" and not _is_confirmed_full_time(stats_payload.get("time_text", "")):
                 continue
-            exact_score_green = _exact_score_matches(rule, current_score, alert)
-            alert.ft_score = current_score
-            alert.ft_stats_json = stats_to_json(stats)
-            alert.ft_events_json = _events_to_json(stats_payload.get("events"))
-            alert.ft_event_metrics_json = _event_metrics_json(stats_payload.get("events"), alert.alert_minute)
-            alert.ft_completed = True
+            # Exact-score HT rules are settled on the first-half result. If the
+            # worker observes the match only after play resumed, the score is
+            # reconstructed from the timeline, but the settlement still belongs
+            # to minute 45 rather than the current 2H/FT minute.
+            if exact_stage == "HT":
+                settlement_minute = 45
+            exact_score_green = _exact_score_matches(rule, settlement_score, alert)
+            if exact_stage == "FT":
+                alert.ft_score = current_score
+                alert.ft_stats_json = stats_to_json(stats)
+                alert.ft_events_json = _events_to_json(stats_payload.get("events"))
+                alert.ft_event_metrics_json = _event_metrics_json(stats_payload.get("events"), alert.alert_minute)
+                alert.ft_completed = True
             update_alert_status(
                 alert,
                 "green" if exact_score_green else "red",
-                minute,
-                current_score,
+                settlement_minute,
+                settlement_score,
                 stats,
-                "✅ GREEN - placar exato confirmado no fim do jogo"
+                f"✅ GREEN - placar exato confirmado no {'intervalo' if exact_stage == 'HT' else 'fim do jogo'}"
                 if exact_score_green
-                else "❌ RED - placar final diferente do placar exato",
+                else f"❌ RED - placar no {'intervalo' if exact_stage == 'HT' else 'fim do jogo'} diferente do placar exato",
                 events=stats_payload.get("events"),
             )
             continue
@@ -2999,7 +3543,7 @@ def follow_alerts(session):
         prev_minute = alert.last_score_minute if alert.last_score_minute is not None else alert.alert_minute
         if isinstance(prev_minute, int) and isinstance(minute, int) and minute >= prev_minute + 2:
             if current_score and current_score == (alert.last_score or alert.initial_score):
-                forced_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
+                forced_payload = get_forced_stats(alert.url)
                 if forced_payload and forced_payload.get("score") and forced_payload.get("score") != current_score:
                     stats_payload = forced_payload
                     minute = stats_payload.get("minute") or minute
@@ -3055,12 +3599,7 @@ def follow_alerts(session):
             if alert.status == "red" and rule and rule.outcome_red_if_no_green:
                 red_time = _result_time_to_dt(alert.result_time_hhmm)
                 if red_time and (now_sp() - red_time).total_seconds() <= RED_CORRECTION_SECONDS:
-                    latest_payload = fetch_match_stats_fresh(
-                        session,
-                        alert.url,
-                        attempts=ALERT_FETCH_STATS_ATTEMPTS,
-                        delay=ALERT_FETCH_STATS_DELAY,
-                    )
+                    latest_payload = get_validation_stats(alert.url)
                     if latest_payload:
                         latest_score = latest_payload.get("score") or alert.last_score
                         latest_minute = latest_payload.get("minute") or alert.result_minute
@@ -3148,12 +3687,7 @@ def follow_alerts(session):
         
         # 1. Verificar GREEN customizado
         if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, stats_for_outcome):
-            latest_payload = fetch_match_stats_fresh(
-                session,
-                alert.url,
-                attempts=ALERT_FETCH_STATS_ATTEMPTS,
-                delay=ALERT_FETCH_STATS_DELAY,
-            )
+            latest_payload = get_validation_stats(alert.url)
             if latest_payload:
                 minute = latest_payload.get("minute") or minute
                 current_score = latest_payload.get("score") or current_score
@@ -3183,12 +3717,12 @@ def follow_alerts(session):
             continue
 
         # 3. Verificar RED por tempo (se habilitado)
-        time_red_due = should_time_red(rule, alert, minute)
+        time_red_due = should_time_red(rule, alert, minute, time_text=stats_payload.get("time_text", ""))
         if not time_red_due and alert.id in RED_CONFIRM_PENDING:
             RED_CONFIRM_PENDING.pop(alert.id, None)
         if time_red_due:
             # Dupla verificacao antes do RED: reler o jogo para evitar atraso de feed.
-            latest_payload = fetch_match_stats(session, _cache_bust_url(alert.url))
+            latest_payload = get_forced_stats(alert.url)
             latest_minute = minute
             latest_score = current_score
             latest_stats = stats
@@ -3201,6 +3735,15 @@ def follow_alerts(session):
                     alert.last_score_minute = latest_minute
                     if not _commit_allow_missing_alert(alert.id, "time_red_latest_score"):
                         continue
+
+                red_stage = (getattr(rule, "outcome_red_stage", None) or "HT").upper()
+                if not rule.second_half_only and red_stage == "HT":
+                    ht_payload = _first_half_settlement_payload(alert, latest_payload)
+                    if ht_payload:
+                        latest_payload = ht_payload
+                        latest_minute = ht_payload["minute"]
+                        latest_score = ht_payload["score"]
+                        latest_stats = ht_payload["stats"]
 
                 latest_eval_stats = latest_stats
                 if rule and rule.second_half_only:
@@ -3215,17 +3758,15 @@ def follow_alerts(session):
                     if base_stats else latest_eval_stats
                 )
                 latest_outcome_stats = merge_score_delta_into_stats(latest_outcome_stats, alert.initial_score, latest_score)
-                if allow_green_eval and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
-                    latest_payload = fetch_match_stats_fresh(
-                        session,
-                        alert.url,
-                        attempts=ALERT_FETCH_STATS_ATTEMPTS,
-                        delay=ALERT_FETCH_STATS_DELAY,
-                    )
-                    if latest_payload:
-                        latest_minute = latest_payload.get("minute") or latest_minute
-                        latest_score = latest_payload.get("score") or latest_score
-                        latest_stats = latest_payload.get("stats", {}) or latest_stats
+                is_ht_settlement = latest_payload.get("time_text") == "HT"
+                settlement_green_allowed = allow_green_eval or is_ht_settlement
+                if settlement_green_allowed and green_conds and evaluate_outcome_conditions(green_conds, latest_outcome_stats):
+                    if not is_ht_settlement:
+                        latest_payload = get_validation_stats(alert.url)
+                        if latest_payload:
+                            latest_minute = latest_payload.get("minute") or latest_minute
+                            latest_score = latest_payload.get("score") or latest_score
+                            latest_stats = latest_payload.get("stats", {}) or latest_stats
                     update_alert_status(
                         alert,
                         "green",
@@ -3246,16 +3787,37 @@ def follow_alerts(session):
                 continue
 
             # Final refresh to avoid stale score in RED message.
-            final_payload = fetch_match_stats_fresh(
-                session,
-                alert.url,
-                attempts=max(1, ALERT_FETCH_STATS_ATTEMPTS),
-                delay=ALERT_FETCH_STATS_DELAY,
-            )
+            final_payload = get_validation_stats(alert.url)
             if final_payload:
                 latest_minute = final_payload.get("minute") or latest_minute
                 latest_score = final_payload.get("score") or latest_score
                 latest_stats = final_payload.get("stats", {}) or latest_stats
+                red_stage = (getattr(rule, "outcome_red_stage", None) or "HT").upper()
+                if not rule.second_half_only and red_stage == "HT":
+                    ht_payload = _first_half_settlement_payload(alert, final_payload)
+                    if ht_payload:
+                        final_payload = ht_payload
+                        latest_minute = ht_payload["minute"]
+                        latest_score = ht_payload["score"]
+                        latest_stats = ht_payload["stats"]
+            final_eval_stats = (
+                apply_alert_delta(latest_stats, base_stats, latest_minute, alert.alert_minute)
+                if base_stats else latest_stats
+            )
+            final_eval_stats = merge_score_delta_into_stats(final_eval_stats, alert.initial_score, latest_score)
+            final_is_ht = bool(final_payload and final_payload.get("time_text") == "HT")
+            if (allow_green_eval or final_is_ht) and green_conds and evaluate_outcome_conditions(green_conds, final_eval_stats):
+                RED_CONFIRM_PENDING.pop(alert.id, None)
+                update_alert_status(
+                    alert,
+                    "green",
+                    latest_minute,
+                    latest_score,
+                    latest_stats,
+                    "GREEN - condicoes atingidas",
+                    events=final_payload.get("events") if final_payload else None,
+                )
+                continue
             if _looks_like_stale_exact_score(rule, alert, latest_minute, latest_score, latest_stats):
                 RED_CONFIRM_PENDING[alert.id] = {"seen_at": now_sp()}
                 continue
@@ -3308,7 +3870,21 @@ def update_alert_status(alert, status, minute, score, stats, msg_prefix, events=
     if not _commit_allow_missing_alert(alert.id, f"update_status_{status}"):
         return
     export_alert(alert, alert.rule.name, EXPORT_DIR)
-    if alert.rule and alert.rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
+    notification_cutoff = now_sp() - timedelta(hours=ALERT_REALTIME_WINDOW_HOURS)
+    is_current_alert = bool(alert.created_at and alert.created_at >= notification_cutoff)
+    rule = alert.rule
+    if rule and _is_exact_score_rule(rule, alert):
+        result_stage = _exact_score_stage(rule)
+    else:
+        result_stage = (getattr(rule, f"outcome_{status}_stage", None) or "HT").upper() if rule else "HT"
+        result_deadline = int(getattr(rule, f"outcome_{status}_minute", None) or 0) if rule else 0
+        if result_stage == "HT" and result_deadline > 45:
+            result_stage = "FT"
+    if result_stage == "HT":
+        live_state = LiveGameState.query.filter_by(game_id=alert.game_id).first()
+        if live_state and _is_confirmed_full_time(live_state.time_text or ""):
+            is_current_alert = False
+    if is_current_alert and alert.rule and alert.rule.notify_telegram and alert.user.telegram_token and alert.user.telegram_chat_id:
         if status == "green":
             _queue_grouped_notification(alert, minute, score, msg_prefix, "green")
         else:

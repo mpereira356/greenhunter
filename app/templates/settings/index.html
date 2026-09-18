@@ -21,12 +21,14 @@
             <input class="form-control text-muted bg-light" value="{{ current_user.id }}" readonly disabled>
           </div>
           <div class="mb-3">
-            <label class="form-label">Nome de usuário</label>
-            <input class="form-control" name="username" value="{{ current_user.username or '' }}" required>
+            <label class="form-label">Login permanente</label>
+            <input class="form-control text-muted bg-light" value="{{ current_user.username or '' }}" readonly aria-describedby="permanent-login-help">
+            <div class="form-text" id="permanent-login-help">Seu login não pode ser alterado. Apenas o administrador pode fazer essa alteração.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input class="form-control" name="email" value="{{ current_user.email or '' }}" placeholder="nome@exemplo.com">
+            <label class="form-label">E-mail permanente</label>
+            <input class="form-control text-muted bg-light" value="{{ current_user.email or 'Não informado' }}" readonly aria-describedby="permanent-email-help">
+            <div class="form-text" id="permanent-email-help">Seu e-mail não pode ser alterado. Apenas o administrador pode fazer essa alteração.</div>
           </div>
           <div class="mb-3">
             <label class="form-label">Senha atual</label>
@@ -41,7 +43,7 @@
             <input type="password" class="form-control" name="confirm_password" placeholder="Repita a nova senha">
           </div>
           <div class="d-grid gap-2">
-            <button class="btn btn-primary" type="submit">Salvar dados</button>
+            <button class="btn btn-primary" type="submit">Alterar senha</button>
           </div>
         </form>
       </div>

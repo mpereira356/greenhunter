@@ -2,10 +2,11 @@
 {% block title %}Minhas Regras | GreenHunter{% endblock %}
 {% block meta_description %}Gerencie suas regras de sinais GreenHunter, acompanhe filtros ativos, desempenho e estrategias de monitoramento ao vivo.{% endblock %}
 {% block content %}
-<div class="page-header">
+<div class="rules-page">
+<div class="page-header rules-page-header">
   <div>
     <h1 class="page-title">Minhas Regras</h1>
-    <p class="page-subtitle">Gerencie seus bots e acompanhe o desempenho individual.</p>
+    <p class="page-subtitle">Crie regras personalizadas para o bot monitorar partidas, identificar oportunidades e acompanhar os alertas, GREENs e REDs de cada estratégia.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-outline-secondary" href="{{ url_for('rules.export_rules') }}">Exportar Regras</a>
@@ -13,13 +14,14 @@
       <input id="rules-file-input" type="file" name="rules_file" accept=".json,application/json" hidden>
       <button type="button" id="rules-import-btn" class="btn btn-outline-secondary">Importar Regras</button>
     </form>
-    <a class="btn btn-primary shadow-sm" href="{{ url_for('rules.create_rule') }}">
-      <span class="me-1">+</span> Nova Regra
+    <a class="btn btn-primary shadow-sm rules-new-button" href="{{ url_for('rules.create_rule') }}">
+      <span aria-hidden="true">+</span> Criar hipótese
     </a>
   </div>
 </div>
 
-<div class="mb-3">
+<div class="rules-filter-bar">
+  <span>Exibir regras</span>
   <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por tempo">
     <a class="btn {% if stage_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='all') }}">Todas</a>
     <a class="btn {% if stage_filter == 'ht' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('rules.list_rules', stage='ht') }}">1º tempo</a>
@@ -74,95 +76,15 @@
       </div>
     </article>
 
-    {% set rk = rule_rankings.get(rule.id, {}) %}
-    <div class="modal fade" id="ruleMore{{ rule.id }}" tabindex="-1" aria-labelledby="ruleMoreLabel{{ rule.id }}" aria-hidden="true">
+    <div class="modal fade" id="ruleMore{{ rule.id }}" tabindex="-1" aria-labelledby="ruleMoreLabel{{ rule.id }}" aria-hidden="true" data-rule-ranking-url="{{ url_for('rules.rule_rankings', rule_id=rule.id) }}">
       <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="ruleMoreLabel{{ rule.id }}">Ranking da regra</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
           </div>
-          <div class="modal-body">
-            <div class="row g-3">
-              <div class="col-md-6">
-                <h6 class="fw-bold">Campeonatos</h6>
-                <div class="mb-2"><span class="badge bg-success">Greens</span></div>
-                {% set green_leagues = rk.get('leagues', {}).get('green', []) or [] %}
-                <ul class="list-group rule-rank-list mb-3">
-                  {% for item in green_leagues[:5] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                  {% else %}
-                    <li class="list-group-item text-muted">Sem dados</li>
-                  {% endfor %}
-                </ul>
-                {% if green_leagues|length > 5 %}
-                <details class="rule-rank-more mb-3"><summary>Ver todos</summary>
-                  <ul class="list-group rule-rank-list mt-2">
-                    {% for item in green_leagues[5:] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                    {% endfor %}
-                  </ul>
-                </details>
-                {% endif %}
-                <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
-                {% set red_leagues = rk.get('leagues', {}).get('red', []) or [] %}
-                <ul class="list-group rule-rank-list">
-                  {% for item in red_leagues[:5] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                  {% else %}
-                    <li class="list-group-item text-muted">Sem dados</li>
-                  {% endfor %}
-                </ul>
-                {% if red_leagues|length > 5 %}
-                <details class="rule-rank-more mt-2"><summary>Ver todos</summary>
-                  <ul class="list-group rule-rank-list mt-2">
-                    {% for item in red_leagues[5:] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                    {% endfor %}
-                  </ul>
-                </details>
-                {% endif %}
-              </div>
-              <div class="col-md-6">
-                <h6 class="fw-bold">Times</h6>
-                <div class="mb-2"><span class="badge bg-success">Greens</span></div>
-                {% set green_teams = rk.get('teams', {}).get('green', []) or [] %}
-                <ul class="list-group rule-rank-list mb-3">
-                  {% for item in green_teams[:5] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                  {% else %}
-                    <li class="list-group-item text-muted">Sem dados</li>
-                  {% endfor %}
-                </ul>
-                {% if green_teams|length > 5 %}
-                <details class="rule-rank-more mb-3"><summary>Ver todos</summary>
-                  <ul class="list-group rule-rank-list mt-2">
-                    {% for item in green_teams[5:] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                    {% endfor %}
-                  </ul>
-                </details>
-                {% endif %}
-                <div class="mb-2"><span class="badge bg-danger">Reds</span></div>
-                {% set red_teams = rk.get('teams', {}).get('red', []) or [] %}
-                <ul class="list-group rule-rank-list">
-                  {% for item in red_teams[:5] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                  {% else %}
-                    <li class="list-group-item text-muted">Sem dados</li>
-                  {% endfor %}
-                </ul>
-                {% if red_teams|length > 5 %}
-                <details class="rule-rank-more mt-2"><summary>Ver todos</summary>
-                  <ul class="list-group rule-rank-list mt-2">
-                    {% for item in red_teams[5:] %}
-                    <li class="list-group-item d-flex justify-content-between"><span>{{ item.name }}</span><span>{{ item.count }}</span></li>
-                    {% endfor %}
-                  </ul>
-                </details>
-                {% endif %}
-              </div>
-            </div>
+          <div class="modal-body" data-rule-ranking-body>
+            <div class="text-muted py-4 text-center"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Carregando ranking...</div>
           </div>
         </div>
       </div>
@@ -188,6 +110,7 @@
     {% endif %}
   </div>
 {% endif %}
+</div>
 
 <script>
   document.querySelectorAll('.rule-delete-form').forEach(form => {
@@ -220,5 +143,37 @@
       }
     });
   }
+
+  const escapeRankingText = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+  const rankingList = (items, spacing = '') => {
+    const rows = (items || []).map((item) => `<li class="list-group-item d-flex justify-content-between"><span>${escapeRankingText(item.name)}</span><span>${Number(item.count) || 0}</span></li>`);
+    if (!rows.length) rows.push('<li class="list-group-item text-muted">Sem dados</li>');
+    const first = rows.slice(0, 5).join('');
+    const remaining = rows.slice(5);
+    return `<ul class="list-group rule-rank-list ${spacing}">${first}</ul>${remaining.length ? `<details class="rule-rank-more mt-2 ${spacing}"><summary>Ver mais</summary><ul class="list-group rule-rank-list mt-2">${remaining.join('')}</ul></details>` : ''}`;
+  };
+  document.querySelectorAll('[data-rule-ranking-url]').forEach((modal) => {
+    modal.addEventListener('show.bs.modal', async () => {
+      if (modal.dataset.rankingLoaded === 'true' || modal.dataset.rankingLoading === 'true') return;
+      modal.dataset.rankingLoading = 'true';
+      const body = modal.querySelector('[data-rule-ranking-body]');
+      try {
+        const response = await fetch(modal.dataset.ruleRankingUrl, {headers: {'Accept': 'application/json'}});
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error('Ranking indisponível.');
+        body.innerHTML = `<div class="row g-3">
+          <div class="col-md-6"><h6 class="fw-bold">Campeonatos</h6><div class="mb-2"><span class="badge bg-success">Greens</span></div>${rankingList(result.leagues.green, 'mb-3')}<div class="mb-2"><span class="badge bg-danger">Reds</span></div>${rankingList(result.leagues.red)}</div>
+          <div class="col-md-6"><h6 class="fw-bold">Times</h6><div class="mb-2"><span class="badge bg-success">Greens</span></div>${rankingList(result.teams.green, 'mb-3')}<div class="mb-2"><span class="badge bg-danger">Reds</span></div>${rankingList(result.teams.red)}</div>
+        </div>`;
+        modal.dataset.rankingLoaded = 'true';
+      } catch (_) {
+        body.innerHTML = '<div class="alert alert-warning mb-0">Não foi possível carregar o ranking agora. Feche e tente novamente.</div>';
+      } finally {
+        modal.dataset.rankingLoading = 'false';
+      }
+    });
+  });
 </script>
 {% endblock %}

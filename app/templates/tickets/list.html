@@ -6,17 +6,30 @@
 </section>
 <div class="saved-ticket-grid">
   {% for ticket in tickets %}
-  <article class="saved-ticket-card">
-    <header><div><strong>{{ ticket.name }}</strong><small>{{ ticket.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div><div class="saved-ticket-actions">{% if ticket.status == 'pending' %}<a href="{{ url_for('main.edit_saved_ticket', ticket_id=ticket.id) }}" aria-label="Editar {{ ticket.name }}" title="Editar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg></a>{% endif %}<span class="status-badge status-{{ ticket.status }}">{{ ticket.status|upper }}</span></div></header>
+  <article class="saved-ticket-card{% if ticket.status not in ['green', 'pending'] %} is-collapsed{% endif %}" data-saved-ticket>
+    <div class="saved-ticket-share-brand"><span>GH</span><div><b>GreenHunter</b><small>BET INTELLIGENCE</small></div></div>
+    <header>
+      <div><strong>{{ ticket.name }}</strong><small>{{ ticket.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div>
+      <div class="saved-ticket-actions">
+        {% if ticket.status == 'pending' or current_user.is_admin_user %}<a href="{{ url_for('main.edit_saved_ticket', ticket_id=ticket.id) }}" aria-label="Editar {{ ticket.name }}" title="Editar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg></a>{% endif %}
+        <button type="button" class="saved-ticket-share" data-ticket-share aria-label="Compartilhar {{ ticket.name }}" title="Compartilhar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg></button>
+        <span class="status-badge status-{{ ticket.status }}">{{ 'INDISPONÍVEL' if ticket.status == 'unavailable' else ticket.status|upper }}</span>
+        <button type="button" class="saved-ticket-toggle" data-ticket-toggle aria-expanded="{{ 'true' if ticket.status in ['green', 'pending'] else 'false' }}" aria-label="{{ 'Minimizar' if ticket.status in ['green', 'pending'] else 'Maximizar' }} {{ ticket.name }}" title="{{ 'Minimizar' if ticket.status in ['green', 'pending'] else 'Maximizar' }} bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+    </header>
     <div class="saved-ticket-money"><span>Odd <b>{{ '%.2f'|format(ticket.total_odd) }}</b></span><span>Aposta <b>R$ {{ '%.2f'|format(ticket.stake_amount) }}</b></span><span>Resultado <b class="ticket-result status-{{ ticket.status }}">R$ {{ '%.2f'|format(ticket.profit) }}</b></span></div>
     <div class="saved-ticket-legs">
       {% for game in ticket.legs|groupby('game_id') %}
       {% set first = game.list[0] %}
       <section class="saved-ticket-game">
-        <header><small>{{ first.league or 'Liga não informada' }}</small><b>{{ first.home_team }} <em>vs</em> {{ first.away_team }}</b></header>
+        <header>
+          <small>{{ first.league or 'Liga não informada' }}</small>
+          <b class="saved-ticket-team-line"><span>{{ first.home_team }}</span><em>vs</em><span>{{ first.away_team }}</span></b>
+          {% if first.game_time %}<span class="saved-ticket-share-schedule"><i aria-hidden="true">◷</i>{{ first.game_time }}{% if first.game_day %}<em>· {{ first.game_day[8:10] }}/{{ first.game_day[5:7] }}/{{ first.game_day[0:4] }}</em>{% endif %}</span>{% endif %}
+        </header>
         <div class="saved-ticket-game-markets">
           {% for leg in game.list %}
-          <div><small>{{ leg.market_label }}{% if leg.result_value is not none %}<em>Apurado: {{ '%g'|format(leg.result_value) }}{% if leg.market_key in ['over15', 'over25', 'goal_ht'] %} {{ 'gol' if leg.result_value == 1 else 'gols' }}{% elif 'corner' in leg.market_key %} {{ 'escanteio' if leg.result_value == 1 else 'escanteios' }}{% elif 'card' in leg.market_key %} {{ 'cartão' if leg.result_value == 1 else 'cartões' }}{% endif %}</em>{% endif %}</small><span class="status-badge status-{{ leg.status }}">{{ leg.status|upper }}</span></div>
+          <div><small>{{ leg.market_label }}{% if leg.result_value is not none %}<em>Apurado: {{ '%g'|format(leg.result_value) }}{% if leg.market_key in ['over15', 'over25', 'goal_ht'] %} {{ 'gol' if leg.result_value == 1 else 'gols' }}{% elif 'corner' in leg.market_key %} {{ 'escanteio' if leg.result_value == 1 else 'escanteios' }}{% elif 'card' in leg.market_key %} {{ 'cartão' if leg.result_value == 1 else 'cartões' }}{% endif %}</em>{% endif %}</small><span class="status-badge status-{{ leg.status }}">{{ 'INDISPONÍVEL' if leg.status == 'unavailable' else leg.status|upper }}</span></div>
           {% endfor %}
         </div>
       </section>
@@ -25,4 +38,108 @@
   </article>
   {% else %}<div class="analysis-empty">Nenhum bilhete salvo ainda.</div>{% endfor %}
 </div>
+<div class="ticket-share-modal" data-ticket-share-modal hidden>
+  <div class="ticket-share-backdrop" data-ticket-share-close></div>
+  <section class="ticket-share-dialog" role="dialog" aria-modal="true" aria-labelledby="ticket-share-title">
+    <button type="button" class="ticket-share-close" data-ticket-share-close aria-label="Fechar">×</button>
+    <div class="ticket-share-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h2l1-2h6l1 2h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"/><circle cx="12" cy="12" r="4"/></svg></div>
+    <span>COMPARTILHAR BILHETE</span>
+    <h2 id="ticket-share-title">Escolha como enviar</h2>
+    <p>A imagem mostrará o bilhete completo, sem informações pessoais.</p>
+    <div class="ticket-share-options">
+      <button type="button" data-ticket-share-action="share"><b>↗</b><span><strong>Compartilhar imagem</strong><small>WhatsApp, Telegram e outros apps</small></span></button>
+      <button type="button" data-ticket-share-action="copy"><b>▣</b><span><strong>Copiar imagem</strong><small>Cole diretamente em uma conversa</small></span></button>
+      <button type="button" data-ticket-share-action="download"><b>↓</b><span><strong>Baixar PNG</strong><small>Salve a imagem no seu dispositivo</small></span></button>
+    </div>
+    <div class="ticket-share-feedback" data-ticket-share-feedback hidden></div>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+let ticketToShare = null;
+const shareModal = document.querySelector('[data-ticket-share-modal]');
+const shareFeedback = document.querySelector('[data-ticket-share-feedback]');
+const setShareModal = (visible) => {
+  if (!shareModal) return;
+  if (visible) {
+    shareModal.hidden = false;
+    requestAnimationFrame(() => shareModal.classList.add('is-visible'));
+  } else {
+    shareModal.classList.remove('is-visible');
+    window.setTimeout(() => { shareModal.hidden = true; }, 180);
+  }
+};
+const ticketImage = async (card) => {
+  if (!window.html2canvas) throw new Error('Gerador de imagem indisponível.');
+  const clone = card.cloneNode(true);
+  clone.classList.remove('is-collapsed');
+  clone.classList.add('is-share-render');
+  clone.querySelectorAll('.saved-ticket-actions').forEach((node) => node.remove());
+  const stage = document.createElement('div');
+  stage.className = 'ticket-share-render-stage';
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+  try {
+    const canvas = await window.html2canvas(clone, {
+      backgroundColor: document.body.classList.contains('theme-dark') ? '#0d1520' : '#ffffff',
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      logging: false,
+      useCORS: true
+    });
+    return await new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Não foi possível gerar a imagem.')), 'image/png'));
+  } finally {
+    stage.remove();
+  }
+};
+const ticketFilename = (card) => `greenhunter-bilhete-${card.querySelector('header strong')?.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'compartilhar'}.png`;
+document.querySelectorAll('[data-saved-ticket]').forEach((card) => {
+  const button = card.querySelector('[data-ticket-toggle]');
+  button?.addEventListener('click', () => {
+    const collapsed = card.classList.toggle('is-collapsed');
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('aria-label', `${collapsed ? 'Maximizar' : 'Minimizar'} bilhete`);
+    button.setAttribute('title', `${collapsed ? 'Maximizar' : 'Minimizar'} bilhete`);
+  });
+  card.querySelector('[data-ticket-share]')?.addEventListener('click', () => {
+    ticketToShare = card;
+    shareFeedback.hidden = true;
+    setShareModal(true);
+  });
+});
+shareModal?.querySelectorAll('[data-ticket-share-close]').forEach((button) => button.addEventListener('click', () => setShareModal(false)));
+shareModal?.querySelectorAll('[data-ticket-share-action]').forEach((button) => button.addEventListener('click', async () => {
+  if (!ticketToShare || button.disabled) return;
+  const action = button.dataset.ticketShareAction;
+  shareModal.querySelectorAll('[data-ticket-share-action]').forEach((item) => { item.disabled = true; });
+  shareFeedback.hidden = false;
+  shareFeedback.className = 'ticket-share-feedback is-loading';
+  shareFeedback.textContent = 'Gerando a imagem completa do bilhete...';
+  try {
+    const blob = await ticketImage(ticketToShare);
+    const filename = ticketFilename(ticketToShare);
+    const file = new File([blob], filename, {type: 'image/png'});
+    if (action === 'share' && navigator.canShare?.({files: [file]})) {
+      await navigator.share({files: [file], title: 'Bilhete GreenHunter'});
+      shareFeedback.textContent = 'Imagem pronta para compartilhar.';
+    } else if (action === 'copy' && navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      shareFeedback.textContent = 'Imagem copiada! Agora é só colar na conversa.';
+    } else {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+      shareFeedback.textContent = action === 'share' ? 'Compartilhamento direto indisponível; a imagem foi baixada.' : 'Imagem baixada com sucesso.';
+    }
+    shareFeedback.className = 'ticket-share-feedback is-success';
+  } catch (error) {
+    if (error?.name === 'AbortError') shareFeedback.textContent = 'Compartilhamento cancelado.';
+    else shareFeedback.textContent = error?.message || 'Não foi possível gerar a imagem.';
+    shareFeedback.className = 'ticket-share-feedback is-error';
+  } finally {
+    shareModal.querySelectorAll('[data-ticket-share-action]').forEach((item) => { item.disabled = false; });
+  }
+}));
+</script>
 {% endblock %}

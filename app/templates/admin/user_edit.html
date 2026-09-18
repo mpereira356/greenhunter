@@ -2,6 +2,7 @@
 {% block title %}Editar Usuario | GreenHunter{% endblock %}
 {% block meta_description %}Edite dados administrativos de usuario, permissoes e configuracoes de conta no GreenHunter.{% endblock %}
 {% block content %}
+<div class="admin-user-edit-page">
 <div class="page-header">
   <div>
     <div class="page-title">Editar usuario</div>
@@ -26,6 +27,11 @@
       <div class="mb-3 form-check">
         <input class="form-check-input" type="checkbox" name="is_admin" id="is_admin" {% if user.is_admin_user %}checked{% endif %}>
         <label class="form-check-label" for="is_admin">Administrador</label>
+      </div>
+      <div class="mb-3 form-check">
+        <input class="form-check-input" type="checkbox" name="premium_granted_by_admin" id="premium_granted_by_admin" {% if user.premium_granted_by_admin %}checked{% endif %}>
+        <label class="form-check-label" for="premium_granted_by_admin">Premium concedido pelo administrador</label>
+        <div class="form-text">Libera todos os recursos Premium sem cobrança e sem data de expiração. Desmarcar remove somente esta liberação manual.</div>
       </div>
       <div class="row g-3 mb-3">
         <div class="col-md-6">
@@ -93,6 +99,7 @@
       <button class="btn btn-primary" type="submit">Salvar</button>
     </form>
   </div>
+</div>
 </div>
 <script>
   const planSelect = document.getElementById("subscription_plan");

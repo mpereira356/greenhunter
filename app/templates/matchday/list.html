@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Jogos do Dia | GreenHunter{% endblock %}
-{% block meta_description %}Agenda diária de futebol com análise estatística de gols, primeiro tempo e escanteios.{% endblock %}
+{% block title %}Jogos do Dia com IA | GreenHunter{% endblock %}
+{% block meta_description %}Use a IA do GreenHunter para analisar os jogos do dia, comparar tendências e gerar bilhetes inteligentes.{% endblock %}
 {% block page_title %}Jogos do Dia{% endblock %}
 {% block content %}
 <section class="matchday-page">
   <div class="matchday-hero">
     <div>
-      <span class="analysis-kicker">Pré-jogo</span>
-      <h1>Jogos e estatísticas do dia</h1>
-      <p>Abra uma partida para comparar H2H, mandante e visitante. As porcentagens são frequências históricas, não garantias.</p>
+      <span class="analysis-kicker">IA pré-jogo</span>
+      <h1>Jogos do Dia com análise por IA</h1>
+      <p>A IA organiza H2H, desempenho em casa e fora e tendências de mercado para acelerar sua leitura. As porcentagens são frequências históricas, não garantias.</p>
     </div>
     <div class="matchday-hero-actions">
       <div class="matchday-page-alert is-error" data-matchday-page-error role="alert" aria-live="assertive" {% if not payload.error %}hidden{% endif %}>
@@ -18,7 +18,7 @@
         <button type="button" data-page-error-close aria-label="Fechar aviso">×</button>
       </div>
       <button class="matchday-settings-trigger" type="button" data-bs-toggle="modal" data-bs-target="#matchdaySettingsModal" aria-label="Configurações dos Jogos do Dia" title="Configurações">⚙</button>
-      <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#ticketGeneratorModal">Gerar sugestão de bilhete</button>
+      <button class="btn btn-primary" type="button" data-ticket-generator-open data-bs-toggle="modal" data-bs-target="#ticketGeneratorModal"><span data-generator-open-label>Gerar bilhete com IA</span></button>
       <div class="matchday-help">
         <button class="matchday-help-trigger" type="button" aria-label="Entenda os indicadores" aria-describedby="matchday-help-legend">i</button>
         <div class="matchday-help-popover" id="matchday-help-legend" role="tooltip">
@@ -64,14 +64,24 @@
           </div>
         </section>
         <section data-settings-panel="markets" hidden>
-          <div class="matchday-settings-copy"><strong>Limites da geração automática</strong><small>O sistema continuará exigindo histórico e confiança. Estes valores apenas definem quais linhas podem entrar no seu bilhete.</small></div>
+          <div class="matchday-settings-copy"><strong>Critérios da geração com IA</strong><small>A IA continuará exigindo histórico e confiança. Estes valores definem quais linhas ela poderá considerar no seu bilhete.</small></div>
           <div class="matchday-settings-general">
             <label><span>Amostra mínima</span><select class="form-select" data-setting-general="minimum_samples">{% for n in range(3,11) %}<option value="{{ n }}" {% if matchday_market_settings.minimum_samples|int == n %}selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
-            <label><span>Máximo por jogo</span><select class="form-select" data-setting-general="max_markets_per_game">{% for n in range(1,7) %}<option value="{{ n }}" {% if matchday_market_settings.max_markets_per_game|int == n %}selected{% endif %}>{{ n }} mercados</option>{% endfor %}</select></label>
+            <label><span>Limite por jogo</span><select class="form-select" data-setting-general="max_markets_per_game">{% for n in range(1,7) %}<option value="{{ n }}" {% if matchday_market_settings.max_markets_per_game|int == n %}selected{% endif %}>Até {{ n }} mercados</option>{% endfor %}</select></label>
           </div>
+          <small class="matchday-settings-limit-note">Esse número é o teto, não uma quantidade obrigatória. Só entram mercados que forem aprovados individualmente pela análise.</small>
           <div class="matchday-settings-goals" data-setting-goals>
             <strong>Mercados de gols permitidos</strong>
-            {% for key, label in [('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols')] %}<label><input class="form-check-input" type="checkbox" data-setting-goal="{{ key }}" {% if matchday_market_settings.goals[key] %}checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+            {% for key, label in [('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols'),('btts','Ambos marcam')] %}<label><input class="form-check-input" type="checkbox" data-setting-goal="{{ key }}" {% if matchday_market_settings.goals[key] %}checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+          </div>
+          {% set team_goals = matchday_market_settings.team_goals %}
+          <div class="matchday-settings-market-table">
+            <div class="matchday-settings-market-head"><span>Gols por equipe</span><span></span><span>Mandante</span><span>Visitante</span></div>
+            <div class="matchday-settings-market-row" data-setting-market="team_goals">
+              <label class="matchday-settings-market-toggle"><input class="form-check-input" type="checkbox" data-setting-enabled {% if team_goals.enabled %}checked{% endif %}><span>Gols do time</span></label>
+              <span></span>
+              {% for scope, label in [('home','Mandante'),('away','Visitante')] %}<label><span>{{ label }}</span><span class="matchday-settings-scope"><input class="form-check-input" type="checkbox" data-setting-scope-enabled="{{ scope }}" {% if team_goals[scope ~ '_enabled'] %}checked{% endif %}><select class="form-select" data-setting-scope="{{ scope }}">{% for line in [0.5, 1.5, 2.5] %}<option value="{{ line }}" {% if team_goals[scope]|float == line %}selected{% endif %}>+{{ line|string|replace('.', ',') }}</option>{% endfor %}</select></span></label>{% endfor %}
+            </div>
           </div>
           <div class="matchday-settings-market-table">
             <div class="matchday-settings-market-head"><span>Mercado</span><span>Total/H2H</span><span>Casa</span><span>Fora</span></div>
@@ -79,7 +89,7 @@
             {% set config = matchday_market_settings[key] %}
             <div class="matchday-settings-market-row" data-setting-market="{{ key }}">
               <label class="matchday-settings-market-toggle"><input class="form-check-input" type="checkbox" data-setting-enabled {% if config.enabled %}checked{% endif %}><span>{{ label }}</span></label>
-              {% for scope in ['total','home','away'] %}<label><span>{{ {'total':'Total/H2H','home':'Casa','away':'Fora'}[scope] }}</span><span class="matchday-settings-scope"><input class="form-check-input" type="checkbox" data-setting-scope-enabled="{{ scope }}" {% if config[scope ~ '_enabled'] %}checked{% endif %}><select class="form-select" data-setting-scope="{{ scope }}">{% for half in range(1,101,2) %}{% set line = half / 2 %}<option value="{{ line }}" {% if config[scope]|float == line %}selected{% endif %}>+{{ line|string|replace('.', ',') }}</option>{% endfor %}</select></span></label>{% endfor %}
+              {% for scope in ['total','home','away'] %}<label><span>{{ {'total':'Total/H2H','home':'Casa','away':'Fora'}[scope] }}</span><span class="matchday-settings-scope"><input class="form-check-input" type="checkbox" data-setting-scope-enabled="{{ scope }}" {% if config[scope ~ '_enabled'] %}checked{% endif %}><select class="form-select" data-setting-scope="{{ scope }}">{% for half in range(1,101,2) %}{% set line = half / 2 %}<option value="{{ line }}" {% if config[scope]|float == line %}selected{% endif %}>{{ line|string|replace('.', ',') }}</option>{% endfor %}</select></span></label>{% endfor %}
             </div>
             {% endfor %}
           </div>
@@ -90,33 +100,47 @@
     </div></div>
   </div>
 
-  <div class="modal fade" id="ticketGeneratorModal" tabindex="-1" aria-labelledby="ticketGeneratorTitle" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered"><div class="modal-content matchday-generator-modal">
-      <div class="modal-header"><div><span class="analysis-kicker">Pré-jogo</span><h2 class="modal-title fs-5" id="ticketGeneratorTitle">Gerar sugestão de bilhete</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal fade" id="ticketGeneratorModal" tabindex="-1" aria-labelledby="ticketGeneratorTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content matchday-generator-modal">
+      <div class="modal-header"><div><span class="analysis-kicker">IA pré-jogo</span><h2 class="modal-title fs-5" id="ticketGeneratorTitle">Criar bilhete inteligente com IA</h2></div><button type="button" class="btn-close" data-generator-dismiss data-bs-dismiss="modal" aria-label="Fechar"></button></div>
       <form method="get" data-ticket-generator-form>
         <div class="modal-body">
-          <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="ticket_generator" value="1">
+          <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="ticket_generator" value="1"><input type="hidden" name="generator_request_id" value="" data-generator-request-id>
           {% for league in selected_leagues %}<input type="hidden" name="league" value="{{ league }}">{% endfor %}
           {% for team in selected_teams %}<input type="hidden" name="team" value="{{ team }}">{% endfor %}
           <div class="matchday-generator-grid">
-            <label><span>Quantidade de jogos</span><input class="form-control" type="number" inputmode="numeric" min="1" step="1" name="generator_count" value="3" required></label>
-            <label><span>Analisar até</span><select class="form-select" name="generator_samples">{% set generator_default_sample = [6, matchday_market_settings.minimum_samples|int]|max %}{% for n in range(3,11) %}<option value="{{ n }}"{% if n == generator_default_sample %} selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
+            <label><span>Quantidade de jogos</span><input class="form-control" type="number" inputmode="numeric" min="1" max="{{ ticket_game_limit }}" step="1" name="generator_count" value="3" required></label>
+            <label><span>Quantidade de últimos jogos para analisar</span><select class="form-select" name="generator_samples">{% set generator_default_sample = (6 if premium_access else 3) %}{% for n in range(3,(11 if premium_access else 4)) %}<option value="{{ n }}"{% if n == generator_default_sample %} selected{% endif %}>{{ n }} jogos</option>{% endfor %}</select></label>
           </div>
-          <fieldset class="matchday-generator-markets"><legend>Mercados permitidos</legend>
-            {% for value, label in [('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols'),('corners_avg','Escanteios'),('cards_avg','Cartões')] %}
-            <label><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" checked><span>{{ label }}</span></label>
+          <div class="matchday-generator-early">
+            <div><strong>Jogos mais cedo <em class="matchday-premium-tag">PRO</em></strong><small>A IA Premium prioriza os próximos horários que tiverem boas estatísticas.</small></div>
+            <label class="{% if not premium_access %}is-premium-locked{% endif %}"><input type="checkbox" name="generator_early" value="1" role="switch" data-generator-early data-premium-access="{{ 'true' if premium_access else 'false' }}"><span aria-hidden="true"></span><b data-generator-early-state>{% if premium_access %}OFF · Geral{% else %}♛ PREMIUM{% endif %}</b></label>
+          </div>
+          <fieldset class="matchday-generator-markets"><legend>Mercados autorizados — não obrigatórios</legend>
+            {% for value, label in [('over05','Mais de 0,5 gol'),('goal_ht','Gol no 1º tempo'),('over15','Mais de 1,5 gols'),('over25','Mais de 2,5 gols'),('btts','Ambos marcam'),('team_goals','Gols por equipe'),('corners_avg','Escanteios'),('cards_avg','Cartões')] %}
+            <label><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" {% if value not in ['over05', 'goal_ht', 'over25'] %}checked{% endif %}><span>{{ label }}</span></label>
             {% endfor %}
             <label><input class="form-check-input" type="checkbox" name="generator_market" value="first_half" checked><span>Mercados do 1º tempo</span></label>
             {% for value, label in [('shots_avg','Finalizações'),('shots_on_target_avg','Chutes ao gol'),('fouls_avg','Faltas'),('offsides_avg','Impedimentos')] %}
             <label data-relevant-generator-market {% if not relevant_selection_active %}hidden{% endif %}><input class="form-check-input" type="checkbox" name="generator_market" value="{{ value }}" {% if not relevant_selection_active %}disabled{% endif %}><span>{{ label }}</span></label>
             {% endfor %}
           </fieldset>
-          <p class="matchday-generator-note">A quantidade escolhida é o máximo de jogos no bilhete. O gerador respeita seus campeonatos e limites pessoais definidos na engrenagem. Em cada jogo, somente mercados independentes e aprovados são incluídos. Não representa garantia de resultado.</p>
+          <p class="matchday-generator-note">Marcar um mercado autoriza sua análise, mas não força sua entrada. A IA cruza histórico H2H, desempenho em casa e fora, confiança e contexto; somente mercados independentes e aprovados são incluídos. As quantidades escolhidas são limites máximos. A análise não representa garantia de resultado.</p>
         </div>
-        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary matchday-loading-button" type="submit" data-generator-submit><span class="matchday-button-idle">Analisar jogos e gerar</span><span class="matchday-button-loading" hidden><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Preparando análise...</span></button></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-generator-dismiss data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary matchday-loading-button" type="submit" data-generator-submit><span class="matchday-button-idle">IA analisar e gerar</span><span class="matchday-button-loading" hidden><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> IA analisando jogos...</span></button></div>
       </form>
     </div></div>
   </div>
+
+  {% if not premium_access %}
+  <div class="modal fade" id="earlyGamesPremiumModal" tabindex="-1" aria-labelledby="earlyGamesPremiumTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content matchday-premium-modal">
+      <div class="modal-header"><div><span class="analysis-kicker">RECURSO PREMIUM</span><h2 class="modal-title fs-5" id="earlyGamesPremiumTitle">Priorize os jogos mais cedo com IA</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body"><div class="matchday-premium-modal-icon" aria-hidden="true">♛</div><p>Esta opção é exclusiva do GreenHunter Pro. No Premium, a IA pode concentrar a geração do bilhete nos próximos horários que também atendam aos critérios de confiança.</p><small>O gerador comum continua disponível no seu plano Free.</small></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Agora não</button><a class="btn btn-primary" href="{{ url_for('main.premium') }}">Conhecer o Premium</a></div>
+    </div></div>
+  </div>
+  {% endif %}
 
   <form class="matchday-filters" method="get">
     <label class="matchday-select-field matchday-date-field">
@@ -197,11 +221,12 @@
     <div class="matchday-trend-filter-title">
       <span class="matchday-trend-icon" aria-hidden="true">%</span>
       <div><strong>Filtro de tendências</strong>
-      <small>Analisa todos os jogos da data e exige a quantidade de amostras escolhida.</small></div>
+      <small>Filtra os jogos da data conforme o indicador, a faixa percentual e a quantidade de amostras escolhida.</small></div>
     </div>
     <label><span>Indicador</span>
       <select class="form-select" name="trend_market" data-trend-market required>
         <option value=""{% if not trend_market %} selected{% endif %} disabled>Escolha o indicador</option>
+        <option value="over05"{% if trend_market == 'over05' %} selected{% endif %}>Mais de 0,5 gol</option>
         <option value="over15"{% if trend_market == 'over15' %} selected{% endif %}>Mais de 1,5 gols</option>
         <option value="over25"{% if trend_market == 'over25' %} selected{% endif %}>Mais de 2,5 gols</option>
         <option value="goal_ht"{% if trend_market == 'goal_ht' %} selected{% endif %}>Gol no 1º tempo</option>
@@ -252,15 +277,15 @@
   {% if matches %}
   <div class="matchday-grid">
     {% for match in matches %}
-    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-is-live="{{ '1' if match.is_live else '0' }}" data-sample-limit="{{ request.args.get('generator_samples', 6) if ticket_generator_active else (trend_limit if trend_active else 6) }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}{% if match.game_id|string in generated_goal_suggestions %} data-generator-suggestion="{{ generated_goal_suggestions[match.game_id|string]|tojson|forceescape }}"{% endif %}>
+    <article class="matchday-card" data-matchday-summary="{{ url_for('main.matchday_summary', game_id=match.game_id, day=day) }}" data-bet365-odds="{{ url_for('main.matchday_bet365_odds', game_id=match.game_id) }}" data-game-id="{{ match.game_id }}" data-game-day="{{ day }}" data-home-team="{{ match.home_team|e }}" data-away-team="{{ match.away_team|e }}" data-league="{{ (match.league or '')|e }}" data-home-win-odd="{{ match.home_win_odd or '' }}" data-away-win-odd="{{ match.away_win_odd or '' }}" data-is-live="{{ '1' if match.is_live else '0' }}" data-sample-limit="{{ card_sample_limit }}"{% if match.game_id|string in trend_prefetch %} data-trend-prefetch="{{ trend_prefetch[match.game_id|string]|tojson|forceescape }}"{% elif trend_active %} hidden{% endif %}{% if match.game_id|string in summary_prefetch %} data-summary-prefetch="{{ summary_prefetch[match.game_id|string]|tojson|forceescape }}"{% endif %}{% if match.game_id|string in generated_goal_suggestions %} data-generator-suggestion="{{ generated_goal_suggestions[match.game_id|string]|tojson|forceescape }}"{% endif %}>
       <div class="matchday-card-head">
         <span class="{% if match.is_live %}is-live{% endif %}" data-game-time data-live-prefix="{% if match.is_live %}AO VIVO · {% endif %}">{% if match.is_live %}AO VIVO · {% endif %}{{ match.time }}</span>
         <small>{{ match.league or "Liga não informada" }}</small>
       </div>
       <div class="matchday-teams">
-        <strong>{{ match.home_team }}</strong>
+        <strong class="matchday-team-name"><span>{{ match.home_team }}</span>{% if match.home_win_odd is defined %}<small class="matchday-win-odd" title="Odd de vitória do mandante">{{ '%.2f'|format(match.home_win_odd)|replace('.', ',') }}</small>{% endif %}</strong>
         <span>vs</span>
-        <strong>{{ match.away_team }}</strong>
+        <strong class="matchday-team-name"><span>{{ match.away_team }}</span>{% if match.away_win_odd is defined %}<small class="matchday-win-odd" title="Odd de vitória do visitante">{{ '%.2f'|format(match.away_win_odd)|replace('.', ',') }}</small>{% endif %}</strong>
         {% if match.is_live %}<div class="matchday-live-score">{{ match.score }}</div>{% endif %}
       </div>
       <div class="matchday-card-summary" aria-live="polite">
@@ -287,9 +312,12 @@
   <aside class="matchday-bet-ticket" data-bet-ticket hidden aria-label="Bilhete de seleções">
     <header class="matchday-ticket-head" data-ticket-drag>
       <div><span>Meu bilhete</span><small data-ticket-count>0 seleções</small></div>
-      <button type="button" data-ticket-close aria-label="Fechar bilhete">×</button>
+      <div class="matchday-ticket-window-actions"><button type="button" data-ticket-minimize aria-label="Minimizar bilhete" title="Minimizar bilhete">−</button></div>
     </header>
-    <div class="matchday-ticket-body" data-ticket-items></div>
+    <div class="matchday-ticket-body">
+      <div class="matchday-ticket-items" data-ticket-items></div>
+      <button class="matchday-ticket-add-game" type="button" data-ticket-add-game hidden><span aria-hidden="true">+</span> Adicionar mais um jogo</button>
+    </div>
     <footer>
       <button class="matchday-ticket-save" type="button" data-ticket-save>Salvar bilhete</button>
       <button class="matchday-ticket-clear" type="button" data-ticket-clear>Limpar bilhete</button>
@@ -311,7 +339,7 @@
   </div>
   <div class="matchday-history-popover" data-history-popover hidden></div>
 </section>
-<script src="{{ url_for('static', filename='js/bet-generator.js', v='20260902-v13') }}"></script>
+<script src="{{ url_for('static', filename='js/bet-generator.js', v='20260918-legacy-shadow-v21') }}"></script>
 <script>
 (function () {
   const leaguePicker = document.querySelector('[data-filter-picker="league"]');
@@ -568,9 +596,34 @@
   const ticketGeneratorRequested = new URLSearchParams(window.location.search).get('ticket_generator') === '1';
   const generatorForm = document.querySelector('[data-ticket-generator-form]');
   const generatorCancel = document.querySelector('[data-generator-cancel]');
+  const generatorOpen = document.querySelector('[data-ticket-generator-open]');
+  const generatorModal = document.getElementById('ticketGeneratorModal');
   const activeSummaryControllers = new Set();
   let generationCancelled = false;
   let completedGeneratorCards = 0;
+
+  function setGeneratorLocked(locked) {
+    if (generatorOpen) {
+      generatorOpen.disabled = locked;
+      generatorOpen.setAttribute('aria-busy', locked ? 'true' : 'false');
+      const label = generatorOpen.querySelector('[data-generator-open-label]');
+      if (label) label.textContent = locked ? 'Gerando bilhete...' : 'Gerar bilhete com IA';
+    }
+    generatorModal?.querySelectorAll('[data-generator-dismiss]').forEach((control) => {
+      control.disabled = locked;
+      control.hidden = locked;
+    });
+    if (locked) sessionStorage.setItem('greenhunter-ticket-generation-active', String(Date.now()));
+    else sessionStorage.removeItem('greenhunter-ticket-generation-active');
+  }
+
+  function clearTicketGeneratorFromUrl() {
+    if (!ticketGeneratorRequested) return;
+    const cleanUrl = new URL(window.location.href);
+    ['ticket_generator', 'generator_count', 'generator_samples', 'generator_market', 'generator_early', 'generator_request_id']
+      .forEach((name) => cleanUrl.searchParams.delete(name));
+    window.history.replaceState({}, '', cleanUrl);
+  }
 
   function setGeneratorStatus(state, title, message) {
     if (generatorCancel) generatorCancel.hidden = state !== 'loading' || generationCancelled;
@@ -580,15 +633,39 @@
     }
     if (state === 'success') {
       showPageSuccess(title, message);
+      // A confirmação da geração usa o mesmo toast superior dos demais
+      // avisos, em vez de permanecer dentro das ações do cabeçalho.
+      pageError?.classList.add('is-centered');
       return;
     }
     showPageLoading(title, message);
   }
 
   if (generatorForm) {
-    generatorForm.addEventListener('submit', () => {
+    const earlyToggle = generatorForm.querySelector('[data-generator-early]');
+    const earlyState = generatorForm.querySelector('[data-generator-early-state]');
+    const earlyPremiumAccess = earlyToggle.dataset.premiumAccess === 'true';
+    const updateEarlyState = () => { earlyState.textContent = earlyPremiumAccess ? (earlyToggle.checked ? 'ON · Mais cedo' : 'OFF · Geral') : '♛ PREMIUM'; };
+    earlyToggle.addEventListener('click', (event) => {
+      if (earlyPremiumAccess) return;
+      event.preventDefault();
+      earlyToggle.checked = false;
+      const premiumModal = document.getElementById('earlyGamesPremiumModal');
+      if (premiumModal && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(premiumModal).show();
+    });
+    earlyToggle.addEventListener('change', updateEarlyState);
+    updateEarlyState();
+    generatorForm.addEventListener('submit', (event) => {
       const button = generatorForm.querySelector('[data-generator-submit]');
       if (!button || !generatorForm.checkValidity()) return;
+      if (generatorForm.dataset.submitting === 'true') {
+        event.preventDefault();
+        return;
+      }
+      generatorForm.dataset.submitting = 'true';
+      const requestId = generatorForm.querySelector('[data-generator-request-id]');
+      if (requestId && !requestId.value) requestId.value = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      setGeneratorLocked(true);
       button.disabled = true;
       button.dataset.loading = 'true';
       button.querySelector('.matchday-button-idle').hidden = true;
@@ -596,6 +673,9 @@
     });
   }
   cards.forEach((card) => {
+    if (card.dataset.summaryPrefetch) {
+      try { card._summaryPrefetch = JSON.parse(card.dataset.summaryPrefetch); } catch (_) { card._summaryPrefetch = null; }
+    }
     if (!card.dataset.trendPrefetch) return;
     try { card._trendGroups = JSON.parse(card.dataset.trendPrefetch); } catch (_) { card._trendGroups = null; }
   });
@@ -605,7 +685,7 @@
   const ticket = document.querySelector('[data-bet-ticket]');
   const ticketLauncher = document.querySelector('[data-ticket-launcher]');
   const ticketStorageKey = 'greenhunter-matchday-ticket-v1';
-  const summaryCacheVersion = 'v31-period-corners-10';
+  const summaryCacheVersion = 'v37-opponent-context';
   const historyPopover = document.querySelector('[data-history-popover]');
   const saveModal = document.querySelector('[data-ticket-save-modal]');
   const ticketUndo = document.querySelector('[data-ticket-undo]');
@@ -621,10 +701,10 @@
   const userMarketSettings = {{ matchday_market_settings|tojson }};
   const globalRelevantLeagues = new Set({{ global_configured_relevant_leagues|tojson }});
   const personalLeagueMode = {{ personal_relevant_active|tojson }};
-  const generatorSettingMap = {corners_avg: 'corners', cards_avg: 'cards', shots_avg: 'shots', shots_on_target_avg: 'shots_on_target', fouls_avg: 'fouls', offsides_avg: 'offsides'};
+  const generatorSettingMap = {team_goals: 'team_goals', corners_avg: 'corners', cards_avg: 'cards', shots_avg: 'shots', shots_on_target_avg: 'shots_on_target', fouls_avg: 'fouls', offsides_avg: 'offsides'};
   document.querySelectorAll('[data-ticket-generator-form] [name="generator_market"]').forEach((input) => {
     const key = generatorSettingMap[input.value];
-    const disabledByPreference = ['goal_ht', 'over15', 'over25'].includes(input.value) ? userMarketSettings.goals?.[input.value] === false
+    const disabledByPreference = ['goal_ht', 'over15', 'over25', 'btts'].includes(input.value) ? userMarketSettings.goals?.[input.value] === false
       : key ? userMarketSettings[key]?.enabled === false
       : input.value === 'first_half' && userMarketSettings.corners_1h?.enabled === false && userMarketSettings.cards_1h?.enabled === false;
     if (disabledByPreference) {
@@ -779,8 +859,36 @@
   try { ticketItems = JSON.parse(localStorage.getItem(ticketStorageKey) || '[]'); } catch (_) { ticketItems = []; }
   if (!Array.isArray(ticketItems)) ticketItems = [];
 
-  const marketLabels = {goal_ht: 'Gol no 1º tempo', over15: 'Mais de 1,5 gols', over25: 'Mais de 2,5 gols', corners_10_over1: '2+ escanteios até 10’', corners_avg: 'Média de escanteios', cards_avg: 'Média de cartões', offsides_avg: 'Média de impedimentos', shots_avg: 'Média de finalizações', shots_on_target_avg: 'Média de chutes ao gol', fouls_avg: 'Média de faltas'};
+  const marketLabels = {goal_ht: 'Gol no 1º tempo', over05: 'Mais de 0,5 gol', over15: 'Mais de 1,5 gols', over25: 'Mais de 2,5 gols', btts: 'Ambos marcam', corners_10_over1: '2+ escanteios até 10’', corners_avg: 'Média de escanteios', cards_avg: 'Média de cartões', offsides_avg: 'Média de impedimentos', shots_avg: 'Média de finalizações', shots_on_target_avg: 'Média de chutes ao gol', fouls_avg: 'Média de faltas'};
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character]));
+  const ticketSupportsDirection = (item) => Number.isFinite(Number(item?.selectedLine)) && !['goal_ht', 'corners_10_over1'].includes(String(item?.marketKey || item?.generatedMarket || ''));
+  function ticketMarketKeyForDirection(item, direction) {
+    let key = String(item.baseMarketKey || item.generatedMarket || item.marketKey || '');
+    key = key.replace(/^under(?=\d)/, 'over').replace('_under_', '_');
+    if (direction !== 'under') return key;
+    if (/^over\d+$/.test(key)) return key.replace(/^over/, 'under');
+    const period = key.match(/^(goals|corners|cards|shots|shots_on_target)_(1h|2h)(.*)$/);
+    if (period) return `${period[1]}_under_${period[2]}${period[3]}`;
+    const scoped = key.match(/^(.*)_(total|home|away)$/);
+    return scoped ? `${scoped[1]}_under_${scoped[2]}` : `${key}_under_total`;
+  }
+  function applyTicketDirection(item, direction) {
+    delete item.bet365Odd;
+    item.direction = direction === 'under' ? 'under' : 'over';
+    item.baseMarketKey = ticketMarketKeyForDirection(item, 'over');
+    const marketKey = ticketMarketKeyForDirection(item, item.direction);
+    item.marketKey = marketKey;
+    if (item.generatedMarket) item.generatedMarket = marketKey;
+    const option = (item.lineOptions || []).find((entry) => Number(entry.line) === Number(item.selectedLine));
+    const overPercentage = Number(option?.percentage ?? item.overPercentage ?? item.value);
+    if (Number.isFinite(overPercentage)) {
+      item.overPercentage = overPercentage;
+      item.value = item.direction === 'under' ? Math.max(0, Math.min(100, Math.round(100 - overPercentage))) : Math.round(overPercentage);
+      item.historicalFrequency = item.value;
+      item.unit = '%';
+    }
+    item.market = `${item.direction === 'under' ? 'Menos' : 'Mais'} de ${String(item.selectedLine).replace('.', ',')} ${item.lineNoun || 'gols'}${item.lineSuffix || ''}`;
+  }
   function saveTicket() {
     const payload = JSON.stringify(ticketItems);
     try {
@@ -800,6 +908,78 @@
         return false;
       }
     }
+  }
+
+  const bet365Requests = new Map();
+  const oddsPrefetches = new Set();
+  async function prefetchCardOdds(card) {
+    const key = `${card.dataset.gameDay}:${card.dataset.gameId}`;
+    if (oddsPrefetches.has(key) || card.dataset.isLive === '1') return;
+    oddsPrefetches.add(key);
+    const clock = card.querySelector('[data-game-time]')?.textContent.replace('AO VIVO · ', '').trim() || '';
+    try {
+      await fetch(card.dataset.bet365Odds, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          day: card.dataset.gameDay,
+          match: {home: card.dataset.homeTeam, away: card.dataset.awayTeam, league: card.dataset.league, time: clock},
+          selections: []
+        })
+      });
+    } catch (_) {
+      // A busca normal do bilhete fará uma nova tentativa se o pré-carregamento falhar.
+    }
+  }
+
+  async function prefetchVisibleOdds() {
+    const queue = cards.filter((card) => !card.hidden).slice(0, 12);
+    let cursor = 0;
+    async function worker() {
+      while (cursor < queue.length) {
+        const card = queue[cursor++];
+        await prefetchCardOdds(card);
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(2, queue.length)}, worker));
+  }
+
+  async function refreshBet365Odds() {
+    const games = new Map();
+    ticketItems.forEach((item) => {
+      const key = `${item.day}:${item.gameId}`;
+      if (!games.has(key)) games.set(key, []);
+      games.get(key).push(item);
+    });
+    games.forEach((items, gameKey) => {
+      const signature = JSON.stringify(items.map((item) => [item.id, item.marketKey || item.generatedMarket, item.direction, item.selectedLine]));
+      const requestKey = `${gameKey}:${signature}`;
+      if (bet365Requests.has(requestKey)) return;
+      bet365Requests.set(requestKey, 'pending');
+      const first = items[0];
+      const card = cards.find((entry) => String(entry.dataset.gameId) === String(first.gameId) && entry.dataset.gameDay === first.day);
+      const endpoint = card?.dataset.bet365Odds || `/jogos-do-dia/${encodeURIComponent(first.gameId)}/odds-bet365`;
+      fetch(endpoint, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({day: first.day, match: {home: first.home, away: first.away, league: first.league, time: first.time}, selections: items.map((item) => ({id: item.id, marketKey: item.marketKey || item.generatedMarket, generatedMarket: item.generatedMarket, direction: item.direction, selectedLine: item.selectedLine}))})
+      }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Odds indisponíveis')))
+        .then((data) => {
+          let changed = false;
+          items.forEach((item) => {
+            const odd = data.odds?.[item.id];
+            const bookmakerOdds = Array.isArray(data.bookmakers?.[item.id]) ? data.bookmakers[item.id] : [];
+            if (Number.isFinite(Number(odd)) && Number(item.bet365Odd) !== Number(odd)) {
+              item.bet365Odd = Number(odd); changed = true;
+            } else if (!Number.isFinite(Number(odd)) && item.bet365Odd !== undefined) {
+              delete item.bet365Odd; changed = true;
+            }
+            if (JSON.stringify(item.bookmakerOdds || []) !== JSON.stringify(bookmakerOdds)) {
+              item.bookmakerOdds = bookmakerOdds; changed = true;
+            }
+          });
+          bet365Requests.set(requestKey, 'done');
+          if (changed) { saveTicket(); renderTicket(false); }
+        }).catch(() => bet365Requests.set(requestKey, 'done'));
+    });
   }
 
   function generatedCandidateToItem(candidate) {
@@ -832,7 +1012,7 @@
       home: card.dataset.homeTeam,
       away: card.dataset.awayTeam,
       market: candidate.line,
-      group: `${scopeLabel} · análise estatística`,
+      group: `${scopeLabel}${candidate.evaluation?.sourcePriority === 'h2h' ? ' · H2H prioritário' : ' · forma casa/fora'} · análise estatística`,
       value: candidate.confidence,
       unit: '%',
       samples: candidate.samples,
@@ -842,10 +1022,14 @@
       // porcentagens diferentes para o mesmo mercado.
       secondaryValue: over25LineOption ? over25LineOption.percentage : over25Value,
       lineOptions: candidate.lineOptions || [],
+      direction: candidate.direction || candidate.evaluation?.direction || 'over',
       selectedLine: candidate.selectedLine ?? null,
       lineNoun: candidate.lineNoun || '',
       lineSuffix: candidate.lineSuffix || '',
       generatedMarket: candidate.market,
+      marketKey: candidate.market,
+      baseMarketKey: candidate.market,
+      overPercentage: candidate.confidence,
       generated: true,
       historicalFrequency: candidate.evaluation?.historicalFrequency ?? candidate.confidence,
       adjustedProbability: candidate.evaluation?.adjustedProbability ?? null,
@@ -854,8 +1038,11 @@
       dataQualityScore: candidate.evaluation?.dataQualityScore ?? null,
       dataQualityGrade: candidate.evaluation?.dataQualityGrade || '',
       consistencyScore: candidate.evaluation?.consistencyScore ?? null,
+      contextScore: candidate.evaluation?.contextScore ?? null,
       sampleScore: candidate.evaluation?.sampleScore ?? null,
       supportingScore: candidate.evaluation?.supportingScore ?? null,
+      approvedMarketsInGame: candidate.evaluation?.approvedMarketsInGame ?? null,
+      configuredMaxMarkets: candidate.evaluation?.configuredMaxMarkets ?? null,
       strengths: candidate.evaluation?.strengths || [],
       weaknesses: candidate.evaluation?.weaknesses || []
     };
@@ -865,9 +1052,10 @@
     const market = String(candidate.market || '');
     if (market.startsWith('corners_1h')) return 'corners_1h';
     if (market.startsWith('cards_1h')) return 'cards_1h';
+    if (market.startsWith('cards_2h')) return 'cards_2h';
     if (market.startsWith('goals_1h')) return 'goals_1h';
     if (market === 'goal_ht') return 'goal_ht';
-    if (['over15', 'over25'].includes(market)) return 'goals_ft';
+    if (['over05', 'over15', 'over25'].includes(market)) return 'goals_ft';
     // Total e desempenho de uma equipe são mercados diferentes. Mantemos uma
     // única linha progressiva por grupo, mas permitimos que ambos coexistam
     // quando os dois passam na análise.
@@ -890,6 +1078,7 @@
     let valueBonus = 0;
     if (market === 'over25') valueBonus = 8;
     else if (market === 'over15') valueBonus = 1;
+    else if (market === 'over05') valueBonus = 0;
     else if (market === 'corners_avg' && Number.isFinite(line)) valueBonus = Math.min(5, Math.max(0, line - 8.5) * .7);
     else if (['corners_home', 'corners_away'].includes(market) && Number.isFinite(line)) valueBonus = Math.min(5, Math.max(0, line - 2.5) * .9);
     else if (market.startsWith('cards') && Number.isFinite(line)) valueBonus = Math.min(4, Math.max(0, line - 4.5) * .7);
@@ -940,7 +1129,7 @@
     });
   }
 
-  function addNextGeneratedCandidate() {
+  function addNextGeneratedCandidate(gamePosition = null) {
     const gamesInTicket = new Set(ticketItems.map((item) => String(item.gameId)));
     const next = generatedCandidateQueue.find((candidate) => {
       const gameId = String(candidate.card.dataset.gameId);
@@ -948,8 +1137,37 @@
     });
     if (!next) return false;
     coherentCandidatesForGame(next.card.dataset.gameId)
-      .forEach((candidate) => ticketItems.push(generatedCandidateToItem(candidate)));
+      .forEach((candidate) => {
+        const item = generatedCandidateToItem(candidate);
+        if (Number.isFinite(Number(gamePosition))) item.gamePosition = Number(gamePosition);
+        ticketItems.push(item);
+      });
     return true;
+  }
+
+  function hasNextGeneratedCandidate() {
+    const gamesInTicket = new Set(ticketItems.map((item) => String(item.gameId)));
+    return generatedCandidateQueue.some((candidate) => {
+      const gameId = String(candidate.card.dataset.gameId);
+      return !gamesInTicket.has(gameId) && !excludedGeneratedGames.has(gameId);
+    });
+  }
+
+  function ensureStableTicketGameOrder() {
+    const positions = new Map();
+    let greatest = -1;
+    ticketItems.forEach((item) => {
+      const key = `${item.day}:${item.gameId}`;
+      const position = Number(item.gamePosition);
+      if (!Number.isFinite(position)) return;
+      if (!positions.has(key) || position < positions.get(key)) positions.set(key, position);
+      greatest = Math.max(greatest, position);
+    });
+    ticketItems.forEach((item) => {
+      const key = `${item.day}:${item.gameId}`;
+      if (!positions.has(key)) positions.set(key, ++greatest);
+      item.gamePosition = positions.get(key);
+    });
   }
 
   function ticketGroupLabel(item) {
@@ -962,6 +1180,7 @@
 
   function renderTicket(openWhenPopulated) {
     const itemsBox = ticket.querySelector('[data-ticket-items]');
+    ensureStableTicketGameOrder();
     const games = [];
     ticketItems.forEach((item) => {
       if (item.secondaryMarket === 'Mais de 2,5 gols' && Array.isArray(item.lineOptions)) {
@@ -978,6 +1197,7 @@
       }
       game.selections.push(item);
     });
+    games.sort((left, right) => Number(left.item.gamePosition) - Number(right.item.gamePosition));
     const gameCount = games.length;
     ticket.querySelector('[data-ticket-count]').textContent = `${gameCount} ${gameCount === 1 ? 'jogo' : 'jogos'}`;
     ticketLauncher.querySelector('[data-ticket-launcher-count]').textContent = gameCount;
@@ -985,7 +1205,8 @@
       <article class="matchday-ticket-item">
         <header>
           <div><small>${escapeHtml(game.item.day)} · ${escapeHtml(game.item.time)} · ${escapeHtml(game.item.league || 'Liga não informada')}</small>
-          <strong>${escapeHtml(game.item.home)} <em>vs</em> ${escapeHtml(game.item.away)}</strong></div>
+          <strong>${escapeHtml(game.item.home)} <em>vs</em> ${escapeHtml(game.item.away)}</strong>
+          ${Number.isFinite(Number(game.item.approvedMarketsInGame)) ? `<small class="matchday-ticket-approved-count">${escapeHtml(game.item.approvedMarketsInGame)} ${Number(game.item.approvedMarketsInGame) === 1 ? 'mercado aprovado' : 'mercados aprovados'} · limite de ${escapeHtml(game.item.configuredMaxMarkets || game.item.approvedMarketsInGame)}</small>` : ''}</div>
           <div class="matchday-ticket-game-actions">
             <button type="button" data-ticket-go-game="${escapeHtml(game.key)}" aria-label="Ir ao card de ${escapeHtml(game.item.home)} contra ${escapeHtml(game.item.away)}" title="Ir ao card do jogo">⌖</button>
             ${game.selections.some((item) => item.generated) ? `<button type="button" data-ticket-replace-game="${escapeHtml(game.key)}" aria-label="Trocar por outra sugestão" title="Trocar jogo">↻</button>` : ''}
@@ -995,8 +1216,13 @@
         <div class="matchday-ticket-selections">
           ${game.selections.map((item) => `
           <div class="matchday-ticket-selection">
-            <div><span>${escapeHtml(item.market)}</span><b>${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b></div>
-            ${Array.isArray(item.lineOptions) && item.lineOptions.length > 1 ? `<label class="matchday-ticket-line"><span>Ajustar linha</span><select data-ticket-line="${escapeHtml(item.id)}" aria-label="Alterar linha de ${escapeHtml(item.market)}">${item.lineOptions.map((option) => `<option value="${escapeHtml(option.line)}" ${Number(option.line) === Number(item.selectedLine) ? 'selected' : ''}>Mais de ${escapeHtml(option.line)}</option>`).join('')}</select></label>` : ''}
+            <div class="matchday-ticket-market-row">
+              <span class="matchday-ticket-market-name">${escapeHtml(item.market)}</span>
+              ${Number.isFinite(Number(item.bet365Odd)) ? `<span class="matchday-ticket-bet365-odd" tabindex="0" role="button" aria-label="Ver odds em até 3 casas"><b>${Number(item.bet365Odd).toFixed(2).replace('.', ',')}</b>${Array.isArray(item.bookmakerOdds) && item.bookmakerOdds.length ? `<span class="matchday-ticket-odds-popover"><strong>Odds por casa</strong>${item.bookmakerOdds.slice(0, 3).map((price) => `<span><i>${escapeHtml(price.name)}</i><b>${Number(price.odd).toFixed(2).replace('.', ',')}</b></span>`).join('')}</span>` : ''}</span>` : ''}
+              <b class="matchday-ticket-percentage">${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b>
+            </div>
+            ${ticketSupportsDirection(item) ? `<label class="matchday-ticket-line"><span>Tipo</span><select data-ticket-direction="${escapeHtml(item.id)}" aria-label="Escolher mais ou menos para ${escapeHtml(item.market)}"><option value="over" ${item.direction !== 'under' ? 'selected' : ''}>Mais de</option><option value="under" ${item.direction === 'under' ? 'selected' : ''}>Menos de</option></select></label>` : ''}
+            ${Array.isArray(item.lineOptions) && item.lineOptions.length > 1 ? `<label class="matchday-ticket-line"><span>Ajustar linha</span><select data-ticket-line="${escapeHtml(item.id)}" aria-label="Alterar linha de ${escapeHtml(item.market)}">${item.lineOptions.map((option) => `<option value="${escapeHtml(option.line)}" ${Number(option.line) === Number(item.selectedLine) ? 'selected' : ''}>${item.direction === 'under' ? 'Menos' : 'Mais'} de ${escapeHtml(option.line)}</option>`).join('')}</select></label>` : ''}
             ${item.secondaryMarket && item.secondaryValue !== null && item.secondaryValue !== undefined && !(item.secondaryMarket === 'Mais de 2,5 gols' && Number(item.selectedLine) === 2.5) ? `<small class="matchday-ticket-secondary"><span>${escapeHtml(item.secondaryMarket)}</span><b>${escapeHtml(item.secondaryValue)}%</b></small>` : ''}
             <small>${escapeHtml(ticketGroupLabel(item))}${item.generated ? ' · análise estatística' : ''} · ${escapeHtml(item.samples)} jogos</small>
             <button type="button" data-ticket-remove-index="${ticketItems.indexOf(item)}" aria-label="Remover somente ${escapeHtml(item.market)}" title="Remover somente esta seleção">×</button>
@@ -1013,6 +1239,13 @@
       saveTicket();
       renderTicket(false);
       showTicketUndo(previous, 'Seleção removida', 'A seleção foi retirada do bilhete.');
+    }));
+    itemsBox.querySelectorAll('[data-ticket-direction]').forEach((select) => select.addEventListener('change', () => {
+      const item = ticketItems.find((saved) => saved.id === select.dataset.ticketDirection);
+      if (!item) return;
+      applyTicketDirection(item, select.value);
+      saveTicket();
+      renderTicket(false);
     }));
     itemsBox.querySelectorAll('[data-ticket-remove-game]').forEach((button) => button.addEventListener('click', () => {
       const game = games.find((entry) => entry.key === button.dataset.ticketRemoveGame);
@@ -1039,6 +1272,11 @@
         showPageError('Jogo não está nesta tela', 'Selecione a data e os filtros correspondentes para visualizar o card deste jogo.');
         return;
       }
+      // Um card oculto conserva a animação inicial com fill-mode. Ao voltar a
+      // exibi-lo ela reiniciava a opacidade e fazia o card sumir/aparecer.
+      // Na navegação do bilhete mantemos somente o contorno de localização.
+      card.classList.remove('gh-motion-card');
+      card.style.removeProperty('--gh-enter-delay');
       card.hidden = false;
       ticket.hidden = true;
       renderTicket(false);
@@ -1054,9 +1292,10 @@
       if (!game) return;
       const previous = ticketSnapshot();
       const removedGameId = String(game.item.gameId);
+      const removedPosition = Number(game.item.gamePosition);
       excludedGeneratedGames.add(removedGameId);
       ticketItems = ticketItems.filter((item) => `${item.day}:${item.gameId}` !== game.key);
-      addNextGeneratedCandidate();
+      addNextGeneratedCandidate(removedPosition);
       saveTicket();
       renderTicket(false);
       showTicketUndo(previous, 'Sugestão atualizada', 'O jogo foi substituído por uma nova sugestão.');
@@ -1068,8 +1307,9 @@
       const option = (item.lineOptions || []).find((entry) => Number(entry.line) === Number(select.value));
       if (!option) return;
       item.selectedLine = option.line;
-      item.value = option.percentage;
-      item.historicalFrequency = option.percentage;
+      item.overPercentage = option.percentage;
+      item.value = item.direction === 'under' ? Math.max(0, Math.min(100, Math.round(100 - option.percentage))) : option.percentage;
+      item.historicalFrequency = item.value;
       if (option.adjustedProbability !== undefined) item.adjustedProbability = option.adjustedProbability;
       if (option.confidenceScore !== undefined) item.confidenceScore = option.confidenceScore;
       if (option.confidenceClass !== undefined) item.confidenceClass = option.confidenceClass;
@@ -1080,7 +1320,7 @@
       if (option.supportingScore !== undefined) item.supportingScore = option.supportingScore;
       if (option.strengths !== undefined) item.strengths = option.strengths;
       if (option.weaknesses !== undefined) item.weaknesses = option.weaknesses;
-      item.market = `Mais de ${option.line} ${item.lineNoun}${item.lineSuffix || ''}`;
+      applyTicketDirection(item, item.direction);
       removeRedundantTicketCorners(item.gameId);
       saveTicket();
       renderTicket(false);
@@ -1088,7 +1328,15 @@
     }));
     if (openWhenPopulated && ticketItems.length) ticket.hidden = false;
     ticketLauncher.hidden = !ticket.hidden || ticketItems.length === 0;
+    const addGameButton = ticket.querySelector('[data-ticket-add-game]');
+    const isGeneratedTicket = ticketItems.some((item) => item.generated);
+    addGameButton.hidden = !isGeneratedTicket;
+    addGameButton.disabled = !hasNextGeneratedCandidate();
+    addGameButton.innerHTML = addGameButton.disabled
+      ? '<span aria-hidden="true">✓</span> Nenhum outro jogo aprovado'
+      : '<span aria-hidden="true">+</span> Adicionar mais um jogo';
     syncTicketSelectionMarks();
+    void refreshBet365Odds();
   }
 
   function syncTicketSelectionMarks() {
@@ -1133,6 +1381,31 @@
     // Um clique direto em H2H/Casa/Fora também pode criar uma seleção manual
     // quando a fonte não possui histórico para exibir naquele campo.
     return selected || (exactGroup ? {key: exactGroup, samples: 0, value: null, hasLines: false} : null);
+  }
+
+  function goalLineChoices(values, selectedLine) {
+    const clean = (values || []).map(Number).filter(Number.isFinite);
+    const options = Array.from({length: 10}, (_, index) => index + .5).map((line) => ({
+      line,
+      percentage: clean.length ? Math.round(clean.filter((value) => value > line).length / clean.length * 100) : '-'
+    }));
+    return {
+      options,
+      recommended: options.find((option) => option.line === Number(selectedLine)) || options[0],
+      hasHistoricalLines: clean.length > 0
+    };
+  }
+
+  function generatedGoalLineChoices(card, evaluation) {
+    const groups = card._trendGroups || {};
+    const isTeam = String(evaluation.marketGroup || '').startsWith('team_goals_');
+    if (isTeam && evaluation.sourcePriority === 'h2h') {
+      const h2hKey = evaluation.scope === 'home' ? 'team_goals_home' : 'team_goals_away';
+      return goalLineChoices(historyNumbers(groups.H2H || {}, h2hKey), evaluation.line).options;
+    }
+    const keys = evaluation.scope === 'home' ? ['Mandante'] : evaluation.scope === 'away' ? ['Visitante'] : ['H2H', 'Mandante', 'Visitante'];
+    const values = keys.flatMap((key) => historyNumbers(groups[key] || {}, isTeam ? 'team_goals' : 'over15'));
+    return goalLineChoices(values, evaluation.line).options;
   }
 
   function manualCornerLine(card, groupKey) {
@@ -1239,7 +1512,9 @@
       else if (market === 'shots_on_target_avg') { noun = 'chutes ao gol'; baseKey = 'shots_on_target'; }
       else return;
       let lineOptions = [];
-      if (line === null) {
+      if (['over15', 'over25'].includes(market)) {
+        lineOptions = goalLineChoices(history, line).options;
+      } else if (line === null) {
         const maximum = Math.max(1.5, Math.min(30.5, Math.max(...history, 1) + .5));
         lineOptions = Array.from({length: Math.floor(maximum) + 1}, (_, index) => index + .5)
           .map((candidateLine) => ({line: candidateLine, percentage: history.length ? Math.round(history.filter((value) => value > candidateLine).length / history.length * 100) : '-'}));
@@ -1274,17 +1549,20 @@
     const teamName = selection.key === 'Mandante' ? card.dataset.homeTeam : selection.key === 'Visitante' ? card.dataset.awayTeam : '';
     const groupLabel = selection.key === 'H2H' ? 'Total · H2H' : `${teamName} · ${selection.key === 'Mandante' ? 'Casa' : 'Fora'}`;
     const secondary = market === 'over15' ? selectedTrendForCard(card, 'over25', selection.key) : null;
-    const percentageMarket = ['goal_ht', 'over15', 'over25', 'corners_10_over1'].includes(market);
+    const percentageMarket = ['goal_ht', 'over15', 'over25', 'btts', 'corners_10_over1'].includes(market);
+    const goalLine = ['over15', 'over25'].includes(market)
+      ? {...goalLineChoices(historyNumbers((card._trendGroups || {})[selection.key] || {}, 'over15'), market === 'over15' ? 1.5 : 2.5), marketKey: market, noun: 'gols'}
+      : null;
     const cornerLine = market === 'corners_avg' ? manualCornerLine(card, selection.key) : null;
     const cardLine = market === 'cards_avg' ? manualCardLine(card, selection.key) : null;
     const metricLine = manualMetricLine(card, selection.key, market);
-    const adjustableLine = cornerLine || cardLine || metricLine;
+    const adjustableLine = goalLine || cornerLine || cardLine || metricLine;
     const lineSuffix = teamName ? ` — ${teamName}` : '';
     const lineNoun = cornerLine ? 'escanteios' : cardLine ? 'cartões' : (metricLine?.noun || '');
-    const marketName = adjustableLine ? `Mais de ${adjustableLine.recommended.line} ${lineNoun}${lineSuffix}` : marketLabels[market];
+    const marketName = adjustableLine ? `Mais de ${adjustableLine.recommended.line} ${lineNoun}${lineSuffix}` : market === 'btts' ? 'Ambos marcam — Sim' : marketLabels[market];
     const earlyCornerSecondary = market === 'corners_10_over1' ? (card._trendGroups || {})[selection.key]?.corners_10_over0 : null;
     const hasDisplayedPercentage = selection.value !== null && selection.value !== undefined;
-    const item = {id, gameId: card.dataset.gameId, day: card.dataset.gameDay, time: clock, league: card.dataset.league, home: card.dataset.homeTeam, away: card.dataset.awayTeam, market: marketName, marketKey: adjustableLine ? adjustableLine.marketKey : market, generatedMarket: adjustableLine ? adjustableLine.marketKey : undefined, selectedLine: adjustableLine ? adjustableLine.recommended.line : market === 'over15' ? 1.5 : market === 'over25' ? 2.5 : market === 'corners_10_over1' ? 1.5 : null, lineOptions: adjustableLine ? adjustableLine.options : [], lineNoun, lineSuffix: adjustableLine ? lineSuffix : '', group: `${groupLabel}${!hasDisplayedPercentage ? ' · histórico indisponível' : ''}`, value: adjustableLine ? adjustableLine.recommended.percentage : (hasDisplayedPercentage ? selection.value : '-'), unit: ((percentageMarket && hasDisplayedPercentage) || (adjustableLine && adjustableLine.hasHistoricalLines)) ? '%' : '', samples: selection.samples, secondaryMarket: secondary ? 'Mais de 2,5 gols' : market === 'corners_10_over1' && earlyCornerSecondary !== null && earlyCornerSecondary !== undefined ? '1+ escanteio até 10’' : '', secondaryValue: secondary ? secondary.value : earlyCornerSecondary};
+    const item = {id, gameId: card.dataset.gameId, day: card.dataset.gameDay, time: clock, league: card.dataset.league, home: card.dataset.homeTeam, away: card.dataset.awayTeam, market: marketName, marketKey: adjustableLine ? adjustableLine.marketKey : market, generatedMarket: adjustableLine ? adjustableLine.marketKey : undefined, baseMarketKey: adjustableLine ? adjustableLine.marketKey : market, direction: 'over', selectedLine: adjustableLine ? adjustableLine.recommended.line : market === 'over15' ? 1.5 : market === 'over25' ? 2.5 : market === 'corners_10_over1' ? 1.5 : null, lineOptions: adjustableLine ? adjustableLine.options : [], lineNoun: lineNoun || (['over15', 'over25'].includes(market) ? 'gols' : ''), lineSuffix: adjustableLine ? lineSuffix : '', group: `${groupLabel}${!hasDisplayedPercentage ? ' · histórico indisponível' : ''}`, value: adjustableLine ? adjustableLine.recommended.percentage : (hasDisplayedPercentage ? selection.value : '-'), unit: ((percentageMarket && hasDisplayedPercentage) || (adjustableLine && adjustableLine.hasHistoricalLines)) ? '%' : '', samples: selection.samples, secondaryMarket: secondary ? 'Mais de 2,5 gols' : market === 'corners_10_over1' && earlyCornerSecondary !== null && earlyCornerSecondary !== undefined ? '1+ escanteio até 10’' : '', secondaryValue: secondary ? secondary.value : earlyCornerSecondary};
     const existing = ticketItems.findIndex((saved) => saved.id === id);
     if (existing >= 0) ticketItems.splice(existing, 1); else ticketItems.push(item);
     saveTicket();
@@ -1339,7 +1617,13 @@
     if (!event.relatedTarget?.closest?.('[data-history-popover]')) historyPopover.hidden = true;
   });
 
-  ticket.querySelector('[data-ticket-close]').addEventListener('click', () => { ticket.hidden = true; renderTicket(false); });
+  ticket.querySelector('[data-ticket-minimize]')?.addEventListener('click', () => {
+    const minimized = ticket.classList.toggle('is-minimized');
+    const button = ticket.querySelector('[data-ticket-minimize]');
+    button.textContent = minimized ? '+' : '−';
+    button.setAttribute('aria-label', minimized ? 'Maximizar bilhete' : 'Minimizar bilhete');
+    button.setAttribute('title', minimized ? 'Maximizar bilhete' : 'Minimizar bilhete');
+  });
   ticket.querySelector('[data-ticket-clear]').addEventListener('click', () => {
     const previous = ticketSnapshot();
     ticketItems = [];
@@ -1348,6 +1632,18 @@
     ticket.hidden = true;
     renderTicket(false);
     showTicketUndo(previous, 'Bilhete limpo', 'Todas as seleções foram removidas.');
+  });
+  ticket.querySelector('[data-ticket-add-game]').addEventListener('click', () => {
+    const previous = ticketSnapshot();
+    ensureStableTicketGameOrder();
+    const lastPosition = ticketItems.reduce((maximum, item) => {
+      const position = Number(item.gamePosition);
+      return Number.isFinite(position) ? Math.max(maximum, position) : maximum;
+    }, -1);
+    if (!addNextGeneratedCandidate(lastPosition + 1)) return;
+    saveTicket();
+    renderTicket(false);
+    showTicketUndo(previous, 'Jogo adicionado', 'Mais uma sugestão aprovada foi incluída no final do bilhete.');
   });
   function closeSaveModal() { saveModal.hidden = true; }
   ticket.querySelector('[data-ticket-save]').addEventListener('click', () => {
@@ -1395,7 +1691,7 @@
   if (trendFilter) {
     const trendMarketSelect = trendFilter.querySelector('[data-trend-market]');
     const updateTrendUnit = () => {
-      const usesPercentage = ['goal_ht', 'over15', 'over25', 'corners_10_over1'].includes(trendMarketSelect.value);
+      const usesPercentage = ['goal_ht', 'over05', 'over15', 'over25', 'corners_10_over1'].includes(trendMarketSelect.value);
       trendFilter.querySelectorAll('[data-trend-unit]').forEach((unit) => { unit.textContent = usesPercentage ? '%' : ''; });
     };
     trendMarketSelect.addEventListener('change', updateTrendUnit);
@@ -1487,21 +1783,29 @@
 
   if (trendActive) applyTrendFilter();
 
-  async function loadCard(card, busyAttempts = 0) {
+  async function loadCard(card, busyAttempts = 0, forceRefresh = false) {
     const box = card.querySelector('.matchday-card-summary');
     card._trendFailed = false;
     const limit = Number(card.dataset.sampleLimit || 6);
     const summaryCacheKey = `greenhunter-summary:${summaryCacheVersion}:${card.dataset.gameDay}:${card.dataset.gameId}:${limit}`;
     try {
       let data = null;
+      if (!forceRefresh && card._summaryPrefetch) {
+        data = card._summaryPrefetch;
+        card._summaryPrefetch = null;
+      }
       try {
         const cached = JSON.parse(localStorage.getItem(summaryCacheKey) || 'null');
-        if (cached && Date.now() - Number(cached.savedAt || 0) < 12 * 60 * 60 * 1000) data = cached.data;
+        if (!data && cached && Date.now() - Number(cached.savedAt || 0) < 12 * 60 * 60 * 1000) data = cached.data;
       } catch (_) {}
-      if (!data) {
+      if (forceRefresh) {
+        try { localStorage.removeItem(summaryCacheKey); } catch (_) {}
+      }
+      if (!data || forceRefresh) {
         box.innerHTML = '<div class="matchday-summary-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Calculando tendências...</div>';
         const summaryUrl = new URL(card.dataset.matchdaySummary, window.location.origin);
         summaryUrl.searchParams.set('limit', String(limit));
+        if (forceRefresh) summaryUrl.searchParams.set('refresh', '1');
         const requestController = new AbortController();
         activeSummaryControllers.add(requestController);
         const requestTimeout = window.setTimeout(() => requestController.abort(), 20000);
@@ -1525,7 +1829,7 @@
           return loadCard(card, busyAttempts + 1);
         }
         if (!response.ok) throw new Error(data.error || 'Falha temporária ao consultar o histórico.');
-        if (data.ok && data.status === 'ready') {
+        if (data.ok && ['ready', 'empty'].includes(data.status)) {
           try { localStorage.setItem(summaryCacheKey, JSON.stringify({savedAt: Date.now(), data})); } catch (_) {}
         }
       }
@@ -1541,7 +1845,7 @@
           <span>${data.message || 'Não há partidas anteriores disponíveis na fonte.'}</span>
           <button type="button" class="matchday-summary-retry">Tentar novamente</button>
         </div>`;
-        box.querySelector('.matchday-summary-retry').addEventListener('click', () => loadCard(card));
+        box.querySelector('.matchday-summary-retry').addEventListener('click', () => loadCard(card, 0, true));
         applyTrendFilter();
         return;
       }
@@ -1563,7 +1867,7 @@
           const selectable = ['goal_ht', 'over15', 'over25', 'corners_10_over1', 'corners_avg', 'cards_avg', 'shots_avg', 'shots_on_target_avg'].includes(key) && hasValue;
           return `<td class="matchday-period-value${selectable ? ' is-ticket-cell' : ''}" data-history="${encodedHistory}" data-history-market="${key}" data-history-group="${group}"${selectable ? ` data-period-ticket-cell="${key}" data-period="${period}" data-ticket-group="${group}"` : ''}>${value(source[displayKey], suffix)}</td>`;
         }
-        const manuallySelectable = ['goal_ht', 'over15', 'over25', 'corners_10_over1', 'corners_avg', 'cards_avg', 'offsides_avg', 'shots_avg', 'shots_on_target_avg', 'fouls_avg'].includes(key);
+        const manuallySelectable = ['goal_ht', 'over15', 'over25', 'btts', 'corners_10_over1', 'corners_avg', 'cards_avg', 'offsides_avg', 'shots_avg', 'shots_on_target_avg', 'fouls_avg'].includes(key);
         return manuallySelectable
           ? `<td class="is-ticket-cell${hasValue ? '' : ' is-line-only'}" data-ticket-cell="${key}" data-ticket-group="${group}" data-history="${encodedHistory}"${hasValue ? '' : ' title="Clique para adicionar manualmente ao bilhete"'}>${value(source[displayKey], suffix)}</td>`
           : `<td>${value(source[displayKey], suffix)}</td>`;
@@ -1586,8 +1890,7 @@
         box.innerHTML = `
           <div class="matchday-period-switch" role="group" aria-label="Período das estatísticas">
             <button type="button" data-period="total" class="${period === 'total' ? 'is-active' : ''}">Total</button>
-            <button type="button" data-period="first" class="${period === 'first' ? 'is-active' : ''}">1º tempo</button>
-            <button type="button" data-period="second" class="${period === 'second' ? 'is-active' : ''}">2º tempo</button>
+            {{ "<button type=\"button\" data-period=\"first\" class=\"${period === 'first' ? 'is-active' : ''}\">1º tempo</button><button type=\"button\" data-period=\"second\" class=\"${period === 'second' ? 'is-active' : ''}\">2º tempo</button>"|safe if premium_access else "" }}
           </div>
           <table class="matchday-mini-table matchday-compare-table">
             <thead><tr><th>Mercado</th><th>H2H</th><th>Casa</th><th>Fora</th></tr></thead>
@@ -1595,6 +1898,7 @@
               <tr><td>${period === 'total' ? 'Gol HT' : `Gol no ${periodLabel}`}</td>${cells('goal_ht', '%')}</tr>
               <tr><td>${period === 'total' ? 'Mais de 1,5' : `2+ gols no ${periodLabel}`}</td>${cells('over15', '%')}</tr>
               <tr><td>${period === 'total' ? 'Mais de 2,5' : `3+ gols no ${periodLabel}`}</td>${cells('over25', '%')}</tr>
+              ${period === 'total' ? `<tr><td>Ambos marcam</td>${cells('btts', '%')}</tr>` : ''}
               ${period !== 'second' ? `<tr><td>2+ esc. até 10’</td>${cells('corners_10_over1', '%')}</tr>` : ''}
               <tr><td>Média esc.</td>${cells('corners_avg', '')}</tr>
               <tr><td>Média cartões</td>${cells('cards_avg', '')}</tr>
@@ -1728,6 +2032,15 @@
     return valid.length ? valid.reduce((sum, value) => sum + Number(value), 0) / valid.length : null;
   }
 
+  function teamStrengthScore(group) {
+    return combinedSupport([
+      normalizedRange(averageNumbers(historyNumbers(group, 'team_goals')), .4, 2.6),
+      normalizedRange(averageNumbers(historyNumbers(group, 'team_shots')), 5, 18),
+      normalizedRange(averageNumbers(historyNumbers(group, 'team_shots_on_target')), 1, 7),
+      normalizedRange(averageNumbers(historyNumbers(group, 'team_corners_avg')), 2, 8)
+    ]);
+  }
+
   function historicalHitRate(group, key, predicate) {
     const values = historyNumbers(group, key);
     return values.length ? values.filter(predicate).length / values.length * 100 : null;
@@ -1762,7 +2075,7 @@
   function uiCandidateFromEvaluation(card, evaluation, lineOptions) {
     const team = evaluation.scope === 'home' ? card.dataset.homeTeam : evaluation.scope === 'away' ? card.dataset.awayTeam : '';
     const suffix = team ? ` — ${team}` : '';
-    const nouns = {corners: 'escanteios', cards: 'cartões', shots: 'finalizações', shots_on_target: 'chutes ao gol', fouls: 'faltas', offsides: 'impedimentos', corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo', goals_1h: 'gols no 1º tempo'};
+    const nouns = {team_goals: 'gols', corners: 'escanteios', cards: 'cartões', shots: 'finalizações', shots_on_target: 'chutes ao gol', fouls: 'faltas', offsides: 'impedimentos', corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo', cards_2h: 'cartões no 2º tempo', goals_1h: 'gols no 1º tempo'};
     let line = evaluation.label;
     let noun = '';
     if (!line) {
@@ -1774,7 +2087,7 @@
     const candidate = {
       card, market: evaluation.marketType, line, score: evaluation.confidenceScore, advancedScore: evaluation.confidenceScore,
       confidence: Math.round(evaluation.rawProbability), samples, group: `Confiança ${evaluation.confidenceScore}/100 · ${evaluation.classification}`,
-      selectedLine: evaluation.line, lineNoun: noun || (evaluation.marketGroup === 'goals_ft' ? 'gols' : ''), lineSuffix: suffix,
+      selectedLine: evaluation.line, direction: evaluation.direction || 'over', lineNoun: noun || (evaluation.marketGroup === 'goals_ft' ? 'gols' : ''), lineSuffix: suffix,
       lineOptions: lineOptions || [], evaluation
     };
     evaluation.uiCandidate = candidate;
@@ -1787,6 +2100,66 @@
     const h2h = groups.H2H || {};
     const home = groups.Mandante || {};
     const away = groups.Visitante || {};
+    const homeStrength = teamStrengthScore(home);
+    const awayStrength = teamStrengthScore(away);
+    const homeWinOdd = Number(card.dataset.homeWinOdd);
+    const awayWinOdd = Number(card.dataset.awayWinOdd);
+    const matchupDominance = (scope) => {
+      if (!Number.isFinite(homeWinOdd) || !Number.isFinite(awayWinOdd) || homeWinOdd <= 1 || awayWinOdd <= 1) return null;
+      const homeImplied = 1 / homeWinOdd;
+      const awayImplied = 1 / awayWinOdd;
+      const total = homeImplied + awayImplied;
+      return scope === 'home' ? homeImplied / total * 100 : scope === 'away' ? awayImplied / total * 100 : null;
+    };
+    const matchupContextScore = (scope, marketBase, line) => {
+      if (!['home', 'away'].includes(scope)) return null;
+      const teamGroup = scope === 'home' ? home : away;
+      const opponentGroup = scope === 'home' ? away : home;
+      const teamStrength = scope === 'home' ? homeStrength : awayStrength;
+      const opponentStrength = scope === 'home' ? awayStrength : homeStrength;
+      const keys = {
+        team_goals: ['team_goals', 'opponent_goals'], goals: ['team_goals', 'opponent_goals'],
+        corners: ['team_corners_avg', 'opponent_corners'], cards: ['team_cards', 'opponent_cards'],
+        shots: ['team_shots', 'opponent_shots'], shots_on_target: ['team_shots_on_target', 'opponent_shots_on_target'],
+        fouls: ['team_fouls', 'opponent_fouls'], offsides: ['team_offsides', 'opponent_offsides']
+      };
+      const base = String(marketBase || '').replace(/_(?:1h|2h)$/, '');
+      const pair = keys[base];
+      if (!pair) return null;
+      const production = averageNumbers(historyNumbers(teamGroup, pair[0]));
+      const conceded = averageNumbers(historyNumbers(opponentGroup, pair[1]));
+      const marginScore = combinedSupport([
+        Number.isFinite(production) ? normalizedRange(production - Number(line), -2, 3) : null,
+        Number.isFinite(conceded) ? normalizedRange(conceded - Number(line), -2, 3) : null
+      ]);
+      const dominance = matchupDominance(scope);
+      const offensiveMarket = ['team_goals', 'goals', 'corners', 'shots', 'shots_on_target', 'offsides'].includes(base);
+      if (!Number.isFinite(teamStrength) || !Number.isFinite(opponentStrength)) {
+        return offensiveMarket && Number.isFinite(dominance) ? combinedSupport([marginScore, dominance]) : marginScore;
+      }
+      const difference = teamStrength - opponentStrength;
+      const defensiveMarket = ['cards', 'fouls'].includes(base);
+      const strengthScore = Math.max(0, Math.min(100, 50 + difference * (defensiveMarket ? -.25 : .75)));
+      const statisticalContext = combinedSupport([marginScore, strengthScore]);
+      if (!offensiveMarket || !Number.isFinite(dominance)) return statisticalContext;
+      return statisticalContext === null ? dominance : statisticalContext * .45 + dominance * .55;
+    };
+    const totalGoalContext = (line, btts = false) => {
+      const homeProjection = combinedSupport([
+        averageNumbers(historyNumbers(home, 'team_goals')),
+        averageNumbers(historyNumbers(away, 'opponent_goals'))
+      ]);
+      const awayProjection = combinedSupport([
+        averageNumbers(historyNumbers(away, 'team_goals')),
+        averageNumbers(historyNumbers(home, 'opponent_goals'))
+      ]);
+      if (!Number.isFinite(homeProjection) || !Number.isFinite(awayProjection)) return null;
+      if (btts) {
+        const imbalance = Number.isFinite(homeStrength) && Number.isFinite(awayStrength) ? Math.abs(homeStrength - awayStrength) : 0;
+        return Math.max(0, Math.min(100, Math.min(homeProjection, awayProjection) * 50 - imbalance * .35));
+      }
+      return normalizedRange(homeProjection + awayProjection - Number(line), -.5, 2);
+    };
     const fixture = {
       fixtureId: card.dataset.gameId, competitionName: card.dataset.league,
       homeTeam: card.dataset.homeTeam, awayTeam: card.dataset.awayTeam
@@ -1796,7 +2169,8 @@
     const personalMarket = (key) => userMarketSettings[key] || defaultMarketSettings[key] || {};
     const add = (input) => {
       const result = engine.evaluateCandidate({...fixture, ...input}, profile);
-      const primary = result.scope === 'home' ? [result.sourceStats.home]
+      const primary = result.sourcePriority === 'h2h' ? [result.sourceStats.h2h]
+        : result.scope === 'home' ? [result.sourceStats.home]
         : result.scope === 'away' ? [result.sourceStats.away] : [result.sourceStats.home, result.sourceStats.away];
       if (primary.some((item) => !item || item.samples < requiredSamples)) {
         result.status = 'REJECTED';
@@ -1807,44 +2181,99 @@
       return result;
     };
 
+    const prioritizedGoalInput = (historyKey) => {
+      const h2hValues = historyNumbers(h2h, historyKey);
+      if (h2hValues.length >= requiredSamples) return {bases: {h2h: h2hValues, home: [], away: []}, sourcePriority: 'h2h'};
+      return {bases: {h2h: [], home: historyNumbers(home, historyKey), away: historyNumbers(away, historyKey)}, sourcePriority: 'form'};
+    };
+    const prioritizedGoalSupport = (historyKey, predicate, line) => {
+      const h2hValues = historyNumbers(h2h, historyKey);
+      if (h2hValues.length < requiredSamples) return goalSupportingScore(groups, historyKey, predicate, line);
+      return combinedSupport([
+        Math.round(h2hValues.filter(predicate).length / h2hValues.length * 100),
+        marginSupportingScore(h2hValues, line, 18)
+      ]);
+    };
+
     if (enabled.has('goal_ht') && userMarketSettings.goals?.goal_ht !== false) add({marketType: 'goal_ht', marketGroup: 'goal_ht', scope: 'total', line: .5,
       label: 'Gol no 1º tempo', predicate: (value) => value > 0,
-      bases: {h2h: historyNumbers(h2h, 'goal_ht'), home: historyNumbers(home, 'goal_ht'), away: historyNumbers(away, 'goal_ht')},
-      supportingScore: goalSupportingScore(groups, 'goal_ht', (value) => value > 0, .5)});
+      ...prioritizedGoalInput('goal_ht'), supportingScore: prioritizedGoalSupport('goal_ht', (value) => value > 0, .5), contextScore: totalGoalContext(.5)});
+    if (enabled.has('over05')) add({marketType: 'over05', marketGroup: 'goals_ft', scope: 'total', line: .5,
+      label: 'Mais de 0,5 gol', predicate: (value) => value > 0,
+      ...prioritizedGoalInput('over15'), supportingScore: prioritizedGoalSupport('over15', (value) => value > 0, .5), contextScore: totalGoalContext(.5)});
     if (enabled.has('over15') && userMarketSettings.goals?.over15 !== false) add({marketType: 'over15', marketGroup: 'goals_ft', scope: 'total', line: 1.5,
       label: 'Mais de 1,5 gols', predicate: (value) => value > 1,
-      bases: {h2h: historyNumbers(h2h, 'over15'), home: historyNumbers(home, 'over15'), away: historyNumbers(away, 'over15')},
-      supportingScore: goalSupportingScore(groups, 'over15', (value) => value > 1, 1.5)});
+      ...prioritizedGoalInput('over15'), supportingScore: prioritizedGoalSupport('over15', (value) => value > 1, 1.5), contextScore: totalGoalContext(1.5)});
     if (enabled.has('over25') && userMarketSettings.goals?.over25 !== false) add({marketType: 'over25', marketGroup: 'goals_ft', scope: 'total', line: 2.5,
       label: 'Mais de 2,5 gols', predicate: (value) => value > 2,
-      bases: {h2h: historyNumbers(h2h, 'over25'), home: historyNumbers(home, 'over25'), away: historyNumbers(away, 'over25')},
-      supportingScore: goalSupportingScore(groups, 'over25', (value) => value > 2, 2.5)});
-
-    const addLineFamily = ({enabledKey, marketBase, groupBase, noun, scope, historyKey, minimum, manualMinimum = minimum, maximum, supportingHistory, supportingScoreForLine, supportingScale, enforcePrimaryFloor = true}) => {
+      ...prioritizedGoalInput('over25'), supportingScore: prioritizedGoalSupport('over25', (value) => value > 2, 2.5), contextScore: totalGoalContext(2.5)});
+    if (enabled.has('btts') && userMarketSettings.goals?.btts !== false) add({marketType: 'btts', marketGroup: 'btts', scope: 'total', line: .5,
+      label: 'Ambos marcam — Sim', predicate: (value) => value > 0,
+      ...prioritizedGoalInput('btts'), supportingScore: prioritizedGoalSupport('btts', (value) => value > 0, .5), contextScore: totalGoalContext(.5, true)});
+    const addLineFamily = ({enabledKey, marketBase, groupBase, noun, scope, historyKey, minimum, manualMinimum = minimum, maximum, supportingHistory, supportingScoreForLine, supportingScale, enforcePrimaryFloor = true, basesOverride = null, sourcePriority = ''}) => {
       if (!enabled.has(enabledKey)) return;
-      const bases = scope === 'home'
+      const bases = basesOverride || (scope === 'home'
         ? {h2h: [], home: historyNumbers(home, historyKey), away: []}
         : scope === 'away'
           ? {h2h: [], home: [], away: historyNumbers(away, historyKey)}
-          : {h2h: historyNumbers(h2h, historyKey), home: historyNumbers(home, historyKey), away: historyNumbers(away, historyKey)};
+          : {h2h: historyNumbers(h2h, historyKey), home: historyNumbers(home, historyKey), away: historyNumbers(away, historyKey)});
       const allValues = [...bases.h2h, ...bases.home, ...bases.away];
       if (!allValues.length) return;
       const maxObserved = Math.max(...allValues);
       const maxLine = Math.min(maximum, Math.max(minimum, Math.ceil(maxObserved) - .5));
       for (let line = manualMinimum; line <= maxLine; line += 1) {
         const supportValues = supportingHistory ? supportingHistory() : allValues;
+        // A média da própria sequência já participa da frequência histórica;
+        // reutilizá-la aqui inflava artificialmente a confiança. O apoio só
+        // existe quando outro indicador foi fornecido explicitamente.
         const supportingScore = supportingScoreForLine
           ? supportingScoreForLine(line, supportValues)
-          : marginSupportingScore(supportValues, line, supportingScale || 12);
-        const evaluation = add({marketType: `${marketBase}_${scope}`, marketGroup: `${groupBase}_${scope}`, scope, line,
-          bases, minimumLine: minimum, enforcePrimaryFloor,
-          supportingScore});
+          : null;
+        const evaluation = add({marketType: `${marketBase}_${scope}`, marketGroup: `${groupBase}_${scope}`, scope, direction: 'over', line,
+          bases, minimumLine: minimum, enforcePrimaryFloor, sourcePriority,
+          supportingScore, contextScore: matchupContextScore(scope, groupBase, line), matchupDominance: matchupDominance(scope)});
         if (line < minimum) {
           evaluation.status = 'REJECTED';
           evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
         }
       }
     };
+
+    const opponentGoalsConceded = (group) => {
+      const totals = historyNumbers(group, 'over15');
+      const scored = historyNumbers(group, 'team_goals');
+      return totals.slice(0, Math.min(totals.length, scored.length))
+        .map((total, index) => Math.max(0, total - scored[index]));
+    };
+    const teamGoalSupport = (teamGroup, opponentGroup, line) => {
+      const conceded = opponentGoalsConceded(opponentGroup);
+      return combinedSupport([
+        marginSupportingScore(historyNumbers(teamGroup, 'team_goals'), line, 24),
+        conceded.length ? historicalHitRate({history_values: {conceded}}, 'conceded', (value) => value > line) : null,
+        conceded.length ? marginSupportingScore(conceded, line, 20) : null,
+        normalizedRange(averageNumbers(historyNumbers(teamGroup, 'team_shots')), 7, 16),
+        normalizedRange(averageNumbers(historyNumbers(teamGroup, 'team_shots_on_target')), 2, 7)
+      ]);
+    };
+    if (enabled.has('team_goals') && personalMarket('team_goals').enabled !== false) {
+      const preferences = personalMarket('team_goals');
+      const addPrioritizedTeamGoals = (scope, teamGroup, opponentGroup, minimum) => {
+        const h2hValues = historyNumbers(h2h, scope === 'home' ? 'team_goals_home' : 'team_goals_away');
+        const formValues = historyNumbers(teamGroup, 'team_goals');
+        const useH2H = h2hValues.length > 0;
+        const primaryValues = useH2H ? h2hValues : formValues;
+        const bases = useH2H ? {h2h: h2hValues, home: [], away: []} : scope === 'home'
+          ? {h2h: [], home: primaryValues, away: []}
+          : {h2h: [], home: [], away: primaryValues};
+        addLineFamily({enabledKey: 'team_goals', marketBase: 'team_goals', groupBase: 'team_goals', noun: 'gols', scope,
+          historyKey: 'team_goals', minimum: Number(minimum), maximum: 2.5, basesOverride: bases,
+          sourcePriority: useH2H ? 'h2h' : 'form',
+          supportingScoreForLine: (line) => useH2H ? marginSupportingScore(h2hValues, line, 24) : teamGoalSupport(teamGroup, opponentGroup, line),
+          enforcePrimaryFloor: false});
+      };
+      if (preferences.home_enabled !== false) addPrioritizedTeamGoals('home', home, away, preferences.home);
+      if (preferences.away_enabled !== false) addPrioritizedTeamGoals('away', away, home, preferences.away);
+    }
 
     if (enabled.has('corners_avg') && personalMarket('corners').enabled !== false) {
       const cornerPreferences = personalMarket('corners');
@@ -1857,8 +2286,20 @@
           return combinedSupport([marginSupportingScore(totals, line, 11), projected === null ? null : normalizedRange(projected - line, -2, 3)]);
         }});
       }
-      if (cornerPreferences.home_enabled !== false) addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope: 'home', historyKey: 'team_corners_avg', minimum: Number(personalMarket('corners').home), manualMinimum: .5, maximum: 49.5, supportingScale: 14});
-      if (cornerPreferences.away_enabled !== false) addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope: 'away', historyKey: 'team_corners_avg', minimum: Number(personalMarket('corners').away), manualMinimum: .5, maximum: 49.5, supportingScale: 14});
+      const addPrioritizedTeamCorners = (scope, formGroup, minimum) => {
+        const h2hValues = historyNumbers(h2h, scope === 'home' ? 'team_corners_home' : 'team_corners_away');
+        const formValues = historyNumbers(formGroup, 'team_corners_avg');
+        const useH2H = h2hValues.length >= requiredSamples;
+        const primaryValues = useH2H ? h2hValues : formValues;
+        const bases = useH2H ? {h2h: h2hValues, home: [], away: []} : scope === 'home'
+          ? {h2h: [], home: primaryValues, away: []}
+          : {h2h: [], home: [], away: primaryValues};
+        addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope,
+          historyKey: 'team_corners_avg', minimum: Number(minimum), manualMinimum: .5, maximum: 49.5,
+          basesOverride: bases, sourcePriority: useH2H ? 'h2h' : 'form', supportingScale: useH2H ? 18 : 14});
+      };
+      if (cornerPreferences.home_enabled !== false) addPrioritizedTeamCorners('home', home, cornerPreferences.home);
+      if (cornerPreferences.away_enabled !== false) addPrioritizedTeamCorners('away', away, cornerPreferences.away);
     }
     if (enabled.has('cards_avg') && personalMarket('cards').enabled !== false) {
       const cardPreferences = personalMarket('cards');
@@ -1886,7 +2327,7 @@
         const maxLine = Math.min(maximum, Math.max(minimum, Math.ceil(Math.max(...allValues)) - .5));
         for (let line = manualMinimum; line <= maxLine; line += 1) {
           const evaluation = add({marketType: `${marketBase}_1h_${scope}`, marketGroup: `${marketBase}_1h_${scope}`, scope, line,
-            bases, minimumLine: minimum, supportingScore: marginSupportingScore(allValues, line, scale)});
+            bases, minimumLine: minimum, supportingScore: null, contextScore: matchupContextScore(scope, marketBase, line), matchupDominance: matchupDominance(scope)});
           if (line < minimum) {
             evaluation.status = 'REJECTED';
             evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
@@ -1922,24 +2363,132 @@
     return evaluated;
   }
 
+  function predictionHistorySnapshot(card) {
+    const groups = card._trendGroups || {};
+    const compactGroup = (group) => {
+      const source = group || {};
+      const historyValues = {};
+      Object.entries(source.history_values || {}).forEach(([key, rows]) => {
+        if (!Array.isArray(rows)) return;
+        historyValues[key] = rows.slice(0, 10).map((row) => {
+          if (row === null || typeof row !== 'object') return row;
+          return {
+            match: row.match ?? null, value: row.value ?? null,
+            home_name: row.home_name ?? null, away_name: row.away_name ?? null,
+            home_value: row.home_value ?? null, away_value: row.away_value ?? null,
+            home_external_id: row.home_external_id ?? null,
+            away_external_id: row.away_external_id ?? null,
+            external_id: row.external_id ?? null, kickoff_at: row.kickoff_at ?? null,
+            kickoff_original: row.kickoff_original ?? null,
+            kickoff_timezone: row.kickoff_timezone ?? null,
+            historical_date_available: row.historical_date_available === true,
+            league: row.league ?? null, source: row.source ?? 'betsapi'
+          };
+        });
+      });
+      const scalar = {};
+      Object.entries(source).forEach(([key, value]) => {
+        if (key === 'history_values') return;
+        if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) scalar[key] = value;
+      });
+      return {...scalar, history_values: historyValues};
+    };
+    return {
+      cache_schema_version: 2,
+      captured_at: new Date().toISOString(),
+      fixture: {
+        fixture_id: card.dataset.gameId, target_date: card.dataset.gameDay,
+        kickoff_time: card.querySelector('[data-game-time]')?.textContent.trim() || null,
+        competition: card.dataset.league, home_team: card.dataset.homeTeam, away_team: card.dataset.awayTeam
+      },
+      groups: {H2H: compactGroup(groups.H2H), Mandante: compactGroup(groups.Mandante), Visitante: compactGroup(groups.Visitante)}
+    };
+  }
+
+  function compactPredictionCandidate(candidate) {
+    const card = cards.find((item) => String(item.dataset.gameId) === String(candidate.fixtureId));
+    const sourceStats = {};
+    ['h2h', 'home', 'away'].forEach((key) => {
+      const value = candidate.sourceStats?.[key];
+      sourceStats[key] = value ? {
+        samples: value.samples, hits: value.hits, raw: value.raw, credible: value.credible,
+        recent: value.recent, mean: value.mean, stddev: value.stddev
+      } : null;
+    });
+    return {
+      fixtureId: String(candidate.fixtureId), competitionName: candidate.competitionName || card?.dataset.league || '',
+      homeTeam: candidate.homeTeam || card?.dataset.homeTeam || '', awayTeam: candidate.awayTeam || card?.dataset.awayTeam || '',
+      kickoffAt: card ? `${card.dataset.gameDay}T${card.querySelector('[data-game-time]')?.textContent.trim() || ''}` : null,
+      marketType: candidate.marketType, marketGroup: candidate.marketGroup, scope: candidate.scope,
+      direction: candidate.direction, line: candidate.line, label: candidate.label || '',
+      status: candidate.status, rejectionReasons: [...new Set(candidate.rejectionReasons || [])],
+      rawProbability: candidate.rawProbability, recentScore: candidate.recentScore,
+      adjustedProbability: candidate.adjustedProbability, consistencyScore: candidate.consistencyScore,
+      dataQualityScore: candidate.dataQualityScore, contextScore: candidate.contextScore,
+      confidenceScore: candidate.confidenceScore, sampleScore: candidate.sampleScore,
+      supportingScore: candidate.supportingScore, classification: candidate.classification,
+      strengths: candidate.strengths || [], weaknesses: candidate.weaknesses || [], sourceStats
+    };
+  }
+
+  async function persistLegacyPredictionRun(allCandidates, metadata, parameters) {
+    // Telemetria é deliberadamente best-effort: nenhuma falha aqui pode
+    // interferir no bilhete já calculado e exibido pelo Legacy.
+    try {
+      const started = await fetch('/api/prediction-runs', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({target_date: {{ day|tojson }}, fixture_count: metadata.eligible_games, parameters})
+      });
+      if (!started.ok) return;
+      const run = await started.json();
+      if (!run.ok || !run.run_id) return;
+      const compact = allCandidates.map(compactPredictionCandidate);
+      const batchSize = Math.min(Number(run.max_batch) || 200, 200);
+      for (let offset = 0; offset < compact.length; offset += batchSize) {
+        const batch = compact.slice(offset, offset + batchSize);
+        const fixtureSnapshots = {};
+        new Set(batch.map((candidate) => String(candidate.fixtureId))).forEach((fixtureId) => {
+          const card = cards.find((item) => String(item.dataset.gameId) === fixtureId);
+          if (card) fixtureSnapshots[fixtureId] = predictionHistorySnapshot(card);
+        });
+        const response = await fetch(`/api/prediction-runs/${run.run_id}/candidates`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({candidates: batch, fixture_snapshots: fixtureSnapshots})
+        });
+        if (!response.ok) return;
+      }
+      await fetch(`/api/prediction-runs/${run.run_id}/finish`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
+      });
+    } catch (error) {
+      console.debug('Prediction telemetry unavailable', error);
+    }
+  }
+
   function generateSuggestedTicketV2(finalAttempt) {
     const engine = window.GreenHunterBetGenerator;
     if (!engine || !finalAttempt) return false;
     const params = new URLSearchParams(window.location.search);
     if (params.get('ticket_generator') !== '1' || generateSuggestedTicket.done) return false;
     const wanted = Math.max(1, Number(params.get('generator_count')) || 3);
+    const earlyMode = {{ 'true' if premium_access else 'false' }} && params.get('generator_early') === '1';
     // Um único critério automático: maior qualidade estatística global.
     // Parâmetros antigos de perfil na URL são intencionalmente ignorados.
     const profile = 'balanced';
     const enabled = new Set(params.getAll('generator_market'));
-    if (!enabled.size) ['goal_ht', 'over15', 'over25'].forEach((key) => enabled.add(key));
+    if (!enabled.size) ['goal_ht', 'over15', 'over25', 'team_goals'].forEach((key) => enabled.add(key));
     const eligibleCards = cards.filter((card) => card.dataset.isLive !== '1');
     const successfulCards = eligibleCards.filter((card) => card._trendGroups && !card._trendFailed);
     const failedCards = eligibleCards.filter((card) => card._trendFailed);
     const metadata = engine.analysisMetadata(eligibleCards.length, successfulCards.length, failedCards.length, profile);
-    if (!metadata.analysis_complete) {
+    const partialAnalysis = !metadata.analysis_complete;
+    const partialSufficient = typeof engine.partialAnalysisSufficient === 'function'
+      ? engine.partialAnalysisSufficient(eligibleCards.length, successfulCards.length, wanted)
+      : successfulCards.length >= Math.max(12, wanted * 4)
+        && (!eligibleCards.length || successfulCards.length / eligibleCards.length >= .2);
+    if (partialAnalysis && !partialSufficient) {
       window.greenHunterBetGeneratorDebug = {metadata, candidates: []};
-      setGeneratorStatus('error', 'Análise incompleta', `${metadata.processed_games} de ${metadata.eligible_games} jogos foram processados; ${metadata.failed_games} falharam. Nenhum bilhete parcial foi criado.`);
+      setGeneratorStatus('error', 'Dados insuficientes para gerar', `${metadata.processed_games} de ${metadata.eligible_games} jogos ficaram disponíveis. São necessários pelo menos ${Math.max(12, wanted * 4)} jogos completos e 20% da agenda para montar uma sugestão confiável.`);
       return false;
     }
 
@@ -1962,65 +2511,187 @@
       if (chosen) optimal.push(chosen);
     });
     const requestedCategoryMap = {
-      goal_ht: 'goals', over15: 'goals', over25: 'goals', corners_avg: 'corners', cards_avg: 'cards',
+      goal_ht: 'goals', over05: 'goals', over15: 'goals', over25: 'goals', btts: 'goals', team_goals: 'goals', corners_avg: 'corners', cards_avg: 'cards',
       shots_avg: 'shots', shots_on_target_avg: 'shots_on_target', fouls_avg: 'fouls', offsides_avg: 'offsides'
     };
     const categoryLabels = {
       goals: 'gols', corners: 'escanteios', cards: 'cartões', shots: 'finalizações',
       shots_on_target: 'chutes ao gol', fouls: 'faltas', offsides: 'impedimentos', goal_ht: 'gol no 1º tempo',
-      corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo'
+      corners_1h: 'escanteios no 1º tempo', cards_1h: 'cartões no 1º tempo', cards_2h: 'cartões no 2º tempo'
     };
     const requestedCategories = [...new Set([
       ...[...enabled].map((market) => requestedCategoryMap[market]).filter(Boolean),
-      ...(enabled.has('first_half') ? ['corners_1h', 'cards_1h'] : [])
+      ...(enabled.has('first_half') ? ['corners_1h', 'cards_1h'] : []),
     ])];
     const diversified = engine.diversifyApprovedPool(optimal, requestedCategories);
     const approved = diversified.filter((candidate) => candidate.status === 'APPROVED');
+    const maxMarketsPerGame = Math.max(1, Math.min(6, Number(userMarketSettings.max_markets_per_game) || 3));
+    approved.forEach((candidate) => {
+      candidate.approvedMarketsInGame = new Set(approved
+        .filter((item) => String(item.fixtureId) === String(candidate.fixtureId))
+        .map((item) => engine.marketCategory(item))).size;
+      candidate.configuredMaxMarkets = maxMarketsPerGame;
+    });
     const uiByEvaluation = new Map();
     optimal.forEach((evaluation) => {
-      const family = families.get(`${evaluation.fixtureId}:${evaluation.marketGroup}`) || [];
-      const lineOptions = family.map((item) => ({
-        line: item.line, percentage: Math.round(item.rawProbability), adjustedProbability: item.adjustedProbability,
+      const family = (families.get(`${evaluation.fixtureId}:${evaluation.marketGroup}`) || []).filter((item) => item.direction === evaluation.direction);
+      let lineOptions = family.map((item) => ({
+        line: item.line, direction: item.direction, percentage: Math.round(item.rawProbability), adjustedProbability: item.adjustedProbability,
         confidenceScore: item.confidenceScore, confidenceClass: item.classification,
         dataQualityScore: item.dataQualityScore, dataQualityGrade: item.dataQualityGrade,
         consistencyScore: item.consistencyScore, sampleScore: item.sampleScore,
         supportingScore: item.supportingScore, strengths: item.strengths, weaknesses: item.weaknesses
       })).sort((a, b) => a.line - b.line);
       const card = successfulCards.find((item) => String(item.dataset.gameId) === String(evaluation.fixtureId));
+      if (card && (evaluation.marketGroup === 'goals_ft' || String(evaluation.marketGroup).startsWith('team_goals_'))) {
+        lineOptions = generatedGoalLineChoices(card, evaluation);
+      }
       if (card) uiByEvaluation.set(evaluation, uiCandidateFromEvaluation(card, evaluation, lineOptions));
     });
 
-    const maxMarketsPerGame = Math.max(1, Math.min(6, Number(userMarketSettings.max_markets_per_game) || 3));
-    const selectedEvaluations = engine.buildTicket(approved, wanted, profile, maxMarketsPerGame);
+    const saoNowParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date()).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+    const saoToday = `${saoNowParts.year}-${saoNowParts.month}-${saoNowParts.day}`;
+    const saoMinute = Number(saoNowParts.hour) * 60 + Number(saoNowParts.minute);
+    const kickoffRank = (fixtureId) => {
+      const card = successfulCards.find((item) => String(item.dataset.gameId) === String(fixtureId));
+      if (!card) return Number.MAX_SAFE_INTEGER;
+      const clock = card.querySelector('[data-game-time]')?.textContent.match(/(\d{1,2}):(\d{2})/);
+      const minute = clock ? Number(clock[1]) * 60 + Number(clock[2]) : 1440;
+      const dayOffset = Math.round((new Date(`${card.dataset.gameDay}T12:00:00Z`) - new Date(`${saoToday}T12:00:00Z`)) / 86400000);
+      return dayOffset * 1440 + minute;
+    };
+    let earlyMinimumRank = 0;
+    let selectedEvaluations;
+    if (earlyMode) {
+      earlyMinimumRank = successfulCards.some((card) => card.dataset.gameDay === saoToday) ? saoMinute : 0;
+      const earlyFixtureIds = [...new Set(approved.map((candidate) => String(candidate.fixtureId)))]
+        .filter((fixtureId) => kickoffRank(fixtureId) >= earlyMinimumRank)
+        .sort((left, right) => kickoffRank(left) - kickoffRank(right));
+
+      // No modo "mais cedo", o horario e a prioridade principal. Avaliamos
+      // cada partida cronologicamente e usamos o ranking estatistico apenas
+      // para escolher os melhores mercados dentro daquele mesmo jogo.
+      selectedEvaluations = [];
+      for (const fixtureId of earlyFixtureIds) {
+        const fixturePicks = engine.buildTicket(
+          approved.filter((candidate) => String(candidate.fixtureId) === fixtureId),
+          1,
+          profile,
+          maxMarketsPerGame
+        );
+        if (!fixturePicks.length) continue;
+        selectedEvaluations.push(...fixturePicks);
+        if (new Set(selectedEvaluations.map((candidate) => String(candidate.fixtureId))).size >= wanted) break;
+      }
+    } else {
+      selectedEvaluations = engine.buildTicket(approved, wanted, profile, maxMarketsPerGame);
+    }
+    if (typeof engine.diversifyTicketComposition === 'function') {
+      selectedEvaluations = engine.diversifyTicketComposition(selectedEvaluations, approved, maxMarketsPerGame);
+    }
+    if (earlyMode) selectedEvaluations.sort((left, right) => kickoffRank(left.fixtureId) - kickoffRank(right.fixtureId)
+      || Number(right.confidenceScore) - Number(left.confidenceScore));
+    const isSplitCardsMarket = (candidate) => /^cards_(?:1h|2h)_/.test(String(candidate?.marketGroup || candidate?.marketType || ''));
+    const isFullCardsMarket = (candidate) => /^cards_(?:total|home|away)$/.test(String(candidate?.marketGroup || candidate?.marketType || ''));
+    const ensureFullCardsRepresentation = (picks, pool) => {
+      if (!picks.some(isSplitCardsMarket) || picks.some(isFullCardsMarket)) return picks;
+      const fullCard = engine.rankCandidates(pool.filter(isFullCardsMarket))[0];
+      if (!fullCard) return picks;
+      const sameFixtureSplit = picks.find((candidate) => isSplitCardsMarket(candidate) && String(candidate.fixtureId) === String(fullCard.fixtureId));
+      const splitToReplace = sameFixtureSplit || [...picks].filter(isSplitCardsMarket)
+        .sort((left, right) => Number(left.confidenceScore) - Number(right.confidenceScore))[0];
+      if (!splitToReplace) return picks;
+      return picks.map((candidate) => candidate === splitToReplace ? fullCard : candidate);
+    };
+    if (selectedEvaluations.length && selectedEvaluations.every(isSplitCardsMarket)) {
+      const alternativePool = approved.filter((candidate) => !isSplitCardsMarket(candidate));
+      let alternativePicks = [];
+      if (earlyMode) {
+        const alternativeFixtureIds = [...new Set(alternativePool.map((candidate) => String(candidate.fixtureId)))]
+          .filter((fixtureId) => kickoffRank(fixtureId) >= earlyMinimumRank)
+          .sort((left, right) => kickoffRank(left) - kickoffRank(right));
+        for (const fixtureId of alternativeFixtureIds) {
+          alternativePicks = engine.buildTicket(
+            alternativePool.filter((candidate) => String(candidate.fixtureId) === fixtureId),
+            1,
+            profile,
+            maxMarketsPerGame
+          );
+          if (alternativePicks.length) break;
+        }
+      } else {
+        alternativePicks = engine.buildTicket(alternativePool, 1, profile, maxMarketsPerGame);
+      }
+      if (alternativePicks.length) {
+        const alternativeFixtureId = String(alternativePicks[0].fixtureId);
+        const selectedFixtureIds = new Set(selectedEvaluations.map((candidate) => String(candidate.fixtureId)));
+        const replacedFixtureId = selectedFixtureIds.has(alternativeFixtureId)
+          ? alternativeFixtureId
+          : String(selectedEvaluations[selectedEvaluations.length - 1].fixtureId);
+        selectedEvaluations = selectedEvaluations.filter((candidate) => String(candidate.fixtureId) !== replacedFixtureId);
+        selectedEvaluations.push(...alternativePicks);
+        if (earlyMode) selectedEvaluations.sort((left, right) => kickoffRank(left.fixtureId) - kickoffRank(right.fixtureId)
+          || Number(right.confidenceScore) - Number(left.confidenceScore));
+      } else {
+        selectedEvaluations = [];
+      }
+    }
+    selectedEvaluations = ensureFullCardsRepresentation(selectedEvaluations, approved);
     const selected = selectedEvaluations.map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
     generatedAllCandidates = engine.rankCandidates(approved).map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
     generatedSelectionsByGame = new Map();
     const fixtureIds = [...new Set(approved.map((candidate) => String(candidate.fixtureId)))];
     fixtureIds.forEach((fixtureId) => {
-      const picks = engine.buildTicket(approved.filter((candidate) => String(candidate.fixtureId) === fixtureId), 1, profile, maxMarketsPerGame)
-        .map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
+      const fixturePool = approved.filter((candidate) => String(candidate.fixtureId) === fixtureId);
+      const picks = ensureFullCardsRepresentation(
+        engine.buildTicket(fixturePool, 1, profile, maxMarketsPerGame),
+        fixturePool
+      ).map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
       generatedSelectionsByGame.set(fixtureId, picks);
     });
-    generatedCandidateQueue = engine.rankCandidates(approved)
+    generatedCandidateQueue = (earlyMode
+      ? approved.filter((candidate) => kickoffRank(candidate.fixtureId) >= earlyMinimumRank).sort((a, b) => kickoffRank(a.fixtureId) - kickoffRank(b.fixtureId) || b.confidenceScore - a.confidenceScore)
+      : engine.rankCandidates(approved))
       .filter((candidate, index, array) => array.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
       .map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
     window.greenHunterBetGeneratorDebug = {metadata, enabledMarkets: [...enabled], config: engine.CONFIG, candidates: allEvaluated.map((candidate) => ({...candidate, uiCandidate: undefined, sourceStats: candidate.sourceStats}))};
+    void persistLegacyPredictionRun(allEvaluated, metadata, {
+      generator_count: wanted, generator_samples: Number(params.get('generator_samples')) || null,
+      enabled_markets: [...enabled], max_markets_per_game: maxMarketsPerGame,
+      minimum_samples: Number(userMarketSettings.minimum_samples) || 3, profile,
+      early_mode: earlyMode, engine_config: engine.CONFIG, analysis_metadata: metadata
+    });
 
     if (!selected.length) {
-      setGeneratorStatus('error', 'Nenhuma sugestão aprovada', `Os ${metadata.eligible_games} jogos foram analisados por completo, mas nenhum candidato alcançou os critérios estatísticos necessários.`);
+      const reason = earlyMode
+        ? `Os ${metadata.eligible_games} jogos foram analisados, mas nenhum dos próximos horários atingiu os critérios estatísticos necessários. Desative “Jogos mais cedo” para considerar o dia inteiro.`
+        : `Os ${metadata.eligible_games} jogos foram analisados por completo, mas nenhum candidato alcançou os critérios estatísticos necessários.`;
+      setGeneratorStatus('error', 'Nenhuma sugestão aprovada', reason);
       return false;
     }
     ticketItems = selected.map(generatedCandidateToItem);
     saveTicket();
     renderTicket(true);
     generateSuggestedTicket.done = true;
+    // A geração é uma ação única. Sem limpar estes parâmetros,
+    // F5 ordenaria outra varredura completa de todos os jogos do dia.
+    clearTicketGeneratorFromUrl();
     const generatedGames = new Set(selected.map((candidate) => String(candidate.card.dataset.gameId))).size;
     const includedCategories = [...new Set(selectedEvaluations.map(engine.marketCategory))];
     const unavailableCategories = requestedCategories.filter((category) => !includedCategories.includes(category));
     const includedText = includedCategories.map((category) => categoryLabels[category] || category).join(', ');
     const unavailableText = unavailableCategories.length
       ? ` Sem candidato aprovado em: ${unavailableCategories.map((category) => categoryLabels[category] || category).join(', ')}.` : '';
-    setGeneratorStatus('success', `Bilhete gerado com ${generatedGames} ${generatedGames === 1 ? 'jogo' : 'jogos'} e ${selected.length} ${selected.length === 1 ? 'seleção' : 'seleções'}`, `${metadata.processed_games} jogos analisados. Mercados incluídos: ${includedText}.${unavailableText}`);
+    const shortfallText = generatedGames < wanted
+      ? ` Foram solicitados ${wanted} jogos, mas somente ${generatedGames} ${earlyMode ? 'dos próximos horários ' : ''}atingiram os critérios estatísticos.` : '';
+    const modeText = earlyMode ? ' Prioridade aplicada aos jogos mais cedo.' : '';
+    const coverageText = partialAnalysis
+      ? ` ${metadata.processed_games} de ${metadata.eligible_games} jogos tiveram análise completa; ${metadata.failed_games} indisponíveis foram descartados.`
+      : ` ${metadata.processed_games} jogos analisados.`;
+    setGeneratorStatus('success', `Bilhete gerado com ${generatedGames} ${generatedGames === 1 ? 'jogo' : 'jogos'} e ${selected.length} ${selected.length === 1 ? 'seleção' : 'seleções'}`, `${coverageText}${modeText}${shortfallText} Mercados incluídos: ${includedText}.${unavailableText}`);
     return true;
   }
 
@@ -2240,6 +2911,7 @@
 
   // A geração definitiva só acontece depois de todos os jogos elegíveis.
   if (ticketGeneratorRequested) {
+    setGeneratorLocked(true);
     setGeneratorStatus('loading', 'Analisando jogos e mercados...', `0 de ${cards.length} jogos verificados. As opções aprovadas serão adicionadas automaticamente.`);
   }
   generatorCancel?.addEventListener('click', () => {
@@ -2254,13 +2926,17 @@
     cleanUrl.searchParams.delete('generator_count');
     cleanUrl.searchParams.delete('generator_samples');
     cleanUrl.searchParams.delete('generator_market');
+    cleanUrl.searchParams.delete('generator_early');
+    cleanUrl.searchParams.delete('generator_request_id');
     window.history.replaceState({}, '', cleanUrl);
     showPageSuccess('Geração cancelada', 'A análise foi interrompida e nenhuma sugestão parcial foi adicionada.');
+    setGeneratorLocked(false);
     pageError?.classList.add('is-centered');
   });
   const workers = Math.min(2, cards.length);
   const workerTasks = [];
   for (let index = 0; index < workers; index += 1) workerTasks.push(loadWorker());
+  window.setTimeout(() => { void prefetchVisibleOdds(); }, 350);
   Promise.all(workerTasks).then(() => {
     if (!ticketGeneratorRequested || generationCancelled) return;
     const generated = safelyGenerateSuggestedTicket(true, false);
@@ -2273,11 +2949,13 @@
     // Proteção visual: depois da conclusão, um estado de processamento nunca
     // pode permanecer preso na tela, mesmo se outro retorno falhar.
     window.setTimeout(hideFinishedPageLoading, 1200);
+    setGeneratorLocked(false);
   }).catch((error) => {
     if (generationCancelled && error?.name === 'AbortError') return;
     console.error('Falha inesperada durante a consulta dos jogos.', error);
     if (ticketGeneratorRequested) {
       setGeneratorStatus('error', 'Falha ao consultar os jogos', 'Uma etapa da consulta foi interrompida. Atualize a página e tente gerar o bilhete novamente.');
+      setGeneratorLocked(false);
     }
   });
 

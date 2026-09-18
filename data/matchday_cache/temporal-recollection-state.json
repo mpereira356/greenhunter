@@ -1,0 +1,1473 @@
+{
+  "processed": {
+    "11175474": {
+      "game_id": "11175474",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 17,
+      "duplicated": 18
+    },
+    "11175619": {
+      "game_id": "11175619",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 16,
+      "duplicated": 18
+    },
+    "11310858": {
+      "game_id": "11310858",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 13,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "11417107": {
+      "game_id": "11417107",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "11417108": {
+      "game_id": "11417108",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 16,
+      "duplicated": 18
+    },
+    "11417836": {
+      "game_id": "11417836",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "11613599": {
+      "game_id": "11613599",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 8,
+      "duplicated": 13
+    },
+    "11757163": {
+      "game_id": "11757163",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 10,
+      "stats_available": 10,
+      "duplicated": 17
+    },
+    "11991952": {
+      "game_id": "11991952",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 11,
+      "stats_available": 10,
+      "duplicated": 12
+    },
+    "12026947": {
+      "game_id": "12026947",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "12077154": {
+      "game_id": "12077154",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "12101722": {
+      "game_id": "12101722",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "12101724": {
+      "game_id": "12101724",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 13
+    },
+    "12159688": {
+      "game_id": "12159688",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 15,
+      "stats_available": 6,
+      "duplicated": 16
+    },
+    "12159689": {
+      "game_id": "12159689",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 13,
+      "duplicated": 18
+    },
+    "12159738": {
+      "game_id": "12159738",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 14,
+      "stats_available": 2,
+      "duplicated": 14
+    },
+    "12159808": {
+      "game_id": "12159808",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 9,
+      "stats_available": 4,
+      "duplicated": 12
+    },
+    "12159855": {
+      "game_id": "12159855",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 4,
+      "duplicated": 13
+    },
+    "12159872": {
+      "game_id": "12159872",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 13,
+      "stats_available": 7,
+      "duplicated": 13
+    },
+    "12177641": {
+      "game_id": "12177641",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 7,
+      "temporal_valid": 7,
+      "team_ids_available": 6,
+      "stats_available": 6,
+      "duplicated": 7
+    },
+    "12191635": {
+      "game_id": "12191635",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 13,
+      "stats_available": 0,
+      "duplicated": 14
+    },
+    "12197314": {
+      "game_id": "12197314",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 13
+    },
+    "12205545": {
+      "game_id": "12205545",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 0,
+      "duplicated": 18
+    },
+    "12205547": {
+      "game_id": "12205547",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 2,
+      "duplicated": 18
+    },
+    "12241464": {
+      "game_id": "12241464",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 10,
+      "temporal_valid": 10,
+      "team_ids_available": 9,
+      "stats_available": 4,
+      "duplicated": 10
+    },
+    "12297351": {
+      "game_id": "12297351",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 18
+    },
+    "12325257": {
+      "game_id": "12325257",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 14,
+      "duplicated": 18
+    },
+    "12333159": {
+      "game_id": "12333159",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 12,
+      "stats_available": 14,
+      "duplicated": 14
+    },
+    "12335796": {
+      "game_id": "12335796",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 6
+    },
+    "12367690": {
+      "game_id": "12367690",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 16,
+      "stats_available": 17,
+      "duplicated": 2
+    },
+    "12371643": {
+      "game_id": "12371643",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 6,
+      "stats_available": 15,
+      "duplicated": 2
+    },
+    "12377679": {
+      "game_id": "12377679",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 11,
+      "stats_available": 12,
+      "duplicated": 4
+    },
+    "12449667": {
+      "game_id": "12449667",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 14,
+      "stats_available": 14,
+      "duplicated": 0
+    },
+    "12449711": {
+      "game_id": "12449711",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 6,
+      "stats_available": 11,
+      "duplicated": 0
+    },
+    "12456399": {
+      "game_id": "12456399",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 16,
+      "stats_available": 16,
+      "duplicated": 0
+    },
+    "12464967": {
+      "game_id": "12464967",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 9,
+      "stats_available": 11,
+      "duplicated": 1
+    },
+    "12465151": {
+      "game_id": "12465151",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 11,
+      "stats_available": 7,
+      "duplicated": 0
+    },
+    "12465161": {
+      "game_id": "12465161",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 13,
+      "stats_available": 3,
+      "duplicated": 0
+    },
+    "12465169": {
+      "game_id": "12465169",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 11,
+      "stats_available": 11,
+      "duplicated": 1
+    },
+    "12472751": {
+      "game_id": "12472751",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 3
+    },
+    "12472764": {
+      "game_id": "12472764",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 2
+    },
+    "12472765": {
+      "game_id": "12472765",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 18,
+      "duplicated": 3
+    },
+    "13002334": {
+      "game_id": "13002334",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 1
+    },
+    "13002721": {
+      "game_id": "13002721",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 13,
+      "stats_available": 18,
+      "duplicated": 9
+    },
+    "13025316": {
+      "game_id": "13025316",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 7
+    },
+    "13029223": {
+      "game_id": "13029223",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 8,
+      "stats_available": 11,
+      "duplicated": 7
+    },
+    "13040541": {
+      "game_id": "13040541",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 12,
+      "stats_available": 14,
+      "duplicated": 4
+    },
+    "13040612": {
+      "game_id": "13040612",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 6
+    },
+    "13040619": {
+      "game_id": "13040619",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 7
+    },
+    "13040711": {
+      "game_id": "13040711",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 6
+    },
+    "13040801": {
+      "game_id": "13040801",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 7
+    },
+    "13060049": {
+      "game_id": "13060049",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 11,
+      "stats_available": 0,
+      "duplicated": 0
+    },
+    "13072519": {
+      "game_id": "13072519",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 12,
+      "stats_available": 6,
+      "duplicated": 7
+    },
+    "13080066": {
+      "game_id": "13080066",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 10,
+      "stats_available": 4,
+      "duplicated": 9
+    },
+    "13081588": {
+      "game_id": "13081588",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 6
+    },
+    "13083983": {
+      "game_id": "13083983",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 17,
+      "duplicated": 2
+    },
+    "13086836": {
+      "game_id": "13086836",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 17,
+      "duplicated": 2
+    },
+    "13086922": {
+      "game_id": "13086922",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 18,
+      "duplicated": 7
+    },
+    "13087014": {
+      "game_id": "13087014",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 18,
+      "duplicated": 10
+    },
+    "13093039": {
+      "game_id": "13093039",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 17,
+      "duplicated": 0
+    },
+    "13093049": {
+      "game_id": "13093049",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 13,
+      "stats_available": 15,
+      "duplicated": 0
+    },
+    "13099355": {
+      "game_id": "13099355",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 0
+    },
+    "13099759": {
+      "game_id": "13099759",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 13,
+      "stats_available": 18,
+      "duplicated": 5
+    },
+    "13102350": {
+      "game_id": "13102350",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 10,
+      "stats_available": 10,
+      "duplicated": 2
+    },
+    "13102903": {
+      "game_id": "13102903",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 13,
+      "stats_available": 16,
+      "duplicated": 0
+    },
+    "13128885": {
+      "game_id": "13128885",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 11,
+      "stats_available": 12,
+      "duplicated": 0
+    },
+    "13129537": {
+      "game_id": "13129537",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 6,
+      "temporal_valid": 6,
+      "team_ids_available": 5,
+      "stats_available": 2,
+      "duplicated": 6
+    },
+    "13129538": {
+      "game_id": "13129538",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 10,
+      "temporal_valid": 10,
+      "team_ids_available": 9,
+      "stats_available": 4,
+      "duplicated": 10
+    },
+    "13130005": {
+      "game_id": "13130005",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 9,
+      "stats_available": 12,
+      "duplicated": 1
+    },
+    "13130069": {
+      "game_id": "13130069",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 0
+    },
+    "13130436": {
+      "game_id": "13130436",
+      "day": "2026-09-15",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 18,
+      "duplicated": 0
+    },
+    "11176423": {
+      "game_id": "11176423",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 18,
+      "duplicated": 0
+    },
+    "11188801": {
+      "game_id": "11188801",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 18,
+      "duplicated": 0
+    },
+    "11188822": {
+      "game_id": "11188822",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 11,
+      "stats_available": 13,
+      "duplicated": 1
+    },
+    "11285064": {
+      "game_id": "11285064",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 17,
+      "duplicated": 2
+    },
+    "11288008": {
+      "game_id": "11288008",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 8,
+      "stats_available": 13,
+      "duplicated": 4
+    },
+    "11338652": {
+      "game_id": "11338652",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 7,
+      "stats_available": 15,
+      "duplicated": 1
+    },
+    "11338835": {
+      "game_id": "11338835",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 0
+    },
+    "11339556": {
+      "game_id": "11339556",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 2,
+      "stats_available": 16,
+      "duplicated": 2
+    },
+    "11339690": {
+      "game_id": "11339690",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 11,
+      "stats_available": 17,
+      "duplicated": 3
+    },
+    "11354575": {
+      "game_id": "11354575",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 18,
+      "duplicated": 3
+    },
+    "11354637": {
+      "game_id": "11354637",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 11,
+      "stats_available": 15,
+      "duplicated": 4
+    },
+    "11354638": {
+      "game_id": "11354638",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 12,
+      "stats_available": 17,
+      "duplicated": 5
+    },
+    "11354701": {
+      "game_id": "11354701",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 9,
+      "stats_available": 13,
+      "duplicated": 4
+    },
+    "11613348": {
+      "game_id": "11613348",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 15,
+      "stats_available": 9,
+      "duplicated": 12
+    },
+    "11613598": {
+      "game_id": "11613598",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 13,
+      "stats_available": 9,
+      "duplicated": 9
+    },
+    "11725105": {
+      "game_id": "11725105",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 15,
+      "duplicated": 12
+    },
+    "11930686": {
+      "game_id": "11930686",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 0
+    },
+    "12043554": {
+      "game_id": "12043554",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 16,
+      "stats_available": 15,
+      "duplicated": 0
+    },
+    "12043556": {
+      "game_id": "12043556",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 11,
+      "stats_available": 13,
+      "duplicated": 2
+    },
+    "12043557": {
+      "game_id": "12043557",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 7,
+      "stats_available": 12,
+      "duplicated": 3
+    },
+    "12043561": {
+      "game_id": "12043561",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 9,
+      "stats_available": 15,
+      "duplicated": 5
+    },
+    "12099974": {
+      "game_id": "12099974",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 8,
+      "stats_available": 15,
+      "duplicated": 3
+    },
+    "12103777": {
+      "game_id": "12103777",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 9,
+      "duplicated": 0
+    },
+    "12109695": {
+      "game_id": "12109695",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 11,
+      "temporal_valid": 11,
+      "team_ids_available": 11,
+      "stats_available": 6,
+      "duplicated": 2
+    },
+    "12110467": {
+      "game_id": "12110467",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 11,
+      "stats_available": 12,
+      "duplicated": 6
+    },
+    "12115593": {
+      "game_id": "12115593",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 14,
+      "stats_available": 3,
+      "duplicated": 9
+    },
+    "12115594": {
+      "game_id": "12115594",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 17,
+      "temporal_valid": 17,
+      "team_ids_available": 13,
+      "stats_available": 2,
+      "duplicated": 10
+    },
+    "12115595": {
+      "game_id": "12115595",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 13,
+      "stats_available": 5,
+      "duplicated": 10
+    },
+    "12115596": {
+      "game_id": "12115596",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 13,
+      "stats_available": 3,
+      "duplicated": 10
+    },
+    "12163401": {
+      "game_id": "12163401",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 8,
+      "stats_available": 6,
+      "duplicated": 0
+    },
+    "12179728": {
+      "game_id": "12179728",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 17,
+      "duplicated": 12
+    },
+    "12188642": {
+      "game_id": "12188642",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 11,
+      "stats_available": 2,
+      "duplicated": 4
+    },
+    "12188643": {
+      "game_id": "12188643",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 4,
+      "duplicated": 8
+    },
+    "12188644": {
+      "game_id": "12188644",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 5,
+      "duplicated": 10
+    },
+    "12188645": {
+      "game_id": "12188645",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 6,
+      "duplicated": 7
+    },
+    "12188646": {
+      "game_id": "12188646",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 13,
+      "stats_available": 0,
+      "duplicated": 9
+    },
+    "12188647": {
+      "game_id": "12188647",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 10,
+      "stats_available": 0,
+      "duplicated": 7
+    },
+    "12188649": {
+      "game_id": "12188649",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 15,
+      "stats_available": 2,
+      "duplicated": 10
+    },
+    "12192110": {
+      "game_id": "12192110",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 16,
+      "duplicated": 8
+    },
+    "12192245": {
+      "game_id": "12192245",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 7,
+      "stats_available": 18,
+      "duplicated": 7
+    },
+    "12192289": {
+      "game_id": "12192289",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 15,
+      "stats_available": 18,
+      "duplicated": 8
+    },
+    "12194619": {
+      "game_id": "12194619",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 10,
+      "stats_available": 14,
+      "duplicated": 11
+    },
+    "12194620": {
+      "game_id": "12194620",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 3,
+      "stats_available": 14,
+      "duplicated": 10
+    },
+    "12195196": {
+      "game_id": "12195196",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 4,
+      "duplicated": 7
+    },
+    "12195197": {
+      "game_id": "12195197",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 16,
+      "stats_available": 3,
+      "duplicated": 7
+    },
+    "12195199": {
+      "game_id": "12195199",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 11,
+      "stats_available": 3,
+      "duplicated": 8
+    },
+    "12196910": {
+      "game_id": "12196910",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 10,
+      "stats_available": 3,
+      "duplicated": 11
+    },
+    "12196911": {
+      "game_id": "12196911",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 13,
+      "stats_available": 1,
+      "duplicated": 9
+    },
+    "12208900": {
+      "game_id": "12208900",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 16,
+      "stats_available": 16,
+      "duplicated": 2
+    },
+    "12208901": {
+      "game_id": "12208901",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 18,
+      "duplicated": 4
+    },
+    "12208902": {
+      "game_id": "12208902",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 17,
+      "duplicated": 5
+    },
+    "12221711": {
+      "game_id": "12221711",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 8,
+      "stats_available": 12,
+      "duplicated": 0
+    },
+    "12221712": {
+      "game_id": "12221712",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 10,
+      "stats_available": 12,
+      "duplicated": 0
+    },
+    "12221756": {
+      "game_id": "12221756",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 2,
+      "stats_available": 11,
+      "duplicated": 7
+    },
+    "12221824": {
+      "game_id": "12221824",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 6,
+      "stats_available": 12,
+      "duplicated": 3
+    },
+    "12221872": {
+      "game_id": "12221872",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 2,
+      "stats_available": 16,
+      "duplicated": 8
+    },
+    "12221873": {
+      "game_id": "12221873",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 15,
+      "temporal_valid": 15,
+      "team_ids_available": 6,
+      "stats_available": 10,
+      "duplicated": 5
+    },
+    "12222937": {
+      "game_id": "12222937",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 14,
+      "temporal_valid": 14,
+      "team_ids_available": 7,
+      "stats_available": 8,
+      "duplicated": 11
+    },
+    "12260492": {
+      "game_id": "12260492",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 15,
+      "duplicated": 0
+    },
+    "12260493": {
+      "game_id": "12260493",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 12,
+      "duplicated": 2
+    },
+    "12260494": {
+      "game_id": "12260494",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 14,
+      "stats_available": 15,
+      "duplicated": 4
+    },
+    "12260495": {
+      "game_id": "12260495",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 11,
+      "stats_available": 17,
+      "duplicated": 6
+    },
+    "12260496": {
+      "game_id": "12260496",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 2,
+      "stats_available": 15,
+      "duplicated": 6
+    },
+    "12260497": {
+      "game_id": "12260497",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 7,
+      "stats_available": 12,
+      "duplicated": 8
+    },
+    "12260498": {
+      "game_id": "12260498",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 9,
+      "stats_available": 9,
+      "duplicated": 10
+    },
+    "12260501": {
+      "game_id": "12260501",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 3,
+      "stats_available": 9,
+      "duplicated": 12
+    },
+    "12261861": {
+      "game_id": "12261861",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 12,
+      "stats_available": 1,
+      "duplicated": 0
+    },
+    "12289807": {
+      "game_id": "12289807",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 18,
+      "duplicated": 6
+    },
+    "12306446": {
+      "game_id": "12306446",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 13,
+      "temporal_valid": 13,
+      "team_ids_available": 12,
+      "stats_available": 13,
+      "duplicated": 0
+    },
+    "12314471": {
+      "game_id": "12314471",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 12,
+      "temporal_valid": 12,
+      "team_ids_available": 5,
+      "stats_available": 12,
+      "duplicated": 7
+    },
+    "12316583": {
+      "game_id": "12316583",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 17,
+      "stats_available": 18,
+      "duplicated": 4
+    },
+    "12319797": {
+      "game_id": "12319797",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 18,
+      "temporal_valid": 18,
+      "team_ids_available": 18,
+      "stats_available": 12,
+      "duplicated": 10
+    },
+    "12319835": {
+      "game_id": "12319835",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 14,
+      "stats_available": 7,
+      "duplicated": 8
+    },
+    "12319875": {
+      "game_id": "12319875",
+      "day": "2026-09-16",
+      "ok": true,
+      "history_matches": 16,
+      "temporal_valid": 16,
+      "team_ids_available": 7,
+      "stats_available": 12,
+      "duplicated": 10
+    },
+    "12323893": {
+      "game_id": "12323893",
+      "day": "2026-09-16",
+      "ok": false,
+      "history_matches": 0,
+      "temporal_valid": 0,
+      "team_ids_available": 0,
+      "stats_available": 0,
+      "duplicated": 0,
+      "reason": "NO_HISTORY_RETURNED"
+    }
+  },
+  "attempted": 146,
+  "recovered": 145,
+  "failed": 1,
+  "skipped": 0,
+  "duplicated": 991,
+  "temporal_valid": 2255,
+  "team_ids_available": 1797,
+  "stats_available": 1717
+}

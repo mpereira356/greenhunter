@@ -6,7 +6,19 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_
 
 from app.extensions import db
-from app.models import MatchAlert, Rule, RuleCondition, RuleOutcomeCondition, UndoAction
+from app.models import (
+    AdminBroadcastView,
+    LoginAttempt,
+    MatchAlert,
+    Rule,
+    RuleCondition,
+    RuleOutcomeCondition,
+    SavedTicket,
+    SavedTicketLeg,
+    UndoAction,
+    User,
+    UserMatchdayPreference,
+)
 from app.utils.time import now_sp
 
 UNDO_TTL_SECONDS = int(os.environ.get("UNDO_TTL_SECONDS", "300"))
@@ -65,6 +77,26 @@ def snapshot_rule(rule: Rule) -> dict:
     }
 
 
+def snapshot_user(user: User) -> dict:
+    rules = Rule.query.filter_by(user_id=user.id).order_by(Rule.id).all()
+    tickets = SavedTicket.query.filter_by(user_id=user.id).order_by(SavedTicket.id).all()
+    preference = UserMatchdayPreference.query.filter_by(user_id=user.id).first()
+    return {
+        "user": _column_data(user),
+        "rules": [snapshot_rule(rule) for rule in rules],
+        "tickets": [
+            {
+                "ticket": _column_data(ticket),
+                "legs": [_column_data(leg) for leg in (ticket.legs or [])],
+            }
+            for ticket in tickets
+        ],
+        "matchday_preference": _column_data(preference) if preference else None,
+        "login_attempts": [_column_data(row) for row in LoginAttempt.query.filter_by(user_id=user.id).all()],
+        "broadcast_views": [_column_data(row) for row in AdminBroadcastView.query.filter_by(user_id=user.id).all()],
+    }
+
+
 def create_undo_action(user_id: int, action_type: str, payload: dict, ttl_seconds: int | None = None) -> str:
     now = now_sp()
     ttl = ttl_seconds if isinstance(ttl_seconds, int) and ttl_seconds > 0 else UNDO_TTL_SECONDS
@@ -114,6 +146,8 @@ def apply_undo(token: str, user_id: int) -> tuple[bool, str]:
             restored = _restore_rule(payload.get("rule"))
         elif action.action_type in ("delete_alert", "delete_selected_alerts"):
             restored = _restore_alerts(payload.get("alerts") or [])
+        elif action.action_type == "delete_user":
+            restored = _restore_user(payload.get("user"))
         else:
             return False, "Tipo de undo nao suportado."
         action.used_at = now_sp()
@@ -178,3 +212,40 @@ def _restore_alerts(alert_snapshots: list[dict], forced_rule_id: int | None = No
         db.session.add(alert)
         restored += 1
     return restored
+
+
+def _restore_user(snapshot: dict | None) -> int:
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("user"), dict):
+        return 0
+    user_data = snapshot["user"]
+    if User.query.get(user_data.get("id")):
+        return 0
+
+    user = _build_instance(User, user_data)
+    db.session.add(user)
+    db.session.flush()
+
+    preference_data = snapshot.get("matchday_preference")
+    if isinstance(preference_data, dict):
+        db.session.add(_build_instance(UserMatchdayPreference, preference_data))
+
+    for rule_snapshot in snapshot.get("rules") or []:
+        _restore_rule(rule_snapshot)
+
+    for ticket_snapshot in snapshot.get("tickets") or []:
+        if not isinstance(ticket_snapshot, dict) or not isinstance(ticket_snapshot.get("ticket"), dict):
+            continue
+        ticket = _build_instance(SavedTicket, ticket_snapshot["ticket"])
+        db.session.add(ticket)
+        db.session.flush()
+        for leg_data in ticket_snapshot.get("legs") or []:
+            if isinstance(leg_data, dict):
+                db.session.add(_build_instance(SavedTicketLeg, leg_data))
+
+    for row_data in snapshot.get("login_attempts") or []:
+        if isinstance(row_data, dict):
+            db.session.add(_build_instance(LoginAttempt, row_data))
+    for row_data in snapshot.get("broadcast_views") or []:
+        if isinstance(row_data, dict):
+            db.session.add(_build_instance(AdminBroadcastView, row_data))
+    return 1

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}GreenHunter | IA para Sinais de Apostas em Tempo Real{% endblock %}
-{% block meta_description %}Analise os jogos do dia com H2H, Casa e Fora, filtre tendencias de gols, escanteios e cartoes e acompanhe sinais ao vivo no GreenHunter.{% endblock %}
+{% block title %}GreenHunter | Análise de Futebol e Bilhetes com IA{% endblock %}
+{% block meta_description %}Analise jogos de futebol, crie estratégias personalizadas, receba alertas ao vivo e gere bilhetes inteligentes com a IA do GreenHunter.{% endblock %}
 {% block main_class %}ghx-landing{% endblock %}
 
 {% block content %}
@@ -26,7 +26,7 @@
   </div>
   <div class="ghx-nav-actions">
     <a class="ghx-link-btn" href="{{ url_for('auth.login') }}">Login</a>
-    <a class="ghx-primary-btn ghx-primary-btn-sm" href="{{ url_for('auth.register') }}">Comecar</a>
+    <a class="ghx-primary-btn ghx-primary-btn-sm" href="{{ url_for('auth.register') }}">Começar</a>
   </div>
 </nav>
 
@@ -36,24 +36,24 @@
     <div class="ghx-hero-copy ghx-reveal">
       <div class="ghx-kicker">
         <span></span>
-        Inteligencia pre-jogo e ao vivo
+        IA pré-jogo e ao vivo
       </div>
       <h1>
-        Encontre jogos, compare <em>TENDENCIAS</em> e acompanhe sinais em <em>TEMPO REAL.</em>
+        Transforme dados de futebol em <em>ANÁLISES,</em> alertas e <em>BILHETES COM IA.</em>
       </h1>
       <p>
-        Prepare seu dia com historico H2H, Casa e Fora, filtre mercados por porcentagem e organize seu bilhete. Durante a partida, o GreenHunter monitora os dados e envia alertas pelo Telegram.
+        Analise os jogos do dia, transforme seus critérios em regras automáticas e receba alertas quando uma partida atender à sua estratégia. Para seus bilhetes, a IA compara os candidatos e organiza as melhores opções encontradas.
       </p>
       <div class="ghx-hero-actions">
         <a class="ghx-primary-btn" href="{{ url_for('auth.register') }}">
-          Criar conta
+          Começar gratuitamente
           <span aria-hidden="true">-></span>
         </a>
-        <a class="ghx-secondary-btn" href="#jogos-do-dia">Conhecer recursos</a>
+        <a class="ghx-secondary-btn" href="#jogos-do-dia">Ver como funciona</a>
       </div>
       <div class="ghx-trust-row" aria-label="Indicadores da plataforma">
-        <span>Agenda completa</span>
-        <span>Filtros de tendencias</span>
+        <span>Análise pré-jogo</span>
+        <span>Bilhetes inteligentes</span>
         <span>Alertas no Telegram</span>
       </div>
     </div>
@@ -69,8 +69,8 @@
         <span>Tempo real</span>
       </div>
       <div class="ghx-floating-panel ghx-panel-c">
-        <span class="ghx-panel-label">Signal latency</span>
-        <strong>0.8s</strong>
+        <span class="ghx-panel-label">Monitoramento</span>
+        <strong>24/7</strong>
       </div>
     </div>
   </div>
@@ -80,7 +80,7 @@
   <div class="ghx-section-head ghx-video-copy ghx-reveal">
     <span class="ghx-eyebrow"><i aria-hidden="true"></i> Apresentação da plataforma</span>
     <h2>Veja o GreenHunter em ação.</h2>
-    <p>Conheça, em poucos minutos, uma plataforma completa para analisar os jogos do dia, comparar tendências, montar bilhetes e acompanhar alertas e resultados.</p>
+    <p>Veja como analisar os jogos do dia, comparar tendências, criar bilhetes com IA e acompanhar alertas e resultados em uma única plataforma.</p>
   </div>
   <div class="ghx-video-stage ghx-reveal">
     <div class="ghx-video-frame">
@@ -97,12 +97,12 @@
 <section class="ghx-section ghx-matchday-showcase" id="jogos-do-dia">
   <div class="ghx-matchday-copy ghx-reveal">
     <span class="ghx-eyebrow">Jogos do Dia</span>
-    <h2>Comece a analise antes de a bola rolar.</h2>
-    <p>Escolha a data, campeonatos e times. Compare os ultimos jogos de cada equipe e encontre partidas dentro da faixa estatistica que voce procura.</p>
+    <h2>Encontre os jogos que combinam com sua estratégia.</h2>
+    <p>Escolha a data, filtre campeonatos e times e compare os dados históricos de cada partida. Depois, use a IA para gerar um bilhete com os candidatos que atendem aos critérios definidos.</p>
     <div class="ghx-matchday-points">
-      <div><b>01</b><span><strong>H2H, Casa e Fora</strong><small>Compare gols, primeiro tempo, escanteios, cartoes e impedimentos.</small></span></div>
-      <div><b>02</b><span><strong>Filtro por tendencia</strong><small>Defina mercado, base, amostra e faixa percentual para analisar o dia inteiro.</small></span></div>
-      <div><b>03</b><span><strong>Bilhete organizado</strong><small>Agrupe mercados do mesmo jogo em um painel flutuante e pratico.</small></span></div>
+      <div><b>01</b><span><strong>H2H, Casa e Fora</strong><small>Compare gols, primeiro tempo, escanteios, cartões e impedimentos.</small></span></div>
+      <div><b>02</b><span><strong>Filtros de tendências</strong><small>Defina indicador, base, amostra e faixa percentual para filtrar os jogos da data.</small></span></div>
+      <div><b>03</b><span><strong>Bilhete criado com IA</strong><small>A IA classifica os candidatos por confiança, horário e preferências escolhidas por você.</small></span></div>
     </div>
     <a class="ghx-primary-btn" href="{{ url_for('auth.register') }}">Explorar Jogos do Dia <span aria-hidden="true">-&gt;</span></a>
   </div>
@@ -122,14 +122,14 @@
         <div><span>Gol HT</span><b>67%</b><b>83%</b><b>50%</b></div>
         <div class="is-highlight"><span>Mais de 1,5</span><b>83%</b><b>100%</b><b>83%</b></div>
         <div><span>Mais de 2,5</span><b>50%</b><b>67%</b><b>50%</b></div>
-        <div><span>Media esc.</span><b>9.3</b><b>10.1</b><b>8.7</b></div>
+        <div><span>Média esc.</span><b>9.3</b><b>10.1</b><b>8.7</b></div>
       </div>
     </article>
     <div class="ghx-demo-ticket">
-      <header><strong>Meu bilhete</strong><span>2 selecoes</span></header>
+      <header><strong>Meu bilhete</strong><span>2 seleções</span></header>
       <b>Fluminense <em>vs</em> Palmeiras</b>
       <div><span>Mais de 1,5 gols</span><strong>83%</strong></div>
-      <div><span>Media de escanteios</span><strong>10.1</strong></div>
+      <div><span>Média de escanteios</span><strong>10.1</strong></div>
     </div>
   </div>
 </section>
@@ -147,18 +147,18 @@
 
 <section class="ghx-section" id="beneficios">
   <div class="ghx-section-head ghx-reveal">
-    <span class="ghx-eyebrow">Beneficios</span>
-    <h2>Menos ruido. Mais leitura. Alertas que parecem ter radar proprio.</h2>
-    <p>Uma experiencia feita para quem precisa agir rapido sem perder contexto.</p>
+    <span class="ghx-eyebrow">Benefícios</span>
+    <h2>Menos tempo procurando. Mais informações para decidir.</h2>
+    <p>Centralize a análise pré-jogo, o monitoramento ao vivo e seus resultados em um único lugar.</p>
   </div>
   <div class="ghx-card-grid ghx-card-grid-3">
     {% set features = [
-      ('Agenda inteligente', 'Veja os jogos de hoje e das proximas datas com comparacao de H2H, Casa e Fora.'),
-      ('Regras precisas', 'Monte estrategias com placar, minuto, chutes, escanteios, ataques perigosos e filtros de liga.'),
-      ('Telegram instantaneo', 'Receba o sinal com jogo, minuto, placar, leitura da IA e link direto para abrir a partida.'),
-      ('Filtro de tendencias', 'Pesquise o dia inteiro por Gol HT, mais de 1,5 ou 2,5 e pela amostra desejada.'),
-      ('Historico completo', 'Acompanhe green, red, pendentes, desempenho por regra e padroes que se repetem.'),
-      ('Operacao 24/7', 'Monitoramento continuo em nuvem para capturar jogos enquanto voce foca na decisao.')
+      ('Jogos do Dia', 'Consulte a agenda e compare H2H, desempenho em casa e fora, percentuais e médias por mercado.'),
+      ('Estratégias personalizadas', 'Crie regras com minuto, placar, chutes, escanteios, ataques perigosos e filtros de campeonato.'),
+      ('Alertas no Telegram', 'Receba o sinal com partida, minuto, placar, estatísticas e link direto para acompanhar o jogo.'),
+      ('Bilhetes criados com IA', 'A IA compara os candidatos e monta bilhetes conforme seus mercados, amostras e critérios.'),
+      ('Histórico organizado', 'Acompanhe greens, reds, pendentes, apostas registradas e o desempenho individual de cada regra.'),
+      ('Monitoramento contínuo', 'Suas regras continuam acompanhando as partidas automaticamente, mesmo quando você não está no site.')
     ] %}
     {% for title, text in features %}
     <article class="ghx-glass-card ghx-feature-card ghx-reveal">
@@ -176,8 +176,8 @@
   <div class="ghx-dashboard-wrap ghx-reveal">
     <div class="ghx-dashboard-copy">
       <span class="ghx-eyebrow">Dashboard preview</span>
-      <h2>Um cockpit limpo para operar sinais ao vivo.</h2>
-      <p>Veja regras, alertas, performance e status da API em uma interface escura, rapida e feita para leitura imediata.</p>
+      <h2>Controle toda a sua operação em um só painel.</h2>
+      <p>Acompanhe regras, alertas, resultados e desempenho em uma interface organizada para uma leitura rápida.</p>
     </div>
     <div class="ghx-dashboard">
       <div class="ghx-dashboard-top">
@@ -207,14 +207,14 @@
 <section class="ghx-section" id="como-funciona">
   <div class="ghx-section-head ghx-reveal">
     <span class="ghx-eyebrow">Como funciona</span>
-    <h2>Da agenda do dia ao alerta no Telegram.</h2>
+    <h2>Da análise pré-jogo ao alerta em tempo real.</h2>
   </div>
   <div class="ghx-timeline">
     {% set steps = [
-      ('01', 'Explore os jogos do dia', 'Escolha data, campeonatos e equipes para montar sua lista de analise.'),
-      ('02', 'Compare as tendencias', 'Use H2H, Casa e Fora com a quantidade de amostras adequada ao seu metodo.'),
-      ('03', 'Organize seu bilhete', 'Separe gols, escanteios e cartoes dos jogos que merecem sua atencao.'),
-      ('04', 'Acompanhe ao vivo', 'O motor monitora as partidas e envia alertas no Telegram conforme suas regras.')
+      ('01', 'Explore os jogos do dia', 'Escolha data, campeonatos e equipes para encontrar as partidas que deseja analisar.'),
+      ('02', 'Compare as tendências', 'Use H2H, Casa e Fora e escolha a quantidade de jogos usada em cada amostra.'),
+      ('03', 'Gere seu bilhete com IA', 'A IA classifica jogos e mercados por confiança, respeitando suas preferências.'),
+      ('04', 'Ative suas regras', 'O sistema monitora as partidas e envia alertas quando seus critérios forem atendidos.')
     ] %}
     {% for number, title, text in steps %}
     <article class="ghx-step ghx-reveal">
@@ -229,8 +229,8 @@
 </section>
 
 <section class="ghx-section ghx-stats" id="stats">
-  <div class="ghx-stat-card ghx-reveal"><strong data-count="2500">2.500+</strong><span>jogos analisados por dia</span></div>
-  <div class="ghx-stat-card ghx-reveal"><strong>0.8s</strong><span>latencia media de alerta</span></div>
+  <div class="ghx-stat-card ghx-reveal"><strong data-count="10">Até 10</strong><span>jogos por análise Premium</span></div>
+  <div class="ghx-stat-card ghx-reveal"><strong>20</strong><span>regras ativas no Premium</span></div>
   <div class="ghx-stat-card ghx-reveal"><strong>24/7</strong><span>monitoramento em nuvem</span></div>
   <div class="ghx-stat-card ghx-reveal"><strong>AI</strong><span>score inteligente por sinal</span></div>
 </section>
@@ -238,12 +238,12 @@
 <section class="ghx-section ghx-split" id="tecnologia">
   <div class="ghx-tech-copy ghx-reveal">
     <span class="ghx-eyebrow">Tecnologia IA</span>
-    <h2>Dados em tempo real, modelos adaptativos e filtros antifalso positivo.</h2>
-    <p>O GreenHunter combina regras humanas com leitura automatica para validar se o sinal ainda faz sentido no instante do disparo.</p>
+    <h2>Seus critérios unidos à análise automatizada.</h2>
+    <p>O GreenHunter combina as regras que você cria com dados da partida, revalidação do placar e indicadores históricos para entregar sinais com mais contexto.</p>
     <div class="ghx-tech-list">
-      <span>Revalidacao de placar</span>
-      <span>Score de confianca</span>
-      <span>Historico por regra</span>
+      <span>Revalidação de placar</span>
+      <span>Score de confiança</span>
+      <span>Histórico por regra</span>
       <span>Monitoramento live</span>
     </div>
   </div>
@@ -251,7 +251,7 @@
     <div class="ghx-neural-grid"></div>
     <div class="ghx-neural-core">IA</div>
     <div class="ghx-neural-row"><span>Market Pulse</span><strong>ACTIVE</strong></div>
-    <div class="ghx-neural-row"><span>Data Stream</span><strong>12.8k/s</strong></div>
+    <div class="ghx-neural-row"><span>Revalidation</span><strong>ACTIVE</strong></div>
     <div class="ghx-neural-row"><span>Risk Filter</span><strong>ON</strong></div>
   </div>
 </section>
@@ -294,16 +294,16 @@
     </div>
   </div>
   <div class="ghx-telegram-copy ghx-reveal">
-    <span class="ghx-eyebrow">Integracao Telegram</span>
-    <h2>O sinal chega onde voce realmente opera.</h2>
-    <p>Sem ficar preso na tela. O bot envia a leitura completa, com dados essenciais e link direto para decisao rapida.</p>
+    <span class="ghx-eyebrow">Integração Telegram</span>
+    <h2>Receba o sinal sem precisar ficar preso à tela.</h2>
+    <p>O bot envia os dados essenciais da partida e o link direto do jogo para você conferir a oportunidade rapidamente.</p>
   </div>
 </section>
 
 <section class="ghx-section">
   <div class="ghx-section-head ghx-reveal">
     <span class="ghx-eyebrow">Depoimentos</span>
-    <h2>Operadores querem velocidade, contexto e consistencia.</h2>
+    <h2>Operadores querem velocidade, contexto e consistência.</h2>
   </div>
   <div class="ghx-card-grid ghx-card-grid-3">
     {% set testimonials = [
@@ -324,30 +324,39 @@
 <section class="ghx-section" id="planos">
   <div class="ghx-section-head ghx-reveal">
     <span class="ghx-eyebrow">Planos</span>
-    <h2>Escolha o nivel da sua operacao.</h2>
+    <h2>Comece grátis e evolua quando precisar de mais.</h2>
   </div>
   <div class="ghx-pricing">
     <article class="ghx-price-card ghx-reveal">
-      <span>Starter</span>
+      <span>Grátis</span>
       <h3>Free</h3>
-      <p>Para testar o bot com sinais reais antes de evoluir.</p>
-      <ul><li>Ate 2 regras</li><li>Alertas no Telegram</li><li>Historico basico</li></ul>
+      <p>Para conhecer a plataforma e testar suas primeiras estratégias.</p>
+      <ul><li>2 regras ativas</li><li>Até 10 alertas por dia</li><li>2 bilhetes diários com até 5 jogos</li><li>Amostra dos últimos 3 jogos</li><li>Até 5 bilhetes salvos</li></ul>
       <a href="{{ url_for('auth.register') }}">Criar conta gratis</a>
     </article>
     <article class="ghx-price-card ghx-price-featured ghx-reveal">
       <span>Pro</span>
-      <h3>R$ 25</h3>
-      <p>Para quem ja quer operar com mais estrategias ativas.</p>
-      <ul><li>Ate 10 regras</li><li>Score IA</li><li>Dashboard avancado</li><li>Alertas em tempo real</li></ul>
+      <h3>R$ 14,90 <small>/mês</small></h3>
+      <p>Para ampliar suas análises, alertas e bilhetes inteligentes.</p>
+      <ul><li>Monitore até 20 regras</li><li>Alertas sem limite diário no Telegram</li><li>Bilhetes com IA de até 10 jogos</li><li>IA prioriza os próximos jogos</li><li>Até 10 jogos por análise</li></ul>
       <a href="{{ url_for('auth.register') }}">Ativar Pro</a>
     </article>
     <article class="ghx-price-card ghx-reveal">
       <span>Custom</span>
       <h3>Custom</h3>
-      <p>Para operacoes maiores, limites especiais e setups dedicados.</p>
-      <ul><li>Limite sob medida</li><li>Suporte prioritario</li><li>Relatorios avancados</li></ul>
+      <p>Para operações maiores, limites especiais e configurações dedicadas.</p>
+      <ul><li>Limite sob medida</li><li>Suporte prioritário</li><li>Relatórios avançados</li></ul>
       <a href="{{ url_for('auth.register') }}">Falar com time</a>
     </article>
+  </div>
+  <div class="ghx-plan-comparison ghx-reveal">
+    <div class="ghx-plan-row ghx-plan-head"><b>Benefício</b><b>Grátis</b><b>Premium</b></div>
+    {% for feature, free, pro in [
+      ('Regras ativas','2','Até 20'),('Alertas diários','Até 10','Sem limite diário'),('Telegram','—','✓'),
+      ('Bilhetes gerados com IA','2 por dia · até 5 jogos','Sem limite diário · até 10 jogos'),('Amostra usada pela IA','Últimos 3 jogos','Até 10 jogos'),
+      ('Priorizar jogos mais cedo','—','✓'),('Análise por período','Total','Total · 1ºT · 2ºT'),('Análise detalhada de alertas','—','✓'),
+      ('Bilhetes salvos','Até 5','Até 200')
+    ] %}<div class="ghx-plan-row"><span>{{ feature }}</span><span>{{ free }}</span><strong>{{ pro }}</strong></div>{% endfor %}
   </div>
 </section>
 
@@ -358,11 +367,12 @@
   </div>
   <div class="ghx-faq">
     {% set faqs = [
-      ('O GreenHunter faz apostas automaticamente?', 'Nao. A plataforma entrega sinais e contexto. A decisao final continua com voce.'),
-      ('Posso criar minhas proprias regras?', 'Sim. Voce configura filtros por minuto, placar, estatisticas, ligas e condicoes de resultado.'),
-      ('O que existe em Jogos do Dia?', 'Agenda por data, comparacao H2H, Casa e Fora, filtros percentuais e um bilhete para organizar selecoes.'),
-      ('Os alertas chegam onde?', 'Principalmente no Telegram, com dados do jogo, score, leitura e link direto.'),
-      ('Funciona em tempo real?', 'Sim. O worker acompanha jogos ao vivo e revalida dados antes de criar o alerta.')
+      ('O GreenHunter faz apostas automaticamente?', 'Não. A plataforma entrega sinais e contexto. A decisão final continua com você.'),
+      ('Posso criar minhas próprias regras?', 'Sim. Você configura filtros por minuto, placar, estatísticas, campeonatos e condições de resultado.'),
+      ('O que existe em Jogos do Dia?', 'Agenda por data, comparação H2H, Casa e Fora, filtros de tendências e geração de bilhetes com IA.'),
+      ('O que a IA faz no gerador de bilhetes?', 'Compara os candidatos disponíveis e monta o bilhete conforme os mercados, amostras, horários e limites escolhidos por você.'),
+      ('Os alertas chegam onde?', 'No painel e, no Premium, também pelo Telegram, com dados do jogo e link direto para acompanhar a partida.'),
+      ('Funciona em tempo real?', 'Sim. O sistema acompanha os jogos ao vivo e revalida os dados antes de criar cada alerta.')
     ] %}
     {% for question, answer in faqs %}
     <details class="ghx-faq-item ghx-reveal">
@@ -374,11 +384,11 @@
 </section>
 
 <section class="ghx-final-cta ghx-reveal">
-  <span class="ghx-eyebrow">Entre antes do mercado perceber</span>
-  <h2>Prepare o dia. Filtre oportunidades. Acompanhe ao vivo.</h2>
-  <p>Crie sua conta e reúna analise pre-jogo, bilhete organizado e monitoramento em tempo real no mesmo lugar.</p>
+  <span class="ghx-eyebrow">Sua estratégia. Seus critérios. Mais inteligência.</span>
+  <h2>Analise melhor antes de tomar sua decisão.</h2>
+  <p>Crie sua conta e reúna análise pré-jogo, bilhetes com IA e monitoramento em tempo real no mesmo lugar.</p>
   <p>Apostas envolvem risco. Jogue com responsabilidade. Maiores de 18 anos.</p>
-  <a class="ghx-primary-btn" href="{{ url_for('auth.register') }}">Comecar agora</a>
+  <a class="ghx-primary-btn" href="{{ url_for('auth.register') }}">Começar agora</a>
 </section>
 {% endblock %}
 

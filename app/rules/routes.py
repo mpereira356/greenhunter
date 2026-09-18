@@ -5,10 +5,11 @@ import difflib
 import unicodedata
 from datetime import datetime, timedelta
 
-from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from markupsafe import Markup, escape
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from ..extensions import db
 from ..models import LiveGameState, MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
@@ -48,38 +49,6 @@ def _rule_slots_remaining(user) -> int:
     if getattr(user, "is_admin_user", False):
         return 10**9
     return max(0, user.effective_rule_limit - _visible_rule_count(user.id))
-
-
-def _ensure_ia_shadow_control_rule(user_id: int):
-    existing = (
-        Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
-        .order_by(Rule.id.asc())
-        .first()
-    )
-    if existing:
-        return existing
-    rule = Rule(
-        user_id=user_id,
-        name=IA_SHADOW_CONTROL_RULE_NAME,
-        time_limit_min=90,
-        message_template=None,
-        is_active=True,
-        second_half_only=True,
-        follow_ht=False,
-        follow_ft=False,
-        notify_telegram=False,
-    )
-    db.session.add(rule)
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        return (
-            Rule.query.filter_by(user_id=user_id, name=IA_SHADOW_CONTROL_RULE_NAME)
-            .order_by(Rule.id.asc())
-            .first()
-        )
-    return rule
 
 
 def _normalize_hint_text(raw: str) -> str:
@@ -437,6 +406,31 @@ def _parse_outcome_conditions(form, prefix):
             )
         index += 1
     return conditions
+
+
+def _has_incomplete_outcome_conditions(form, prefix):
+    """Reject partially filled result rows instead of silently discarding them."""
+    grouped_pattern = re.compile(rf"^{re.escape(prefix)}-group-(\d+)-cond-(\d+)-stat_key$")
+    rows = []
+    for key in form.keys():
+        match = grouped_pattern.match(key)
+        if match:
+            rows.append((f"{prefix}-group-{match.group(1)}-cond-{match.group(2)}", key))
+    if not rows:
+        index = 0
+        while form.get(f"{prefix}-{index}-stat_key") is not None:
+            rows.append((f"{prefix}-{index}", f"{prefix}-{index}-stat_key"))
+            index += 1
+    for base, stat_key_name in rows:
+        stat_key = str(form.get(stat_key_name) or "").strip()
+        side = str(form.get(f"{base}-side") or "").strip()
+        operator = str(form.get(f"{base}-operator") or "").strip()
+        value = str(form.get(f"{base}-value") or "").strip()
+        if stat_key.lower() in ("minute", "minutos", "minuto", "min") and not side:
+            side = "total"
+        if not stat_key or not side or operator not in {">=", "<=", "==", ">", "<", "≥", "≤", "="} or not value.isdigit():
+            return True
+    return False
 
 
 def _coerce_int(value, default=None):
@@ -1144,6 +1138,7 @@ def _build_form_context(form):
         "outcome_green_minute": form.get("outcome_green_minute", "").strip(),
         "outcome_red_minute": form.get("outcome_red_minute", "").strip(),
         "outcome_red_if_no_green": bool(form.get("outcome_red_if_no_green")),
+        "custom_red_enabled": bool(form.get("custom_red_enabled")) if form.get("result_ui_version") == "2" else bool(_parse_outcome_conditions(form, "outcome-red")),
     }
     conditions = [_condition_dict(c) for c in _parse_conditions(form)]
     outcome_green = [_condition_dict(c) for c in _parse_outcome_conditions(form, "outcome-green")]
@@ -1177,21 +1172,21 @@ def _build_rule_context(rule):
 @rules_bp.route("/")
 @login_required
 def list_rules():
-    _ensure_ia_shadow_control_rule(current_user.id)
     stage_filter = (request.args.get("stage") or "all").strip().lower()
     if stage_filter not in ("all", "ht", "ft"):
         stage_filter = "all"
-    rules_query = Rule.query.filter_by(user_id=current_user.id)
+    rules_query = Rule.query.filter(
+        Rule.user_id == current_user.id,
+        Rule.name != IA_SHADOW_CONTROL_RULE_NAME,
+    )
     if stage_filter == "ht":
         rules_query = rules_query.filter(Rule.second_half_only.is_(False))
     elif stage_filter == "ft":
         rules_query = rules_query.filter(Rule.second_half_only.is_(True))
-    rules = rules_query.all()
-    has_any_rules = Rule.query.filter_by(user_id=current_user.id).count() > 0
+    rules = rules_query.options(selectinload(Rule.conditions)).all()
+    has_any_rules = _visible_rule_count(current_user.id) > 0
     rule_stats = {rule.id: {"green": 0, "red": 0} for rule in rules}
     rule_alert_counts = {rule.id: 0 for rule in rules}
-    rule_rankings = {rule.id: {"leagues": {"green": [], "red": []}, "teams": {"green": [], "red": []}} for rule in rules}
-    rule_ids = [rule.id for rule in rules]
     counts = (
         db.session.query(MatchAlert.rule_id, MatchAlert.status, func.count(MatchAlert.id))
         .filter(MatchAlert.user_id == current_user.id)
@@ -1204,40 +1199,6 @@ def list_rules():
         if rule_id in rule_alert_counts:
             rule_alert_counts[rule_id] += total
 
-    if rule_ids:
-        alerts = (
-            db.session.query(
-                MatchAlert.rule_id,
-                MatchAlert.status,
-                MatchAlert.league,
-                MatchAlert.home_team,
-                MatchAlert.away_team,
-            )
-            .filter(MatchAlert.user_id == current_user.id)
-            .filter(MatchAlert.rule_id.in_(rule_ids))
-            .filter(MatchAlert.status.in_(("green", "red")))
-            .all()
-        )
-        league_counts = {rid: {"green": {}, "red": {}} for rid in rule_ids}
-        team_counts = {rid: {"green": {}, "red": {}} for rid in rule_ids}
-        for rule_id, status, league, home_team, away_team in alerts:
-            if rule_id not in league_counts:
-                continue
-            if league:
-                league_counts[rule_id][status][league] = league_counts[rule_id][status].get(league, 0) + 1
-            for team in (home_team, away_team):
-                if team:
-                    team_counts[rule_id][status][team] = team_counts[rule_id][status].get(team, 0) + 1
-
-        def _rank_items(d):
-            items = sorted(d.items(), key=lambda item: (-item[1], item[0]))
-            return [{"name": name, "count": count} for name, count in items]
-
-        for rid in rule_ids:
-            rule_rankings[rid]["leagues"]["green"] = _rank_items(league_counts[rid]["green"])
-            rule_rankings[rid]["leagues"]["red"] = _rank_items(league_counts[rid]["red"])
-            rule_rankings[rid]["teams"]["green"] = _rank_items(team_counts[rid]["green"])
-            rule_rankings[rid]["teams"]["red"] = _rank_items(team_counts[rid]["red"])
     rules = sorted(
         rules,
         key=lambda rule: (
@@ -1252,10 +1213,40 @@ def list_rules():
         rules=rules,
         rule_stats=rule_stats,
         rule_alert_counts=rule_alert_counts,
-        rule_rankings=rule_rankings,
         stage_filter=stage_filter,
         has_any_rules=has_any_rules,
     )
+
+
+@rules_bp.get("/<int:rule_id>/rankings")
+@login_required
+def rule_rankings(rule_id):
+    rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first()
+    if rule is None:
+        abort(404)
+    alerts = (
+        db.session.query(MatchAlert.status, MatchAlert.league, MatchAlert.home_team, MatchAlert.away_team)
+        .filter(MatchAlert.user_id == current_user.id, MatchAlert.rule_id == rule.id)
+        .filter(MatchAlert.status.in_(("green", "red")))
+        .all()
+    )
+    leagues = {"green": {}, "red": {}}
+    teams = {"green": {}, "red": {}}
+    for status, league, home_team, away_team in alerts:
+        if league:
+            leagues[status][league] = leagues[status].get(league, 0) + 1
+        for team in (home_team, away_team):
+            if team:
+                teams[status][team] = teams[status].get(team, 0) + 1
+
+    def ranked(values):
+        return [
+            {"name": name, "count": count}
+            for name, count in sorted(values.items(), key=lambda item: (-item[1], item[0]))[:20]
+        ]
+
+    return jsonify(ok=True, leagues={status: ranked(values) for status, values in leagues.items()},
+                   teams={status: ranked(values) for status, values in teams.items()})
 
 
 
@@ -1451,6 +1442,15 @@ def create_rule():
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
 
+        if any(value and not value.isdigit() for value in (outcome_green_minute_raw, outcome_red_minute_raw)):
+            flash("Os minutos do resultado devem ser numeros inteiros iguais ou maiores que zero.", "warning")
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
+
         if not name:
             flash("Nome e obrigatorio.", "warning")
             return render_template(
@@ -1480,6 +1480,17 @@ def create_rule():
 
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
+        custom_red_enabled = bool(request.form.get("custom_red_enabled"))
+        if request.form.get("result_ui_version") == "2" and not custom_red_enabled:
+            outcome_red = []
+        if _has_incomplete_outcome_conditions(request.form, "outcome-green") or (custom_red_enabled and _has_incomplete_outcome_conditions(request.form, "outcome-red")):
+            flash("Preencha completamente todas as condicoes de resultado, usando valores iguais ou maiores que zero.", "warning")
+            return render_template(
+                "rules/form.html",
+                rule=None,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
             return render_template(
@@ -1488,14 +1499,18 @@ def create_rule():
                 available_leagues=_available_leagues(),
                 **_build_form_context(request.form),
             )
-        if outcome_red_if_no_green and outcome_red_minute is None:
-            flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
+        if outcome_red_if_no_green and outcome_green_minute is None:
+            flash("Defina um minuto valido para o prazo do GREEN automatico.", "warning")
             return render_template(
                 "rules/form.html",
                 rule=None,
                 available_leagues=_available_leagues(),
                 **_build_form_context(request.form),
             )
+        if outcome_red_if_no_green and not custom_red_enabled:
+            outcome_red_minute = outcome_green_minute
+        elif outcome_red_if_no_green and outcome_red_minute is None:
+            outcome_red_minute = outcome_green_minute
 
         rule = Rule(
             user_id=current_user.id,
@@ -1560,6 +1575,15 @@ def edit_rule(rule_id):
         score_away_raw = request.form.get("score_away", "").strip()
         allowed_leagues = _parse_allowed_leagues_json(request.form.get("allowed_leagues_json"))
 
+        if any(value and not value.isdigit() for value in (outcome_green_minute_raw, outcome_red_minute_raw)):
+            flash("Os minutos do resultado devem ser numeros inteiros iguais ou maiores que zero.", "warning")
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
+
         if not name:
             flash("Nome e obrigatorio.", "warning")
             return render_template(
@@ -1607,6 +1631,18 @@ def edit_rule(rule_id):
             )
         outcome_green = _parse_outcome_conditions(request.form, "outcome-green")
         outcome_red = _parse_outcome_conditions(request.form, "outcome-red")
+        custom_red_enabled = bool(request.form.get("custom_red_enabled"))
+        if request.form.get("result_ui_version") == "2" and not custom_red_enabled:
+            outcome_red = []
+        if _has_incomplete_outcome_conditions(request.form, "outcome-green") or (custom_red_enabled and _has_incomplete_outcome_conditions(request.form, "outcome-red")):
+            flash("Preencha completamente todas as condicoes de resultado, usando valores iguais ou maiores que zero.", "warning")
+            db.session.rollback()
+            return render_template(
+                "rules/form.html",
+                rule=rule,
+                available_leagues=_available_leagues(),
+                **_build_form_context(request.form),
+            )
         if outcome_red_if_no_green and not outcome_green:
             flash("Adicione ao menos uma condicao de GREEN para usar o RED por tempo.", "warning")
             return render_template(
@@ -1615,14 +1651,21 @@ def edit_rule(rule_id):
                 available_leagues=_available_leagues(),
                 **_build_form_context(request.form),
             )
-        if outcome_red_if_no_green and outcome_red_minute is None:
-            flash("Defina o minuto limite para virar RED quando o GREEN nao ocorrer.", "warning")
+        if outcome_red_if_no_green and outcome_green_minute is None:
+            flash("Defina um minuto valido para o prazo do GREEN automatico.", "warning")
+            db.session.rollback()
             return render_template(
                 "rules/form.html",
                 rule=rule,
                 available_leagues=_available_leagues(),
                 **_build_form_context(request.form),
             )
+        if outcome_red_if_no_green and not custom_red_enabled:
+            outcome_red_minute = outcome_green_minute
+            rule.outcome_red_minute = outcome_red_minute
+        elif outcome_red_if_no_green and outcome_red_minute is None:
+            outcome_red_minute = outcome_green_minute
+            rule.outcome_red_minute = outcome_red_minute
 
         RuleCondition.query.filter_by(rule_id=rule.id).delete()
         RuleOutcomeCondition.query.filter_by(rule_id=rule.id).delete()
@@ -1713,6 +1756,20 @@ def test_rule():
                 "sub-20",
                 "sub 20",
                 "under 20",
+                "u21",
+                "u-21",
+                "u 21",
+                "sub21",
+                "sub-21",
+                "sub 21",
+                "under 21",
+                "u22",
+                "u-22",
+                "u 22",
+                "sub22",
+                "sub-22",
+                "sub 22",
+                "under 22",
             )
         )
 

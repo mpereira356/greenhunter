@@ -1,15 +1,18 @@
 from datetime import datetime
 
 import os
+import tempfile
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from markupsafe import Markup, escape
+from sqlalchemy import func
 
 from ..extensions import db
 from ..models import MatchAlert, Rule, User
 from ..services.match_analysis import build_alert_analysis
 from ..services.telegram import send_document
+from ..services.exporter import export_history_report
 from ..services.undo import create_undo_action, snapshot_alert
 from ..utils.time import now_sp
 
@@ -244,16 +247,45 @@ def send_report():
     if not current_user.telegram_token or not current_user.telegram_chat_id:
         flash("Configure o Telegram antes de enviar.", "warning")
         return redirect(url_for("history.history"))
-    report_path = os.path.join("data", "exports", "historico_geral.xlsx")
-    if not os.path.exists(report_path):
-        flash("Nenhum relatorio encontrado ainda.", "warning")
-        return redirect(url_for("history.history"))
-    ok, message = send_document(
-        current_user.telegram_token,
-        current_user.telegram_chat_id,
-        report_path,
-        caption="Relatorio geral do historico",
+    report_query = (
+        db.session.query(
+            MatchAlert.id, MatchAlert.created_at, MatchAlert.status, Rule.name.label("rule_name"),
+            MatchAlert.league, MatchAlert.home_team, MatchAlert.away_team, MatchAlert.market_label,
+            MatchAlert.target_text, MatchAlert.market_key, MatchAlert.alert_minute, MatchAlert.result_minute,
+            MatchAlert.initial_score, MatchAlert.ht_score, MatchAlert.ft_score, MatchAlert.stake_odd,
+            MatchAlert.stake_amount, MatchAlert.bet_note, MatchAlert.ai_score, MatchAlert.ai_verdict,
+            MatchAlert.ai_commentary, MatchAlert.ml_pred_score, MatchAlert.ml_pred_verdict, MatchAlert.url,
+        )
+        .outerjoin(Rule, Rule.id == MatchAlert.rule_id)
+        .filter(MatchAlert.user_id == current_user.id)
+        .order_by(MatchAlert.created_at.asc())
     )
+    total, first_created, last_created = db.session.query(
+        func.count(MatchAlert.id), func.min(MatchAlert.created_at), func.max(MatchAlert.created_at)
+    ).filter(MatchAlert.user_id == current_user.id).one()
+    if not total:
+        flash("Nenhum historico encontrado ainda.", "warning")
+        return redirect(url_for("history.history"))
+    exports_dir = os.path.join("data", "exports")
+    os.makedirs(exports_dir, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(prefix=f"historico_usuario_{current_user.id}_", suffix=".xlsx", dir=exports_dir, delete=False)
+    report_path = handle.name
+    handle.close()
+    try:
+        export_history_report(report_query.yield_per(1000), report_path)
+        first_date = first_created.strftime("%d/%m/%Y")
+        last_date = last_created.strftime("%d/%m/%Y")
+        ok, message = send_document(
+            current_user.telegram_token,
+            current_user.telegram_chat_id,
+            report_path,
+            caption=f"Historico completo: {total} alertas ({first_date} a {last_date})",
+        )
+    finally:
+        try:
+            os.remove(report_path)
+        except OSError:
+            pass
     if ok:
         flash("Relatorio enviado para o Telegram.", "success")
     else:

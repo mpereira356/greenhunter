@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, url_for
-from flask_login import login_user, logout_user, login_required
+from flask_login import current_user, login_user, logout_user, login_required
 from sqlalchemy import func
 
 from ..extensions import db
@@ -36,6 +36,12 @@ def _record_login_attempt(username, ip_address, success, user=None):
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    # Never render an authentication form inside the authenticated application
+    # shell. This can happen when a stale login link/request arrives after the
+    # session cookie has already been established.
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
     if request.method == "POST":
         if request.content_length and request.content_length > current_app.config["LOGIN_MAX_CONTENT_LENGTH"]:
             return _login_blocked_response(login_rate_limiter.block(get_client_ip()))
@@ -82,6 +88,9 @@ def login():
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
     if request.method == "POST":
         ip_address = get_client_ip()
         retry_after = registration_rate_limiter.retry_after(ip_address)

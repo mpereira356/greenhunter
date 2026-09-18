@@ -11,10 +11,11 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.engine.url import make_url
 
 from ..extensions import db
-from ..models import AdminBroadcast, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, SavedTicket, User
+from ..models import AdminBroadcast, AdminBroadcastView, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, SavedTicket, User
 from ..security import safe_redirect_target
 from ..services.scraper import is_first_half_extra_time
 from ..services.telegram import send_message
+from ..services.undo import apply_undo, create_undo_action, snapshot_user
 from ..services.worker import get_api_status
 from ..utils.time import now_sp
 
@@ -23,7 +24,7 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 ALERTS_PER_HOUR_THRESHOLD = 20
 PLAN_RULE_LIMITS = {
     "starter": 2,
-    "pro": 10,
+    "pro": 20,
     "custom": 50,
 }
 
@@ -643,6 +644,37 @@ def user_detail(user_id):
     )
 
 
+@admin_bp.route("/users/<int:user_id>/delete", methods=["POST"])
+@login_required
+def delete_user(user_id):
+    _require_admin()
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        return jsonify(ok=False, message="Você não pode excluir a conta administrativa que está usando."), 400
+
+    username = user.username
+    payload = snapshot_user(user)
+    undo_token = create_undo_action(
+        user_id=current_user.id,
+        action_type="delete_user",
+        payload={"user": payload},
+        ttl_seconds=5,
+    )
+    LoginAttempt.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    AdminBroadcastView.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify(ok=True, token=undo_token, username=username, message=f"Usuário {username} excluído.")
+
+
+@admin_bp.route("/users/undo-delete/<token>", methods=["POST"])
+@login_required
+def undo_delete_user(token):
+    _require_admin()
+    ok, message = apply_undo(token, current_user.id)
+    return jsonify(ok=ok, message=message), (200 if ok else 400)
+
+
 @admin_bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_user(user_id):
@@ -655,6 +687,7 @@ def edit_user(user_id):
         is_admin = bool(request.form.get("is_admin"))
         new_password = request.form.get("new_password", "").strip()
         subscription_plan = (request.form.get("subscription_plan") or "starter").strip().lower()
+        premium_granted_by_admin = bool(request.form.get("premium_granted_by_admin"))
         rule_limit_raw = (request.form.get("rule_limit") or "").strip()
         paid_days_raw = (request.form.get("paid_days") or "").strip()
         trial_days_raw = (request.form.get("trial_days") or "").strip()
@@ -686,6 +719,7 @@ def edit_user(user_id):
         user.email = email or None
         user.is_admin = is_admin
         user.subscription_plan = subscription_plan
+        user.premium_granted_by_admin = premium_granted_by_admin
         user.rule_limit = rule_limit
         if clear_paid:
             user.paid_until = None

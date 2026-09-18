@@ -1,0 +1,120 @@
+{
+  "date": "2026-09-18",
+  "fixtures": 40,
+  "candidates": 880,
+  "green": 0,
+  "red": 0,
+  "pending": 880,
+  "void": 0,
+  "unresolved": 0,
+  "legacy": {
+    "quantity": 0
+  },
+  "v2_raw": {
+    "quantity": 0
+  },
+  "v2_calibrated": {
+    "quantity": 0
+  },
+  "conservative": {
+    "selected": 38,
+    "green": 0,
+    "red": 0,
+    "pending": 38,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "balanced": {
+    "selected": 448,
+    "green": 0,
+    "red": 0,
+    "pending": 448,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "strength_coverage_percent": 20.0,
+  "matchup_coverage_percent": 0.0,
+  "by_family": {
+    "corners": {
+      "quantity": 160,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "cards": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "fouls": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "offsides": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "shots": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "shots_on_target": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "goals": {
+      "quantity": 80,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "goals_first_half": {
+      "quantity": 40,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    }
+  },
+  "by_league": {},
+  "operations": {
+    "fixtures_found": 545,
+    "fixtures_analyzed": 40,
+    "candidates_created": 880,
+    "candidates_without_v2": 54,
+    "source_errors": 0,
+    "odds_fixture_matches": 0,
+    "odds_supported_candidates": 0,
+    "odds_mapped": 0,
+    "odds_rejected": 0,
+    "duration_ms": 6898,
+    "official_snapshot_policy": "FIRST_COMPLETE_DAILY_CACHE_AFTER_03H_PREWARM_BEFORE_KICKOFF"
+  },
+  "collection_alert": "PARTIAL"
+}

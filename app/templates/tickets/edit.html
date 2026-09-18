@@ -2,7 +2,7 @@
 {% block title %}Editar {{ ticket.name }} | GreenHunter{% endblock %}
 {% block content %}
 <section class="page-header ticket-edit-heading">
-  <div><a href="{{ url_for('main.saved_tickets') }}">← Meus bilhetes</a><h1>Editar {{ ticket.name }}</h1><p class="page-subtitle">Ajuste a aposta enquanto o bilhete ainda está pendente.</p></div>
+  <div><a href="{{ url_for('main.saved_tickets') }}">← Meus bilhetes</a><h1>Editar {{ ticket.name }}</h1><p class="page-subtitle">{% if ticket.status == 'pending' %}Ajuste a aposta enquanto o bilhete ainda está pendente.{% else %}Edição administrativa de bilhete concluído. Linhas alteradas serão revalidadas.{% endif %}</p></div>
 </section>
 <form method="post" class="ticket-edit-form">
   <div class="ticket-edit-money">

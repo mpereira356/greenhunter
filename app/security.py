@@ -101,6 +101,9 @@ def init_security(app):
         ):
             abort(413)
 
+        if request.endpoint == "main.mercadopago_webhook":
+            return None
+
         token = request.headers.get("X-CSRF-Token") or request.form.get("_csrf_token")
         expected = session.get("_csrf_token")
         if not token or not expected or not hmac.compare_digest(token, expected):
@@ -124,6 +127,6 @@ def init_security(app):
         )
         if current_app.config.get("SESSION_COOKIE_SECURE"):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        if request.path.startswith(("/auth/", "/admin/", "/settings/")):
+        if request.path.startswith(("/auth/", "/admin/", "/settings/", "/premium")):
             response.headers.setdefault("Cache-Control", "no-store")
         return response

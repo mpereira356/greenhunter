@@ -1,0 +1,6161 @@
+{
+  "backtest_run_id": 3,
+  "calibration_artifact_id": 2,
+  "training": {
+    "development_candidates": 11406,
+    "trained_through": "2026-08-30T11:30:00",
+    "evaluation_start": "2026-08-30T11:45:00",
+    "internal_validation_start": "2026-08-22T16:30:00",
+    "method_comparison": {
+      "platt": {
+        "quantity": 3488,
+        "brier": 0.223969,
+        "log_loss": 0.639436
+      },
+      "isotonic": {
+        "quantity": 3488,
+        "brier": 0.225588,
+        "log_loss": 0.643061
+      },
+      "bucket": {
+        "quantity": 3488,
+        "brier": 0.224653,
+        "log_loss": 0.64095
+      }
+    },
+    "selected_global_method": "platt",
+    "family_decisions": {
+      "goals": {
+        "source": "GLOBAL_FALLBACK",
+        "reason": "NO_VALIDATED_GAIN",
+        "validation": {
+          "quantity": 454,
+          "brier": 0.217654,
+          "log_loss": 0.62645
+        },
+        "global": {
+          "quantity": 454,
+          "brier": 0.217807,
+          "log_loss": 0.626959
+        }
+      },
+      "goals_first_half": {
+        "source": "FAMILY_GOALS_FIRST_HALF",
+        "method": "isotonic",
+        "validation": {
+          "quantity": 210,
+          "brier": 0.179838,
+          "log_loss": 0.546499
+        },
+        "global": {
+          "quantity": 210,
+          "brier": 0.188846,
+          "log_loss": 0.566412
+        }
+      },
+      "corners": {
+        "source": "FAMILY_CORNERS",
+        "method": "platt",
+        "validation": {
+          "quantity": 495,
+          "brier": 0.196793,
+          "log_loss": 0.581816
+        },
+        "global": {
+          "quantity": 495,
+          "brier": 0.201847,
+          "log_loss": 0.59307
+        }
+      },
+      "cards": {
+        "source": "FAMILY_CARDS",
+        "method": "platt",
+        "validation": {
+          "quantity": 495,
+          "brier": 0.243455,
+          "log_loss": 0.67996
+        },
+        "global": {
+          "quantity": 495,
+          "brier": 0.253422,
+          "log_loss": 0.700764
+        }
+      },
+      "shots_on_target": {
+        "source": "GLOBAL_FALLBACK",
+        "reason": "NO_VALIDATED_GAIN",
+        "validation": {
+          "quantity": 492,
+          "brier": 0.238223,
+          "log_loss": 0.669374
+        },
+        "global": {
+          "quantity": 492,
+          "brier": 0.238264,
+          "log_loss": 0.669765
+        }
+      },
+      "shots": {
+        "source": "FAMILY_SHOTS",
+        "method": "platt",
+        "validation": {
+          "quantity": 241,
+          "brier": 0.225008,
+          "log_loss": 0.643079
+        },
+        "global": {
+          "quantity": 241,
+          "brier": 0.274809,
+          "log_loss": 0.744327
+        }
+      },
+      "offsides": {
+        "source": "GLOBAL_FALLBACK",
+        "reason": "NO_VALIDATED_GAIN",
+        "validation": {
+          "quantity": 231,
+          "brier": 0.22024,
+          "log_loss": 0.633446
+        },
+        "global": {
+          "quantity": 231,
+          "brier": 0.22095,
+          "log_loss": 0.633589
+        }
+      },
+      "fouls": {
+        "source": "FAMILY_FOULS",
+        "method": "isotonic",
+        "validation": {
+          "quantity": 240,
+          "brier": 0.151515,
+          "log_loss": 0.479448
+        },
+        "global": {
+          "quantity": 240,
+          "brier": 0.176442,
+          "log_loss": 0.539845
+        }
+      }
+    }
+  },
+  "evaluation": {
+    "candidates": 6885,
+    "legacy": {
+      "quantity": 6885,
+      "green": 4437,
+      "red": 2448,
+      "hit_rate": 64.444,
+      "brier": 0.253028,
+      "log_loss": 0.704336,
+      "calibration_error": 0.166,
+      "roc_auc": 0.614769,
+      "pr_auc": 0.734997,
+      "buckets": {
+        "50-59": {
+          "quantity": 1658,
+          "green": 1106,
+          "red": 552,
+          "actual_rate": 66.71,
+          "mean_score": 54.93
+        },
+        "60-69": {
+          "quantity": 1317,
+          "green": 997,
+          "red": 320,
+          "actual_rate": 75.7,
+          "mean_score": 64.61
+        },
+        "70-79": {
+          "quantity": 436,
+          "green": 347,
+          "red": 89,
+          "actual_rate": 79.59,
+          "mean_score": 73.4
+        },
+        "80-89": {
+          "quantity": 23,
+          "green": 21,
+          "red": 2,
+          "actual_rate": 91.3,
+          "mean_score": 81.66
+        },
+        "<50": {
+          "quantity": 3451,
+          "green": 1966,
+          "red": 1485,
+          "actual_rate": 56.97,
+          "mean_score": 34.59
+        }
+      },
+      "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+    },
+    "v2_raw": {
+      "quantity": 6830,
+      "green": 4406,
+      "red": 2424,
+      "hit_rate": 64.51,
+      "brier": 0.235213,
+      "log_loss": 0.678801,
+      "calibration_error": 0.115358,
+      "roc_auc": 0.633198,
+      "pr_auc": 0.738812,
+      "buckets": {
+        "50-59": {
+          "quantity": 926,
+          "green": 566,
+          "red": 360,
+          "actual_rate": 61.12,
+          "mean_score": 54.21
+        },
+        "60-69": {
+          "quantity": 949,
+          "green": 659,
+          "red": 290,
+          "actual_rate": 69.44,
+          "mean_score": 65.07
+        },
+        "70-79": {
+          "quantity": 955,
+          "green": 685,
+          "red": 270,
+          "actual_rate": 71.73,
+          "mean_score": 74.82
+        },
+        "80-89": {
+          "quantity": 1272,
+          "green": 933,
+          "red": 339,
+          "actual_rate": 73.35,
+          "mean_score": 85.77
+        },
+        "90-100": {
+          "quantity": 661,
+          "green": 519,
+          "red": 142,
+          "actual_rate": 78.52,
+          "mean_score": 91.98
+        },
+        "<50": {
+          "quantity": 2067,
+          "green": 1044,
+          "red": 1023,
+          "actual_rate": 50.51,
+          "mean_score": 30.87
+        }
+      },
+      "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+    },
+    "v2_calibrated": {
+      "quantity": 6830,
+      "green": 4406,
+      "red": 2424,
+      "hit_rate": 64.51,
+      "brier": 0.209721,
+      "log_loss": 0.608486,
+      "calibration_error": 0.02354,
+      "roc_auc": 0.663377,
+      "pr_auc": 0.766974,
+      "buckets": {
+        "50-59": {
+          "quantity": 1132,
+          "green": 700,
+          "red": 432,
+          "actual_rate": 61.84,
+          "mean_score": 55.57
+        },
+        "60-69": {
+          "quantity": 1756,
+          "green": 1181,
+          "red": 575,
+          "actual_rate": 67.26,
+          "mean_score": 65.11
+        },
+        "70-79": {
+          "quantity": 2249,
+          "green": 1684,
+          "red": 565,
+          "actual_rate": 74.88,
+          "mean_score": 74.5
+        },
+        "80-89": {
+          "quantity": 358,
+          "green": 314,
+          "red": 44,
+          "actual_rate": 87.71,
+          "mean_score": 85.48
+        },
+        "<50": {
+          "quantity": 1335,
+          "green": 527,
+          "red": 808,
+          "actual_rate": 39.48,
+          "mean_score": 36.81
+        }
+      },
+      "warning": "Probabilidades calibradas fora da amostra de ajuste."
+    },
+    "calibration_source": {
+      "GLOBAL_FALLBACK": {
+        "quantity": 2735,
+        "resolved": 2735,
+        "green": 1878,
+        "red": 857,
+        "hit_rate": 68.67,
+        "conclusion_eligible": true
+      },
+      "FAMILY_CARDS": {
+        "quantity": 1032,
+        "resolved": 1032,
+        "green": 552,
+        "red": 480,
+        "hit_rate": 53.49,
+        "conclusion_eligible": true
+      },
+      "FAMILY_CORNERS": {
+        "quantity": 1032,
+        "resolved": 1032,
+        "green": 741,
+        "red": 291,
+        "hit_rate": 71.8,
+        "conclusion_eligible": true
+      },
+      "FAMILY_FOULS": {
+        "quantity": 801,
+        "resolved": 801,
+        "green": 628,
+        "red": 173,
+        "hit_rate": 78.4,
+        "conclusion_eligible": true
+      },
+      "FAMILY_SHOTS": {
+        "quantity": 801,
+        "resolved": 801,
+        "green": 279,
+        "red": 522,
+        "hit_rate": 34.83,
+        "conclusion_eligible": true
+      },
+      "FAMILY_GOALS_FIRST_HALF": {
+        "quantity": 429,
+        "resolved": 429,
+        "green": 328,
+        "red": 101,
+        "hit_rate": 76.46,
+        "conclusion_eligible": true
+      }
+    },
+    "by_family": {
+      "cards": {
+        "quantity": 1035,
+        "legacy": {
+          "quantity": 1035,
+          "green": 552,
+          "red": 483,
+          "hit_rate": 53.333,
+          "brier": 0.256876,
+          "log_loss": 0.711199,
+          "calibration_error": 0.105705,
+          "roc_auc": 0.586805,
+          "pr_auc": 0.614027,
+          "buckets": {
+            "50-59": {
+              "quantity": 227,
+              "green": 135,
+              "red": 92,
+              "actual_rate": 59.47,
+              "mean_score": 54.2
+            },
+            "60-69": {
+              "quantity": 148,
+              "green": 89,
+              "red": 59,
+              "actual_rate": 60.14,
+              "mean_score": 64.46
+            },
+            "70-79": {
+              "quantity": 41,
+              "green": 27,
+              "red": 14,
+              "actual_rate": 65.85,
+              "mean_score": 72.93
+            },
+            "80-89": {
+              "quantity": 3,
+              "green": 3,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 81.23
+            },
+            "<50": {
+              "quantity": 616,
+              "green": 298,
+              "red": 318,
+              "actual_rate": 48.38,
+              "mean_score": 34.16
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 1032,
+          "green": 552,
+          "red": 480,
+          "hit_rate": 53.488,
+          "brier": 0.255141,
+          "log_loss": 0.721925,
+          "calibration_error": 0.110534,
+          "roc_auc": 0.621803,
+          "pr_auc": 0.640785,
+          "buckets": {
+            "50-59": {
+              "quantity": 165,
+              "green": 89,
+              "red": 76,
+              "actual_rate": 53.94,
+              "mean_score": 54.51
+            },
+            "60-69": {
+              "quantity": 128,
+              "green": 82,
+              "red": 46,
+              "actual_rate": 64.06,
+              "mean_score": 64.75
+            },
+            "70-79": {
+              "quantity": 84,
+              "green": 50,
+              "red": 34,
+              "actual_rate": 59.52,
+              "mean_score": 74.23
+            },
+            "80-89": {
+              "quantity": 135,
+              "green": 86,
+              "red": 49,
+              "actual_rate": 63.7,
+              "mean_score": 85.71
+            },
+            "90-100": {
+              "quantity": 51,
+              "green": 38,
+              "red": 13,
+              "actual_rate": 74.51,
+              "mean_score": 91.62
+            },
+            "<50": {
+              "quantity": 469,
+              "green": 207,
+              "red": 262,
+              "actual_rate": 44.14,
+              "mean_score": 31.03
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 1032,
+          "green": 552,
+          "red": 480,
+          "hit_rate": 53.488,
+          "brier": 0.238577,
+          "log_loss": 0.669984,
+          "calibration_error": 0.031529,
+          "roc_auc": 0.623509,
+          "pr_auc": 0.639447,
+          "buckets": {
+            "50-59": {
+              "quantity": 471,
+              "green": 277,
+              "red": 194,
+              "actual_rate": 58.81,
+              "mean_score": 54.29
+            },
+            "60-69": {
+              "quantity": 148,
+              "green": 98,
+              "red": 50,
+              "actual_rate": 66.22,
+              "mean_score": 62.53
+            },
+            "<50": {
+              "quantity": 413,
+              "green": 177,
+              "red": 236,
+              "actual_rate": 42.86,
+              "mean_score": 44.26
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "corners": {
+        "quantity": 1035,
+        "legacy": {
+          "quantity": 1035,
+          "green": 743,
+          "red": 292,
+          "hit_rate": 71.787,
+          "brier": 0.259085,
+          "log_loss": 0.716651,
+          "calibration_error": 0.206286,
+          "roc_auc": 0.54936,
+          "pr_auc": 0.762274,
+          "buckets": {
+            "50-59": {
+              "quantity": 267,
+              "green": 187,
+              "red": 80,
+              "actual_rate": 70.04,
+              "mean_score": 54.7
+            },
+            "60-69": {
+              "quantity": 194,
+              "green": 139,
+              "red": 55,
+              "actual_rate": 71.65,
+              "mean_score": 64.71
+            },
+            "70-79": {
+              "quantity": 133,
+              "green": 107,
+              "red": 26,
+              "actual_rate": 80.45,
+              "mean_score": 73.71
+            },
+            "80-89": {
+              "quantity": 9,
+              "green": 9,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 82.14
+            },
+            "<50": {
+              "quantity": 432,
+              "green": 301,
+              "red": 131,
+              "actual_rate": 69.68,
+              "mean_score": 35.3
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 1032,
+          "green": 741,
+          "red": 291,
+          "hit_rate": 71.802,
+          "brier": 0.224402,
+          "log_loss": 0.657001,
+          "calibration_error": 0.11558,
+          "roc_auc": 0.59037,
+          "pr_auc": 0.776599,
+          "buckets": {
+            "50-59": {
+              "quantity": 127,
+              "green": 85,
+              "red": 42,
+              "actual_rate": 66.93,
+              "mean_score": 54.77
+            },
+            "60-69": {
+              "quantity": 155,
+              "green": 108,
+              "red": 47,
+              "actual_rate": 69.68,
+              "mean_score": 65.05
+            },
+            "70-79": {
+              "quantity": 166,
+              "green": 119,
+              "red": 47,
+              "actual_rate": 71.69,
+              "mean_score": 74.92
+            },
+            "80-89": {
+              "quantity": 243,
+              "green": 196,
+              "red": 47,
+              "actual_rate": 80.66,
+              "mean_score": 85.88
+            },
+            "90-100": {
+              "quantity": 151,
+              "green": 116,
+              "red": 35,
+              "actual_rate": 76.82,
+              "mean_score": 92.15
+            },
+            "<50": {
+              "quantity": 190,
+              "green": 117,
+              "red": 73,
+              "actual_rate": 61.58,
+              "mean_score": 32.39
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 1032,
+          "green": 741,
+          "red": 291,
+          "hit_rate": 71.802,
+          "brier": 0.199196,
+          "log_loss": 0.586685,
+          "calibration_error": 0.022926,
+          "roc_auc": 0.585011,
+          "pr_auc": 0.775374,
+          "buckets": {
+            "50-59": {
+              "quantity": 13,
+              "green": 9,
+              "red": 4,
+              "actual_rate": 69.23,
+              "mean_score": 59.1
+            },
+            "60-69": {
+              "quantity": 312,
+              "green": 196,
+              "red": 116,
+              "actual_rate": 62.82,
+              "mean_score": 66.47
+            },
+            "70-79": {
+              "quantity": 698,
+              "green": 528,
+              "red": 170,
+              "actual_rate": 75.64,
+              "mean_score": 74.18
+            },
+            "80-89": {
+              "quantity": 9,
+              "green": 8,
+              "red": 1,
+              "actual_rate": 88.89,
+              "mean_score": 80.89
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "fouls": {
+        "quantity": 816,
+        "legacy": {
+          "quantity": 816,
+          "green": 639,
+          "red": 177,
+          "hit_rate": 78.309,
+          "brier": 0.25523,
+          "log_loss": 0.711333,
+          "calibration_error": 0.28469,
+          "roc_auc": 0.61146,
+          "pr_auc": 0.848393,
+          "buckets": {
+            "50-59": {
+              "quantity": 196,
+              "green": 149,
+              "red": 47,
+              "actual_rate": 76.02,
+              "mean_score": 54.61
+            },
+            "60-69": {
+              "quantity": 216,
+              "green": 188,
+              "red": 28,
+              "actual_rate": 87.04,
+              "mean_score": 64.93
+            },
+            "70-79": {
+              "quantity": 52,
+              "green": 46,
+              "red": 6,
+              "actual_rate": 88.46,
+              "mean_score": 73.33
+            },
+            "80-89": {
+              "quantity": 1,
+              "green": 1,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 82.3
+            },
+            "<50": {
+              "quantity": 351,
+              "green": 255,
+              "red": 96,
+              "actual_rate": 72.65,
+              "mean_score": 34.32
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 801,
+          "green": 628,
+          "red": 173,
+          "hit_rate": 78.402,
+          "brier": 0.178984,
+          "log_loss": 0.542777,
+          "calibration_error": 0.095829,
+          "roc_auc": 0.629032,
+          "pr_auc": 0.849812,
+          "buckets": {
+            "50-59": {
+              "quantity": 79,
+              "green": 53,
+              "red": 26,
+              "actual_rate": 67.09,
+              "mean_score": 54.12
+            },
+            "60-69": {
+              "quantity": 120,
+              "green": 94,
+              "red": 26,
+              "actual_rate": 78.33,
+              "mean_score": 65.56
+            },
+            "70-79": {
+              "quantity": 124,
+              "green": 98,
+              "red": 26,
+              "actual_rate": 79.03,
+              "mean_score": 75.4
+            },
+            "80-89": {
+              "quantity": 212,
+              "green": 174,
+              "red": 38,
+              "actual_rate": 82.08,
+              "mean_score": 86.47
+            },
+            "90-100": {
+              "quantity": 166,
+              "green": 145,
+              "red": 21,
+              "actual_rate": 87.35,
+              "mean_score": 92.01
+            },
+            "<50": {
+              "quantity": 100,
+              "green": 64,
+              "red": 36,
+              "actual_rate": 64.0,
+              "mean_score": 34.39
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 801,
+          "green": 628,
+          "red": 173,
+          "hit_rate": 78.402,
+          "brier": 0.164453,
+          "log_loss": 0.506192,
+          "calibration_error": 0.036582,
+          "roc_auc": 0.633703,
+          "pr_auc": 0.891605,
+          "buckets": {
+            "70-79": {
+              "quantity": 470,
+              "green": 338,
+              "red": 132,
+              "actual_rate": 71.91,
+              "mean_score": 76.91
+            },
+            "80-89": {
+              "quantity": 331,
+              "green": 290,
+              "red": 41,
+              "actual_rate": 87.61,
+              "mean_score": 85.85
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "goals": {
+        "quantity": 902,
+        "legacy": {
+          "quantity": 902,
+          "green": 657,
+          "red": 245,
+          "hit_rate": 72.838,
+          "brier": 0.237547,
+          "log_loss": 0.669709,
+          "calibration_error": 0.201683,
+          "roc_auc": 0.606797,
+          "pr_auc": 0.79269,
+          "buckets": {
+            "50-59": {
+              "quantity": 245,
+              "green": 179,
+              "red": 66,
+              "actual_rate": 73.06,
+              "mean_score": 56.4
+            },
+            "60-69": {
+              "quantity": 256,
+              "green": 208,
+              "red": 48,
+              "actual_rate": 81.25,
+              "mean_score": 64.49
+            },
+            "70-79": {
+              "quantity": 54,
+              "green": 43,
+              "red": 11,
+              "actual_rate": 79.63,
+              "mean_score": 73.76
+            },
+            "80-89": {
+              "quantity": 4,
+              "green": 4,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 81.28
+            },
+            "<50": {
+              "quantity": 343,
+              "green": 223,
+              "red": 120,
+              "actual_rate": 65.01,
+              "mean_score": 37.54
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 902,
+          "green": 657,
+          "red": 245,
+          "hit_rate": 72.838,
+          "brier": 0.221041,
+          "log_loss": 0.638524,
+          "calibration_error": 0.128377,
+          "roc_auc": 0.575451,
+          "pr_auc": 0.780863,
+          "buckets": {
+            "50-59": {
+              "quantity": 141,
+              "green": 96,
+              "red": 45,
+              "actual_rate": 68.09,
+              "mean_score": 54.46
+            },
+            "60-69": {
+              "quantity": 162,
+              "green": 122,
+              "red": 40,
+              "actual_rate": 75.31,
+              "mean_score": 65.24
+            },
+            "70-79": {
+              "quantity": 181,
+              "green": 125,
+              "red": 56,
+              "actual_rate": 69.06,
+              "mean_score": 74.57
+            },
+            "80-89": {
+              "quantity": 157,
+              "green": 129,
+              "red": 28,
+              "actual_rate": 82.17,
+              "mean_score": 85.06
+            },
+            "90-100": {
+              "quantity": 72,
+              "green": 59,
+              "red": 13,
+              "actual_rate": 81.94,
+              "mean_score": 92.17
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 126,
+              "red": 63,
+              "actual_rate": 66.67,
+              "mean_score": 35.78
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 902,
+          "green": 657,
+          "red": 245,
+          "hit_rate": 72.838,
+          "brier": 0.201279,
+          "log_loss": 0.591772,
+          "calibration_error": 0.077083,
+          "roc_auc": 0.574957,
+          "pr_auc": 0.781169,
+          "buckets": {
+            "50-59": {
+              "quantity": 197,
+              "green": 140,
+              "red": 57,
+              "actual_rate": 71.07,
+              "mean_score": 56.59
+            },
+            "60-69": {
+              "quantity": 410,
+              "green": 287,
+              "red": 123,
+              "actual_rate": 70.0,
+              "mean_score": 65.6
+            },
+            "70-79": {
+              "quantity": 265,
+              "green": 216,
+              "red": 49,
+              "actual_rate": 81.51,
+              "mean_score": 72.87
+            },
+            "<50": {
+              "quantity": 30,
+              "green": 14,
+              "red": 16,
+              "actual_rate": 46.67,
+              "mean_score": 46.96
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "goals_first_half": {
+        "quantity": 430,
+        "legacy": {
+          "quantity": 430,
+          "green": 329,
+          "red": 101,
+          "hit_rate": 76.512,
+          "brier": 0.238199,
+          "log_loss": 0.672043,
+          "calibration_error": 0.227512,
+          "roc_auc": 0.579599,
+          "pr_auc": 0.826368,
+          "buckets": {
+            "50-59": {
+              "quantity": 127,
+              "green": 93,
+              "red": 34,
+              "actual_rate": 73.23,
+              "mean_score": 56.27
+            },
+            "60-69": {
+              "quantity": 130,
+              "green": 106,
+              "red": 24,
+              "actual_rate": 81.54,
+              "mean_score": 64.51
+            },
+            "70-79": {
+              "quantity": 30,
+              "green": 27,
+              "red": 3,
+              "actual_rate": 90.0,
+              "mean_score": 73.95
+            },
+            "80-89": {
+              "quantity": 3,
+              "green": 3,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 81.7
+            },
+            "<50": {
+              "quantity": 140,
+              "green": 100,
+              "red": 40,
+              "actual_rate": 71.43,
+              "mean_score": 36.58
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 429,
+          "green": 328,
+          "red": 101,
+          "hit_rate": 76.457,
+          "brier": 0.220218,
+          "log_loss": 0.637426,
+          "calibration_error": 0.148483,
+          "roc_auc": 0.515108,
+          "pr_auc": 0.786181,
+          "buckets": {
+            "50-59": {
+              "quantity": 61,
+              "green": 44,
+              "red": 17,
+              "actual_rate": 72.13,
+              "mean_score": 53.87
+            },
+            "60-69": {
+              "quantity": 87,
+              "green": 64,
+              "red": 23,
+              "actual_rate": 73.56,
+              "mean_score": 65.36
+            },
+            "70-79": {
+              "quantity": 99,
+              "green": 78,
+              "red": 21,
+              "actual_rate": 78.79,
+              "mean_score": 75.17
+            },
+            "80-89": {
+              "quantity": 77,
+              "green": 57,
+              "red": 20,
+              "actual_rate": 74.03,
+              "mean_score": 84.79
+            },
+            "90-100": {
+              "quantity": 32,
+              "green": 27,
+              "red": 5,
+              "actual_rate": 84.38,
+              "mean_score": 92.06
+            },
+            "<50": {
+              "quantity": 73,
+              "green": 58,
+              "red": 15,
+              "actual_rate": 79.45,
+              "mean_score": 36.85
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 429,
+          "green": 328,
+          "red": 101,
+          "hit_rate": 76.457,
+          "brier": 0.184752,
+          "log_loss": 0.556247,
+          "calibration_error": 0.047648,
+          "roc_auc": 0.516874,
+          "pr_auc": 0.880174,
+          "buckets": {
+            "60-69": {
+              "quantity": 82,
+              "green": 66,
+              "red": 16,
+              "actual_rate": 80.49,
+              "mean_score": 61.54
+            },
+            "70-79": {
+              "quantity": 328,
+              "green": 246,
+              "red": 82,
+              "actual_rate": 75.0,
+              "mean_score": 75.91
+            },
+            "80-89": {
+              "quantity": 18,
+              "green": 16,
+              "red": 2,
+              "actual_rate": 88.89,
+              "mean_score": 80.84
+            },
+            "<50": {
+              "quantity": 1,
+              "green": 0,
+              "red": 1,
+              "actual_rate": 0.0,
+              "mean_score": 46.67
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "offsides": {
+        "quantity": 816,
+        "legacy": {
+          "quantity": 816,
+          "green": 589,
+          "red": 227,
+          "hit_rate": 72.181,
+          "brier": 0.266047,
+          "log_loss": 0.736432,
+          "calibration_error": 0.238673,
+          "roc_auc": 0.589441,
+          "pr_auc": 0.781418,
+          "buckets": {
+            "50-59": {
+              "quantity": 191,
+              "green": 133,
+              "red": 58,
+              "actual_rate": 69.63,
+              "mean_score": 54.48
+            },
+            "60-69": {
+              "quantity": 167,
+              "green": 135,
+              "red": 32,
+              "actual_rate": 80.84,
+              "mean_score": 64.7
+            },
+            "70-79": {
+              "quantity": 71,
+              "green": 58,
+              "red": 13,
+              "actual_rate": 81.69,
+              "mean_score": 72.62
+            },
+            "80-89": {
+              "quantity": 1,
+              "green": 1,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 80.2
+            },
+            "<50": {
+              "quantity": 386,
+              "green": 262,
+              "red": 124,
+              "actual_rate": 67.88,
+              "mean_score": 33.62
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 801,
+          "green": 578,
+          "red": 223,
+          "hit_rate": 72.16,
+          "brier": 0.221497,
+          "log_loss": 0.649266,
+          "calibration_error": 0.120833,
+          "roc_auc": 0.603647,
+          "pr_auc": 0.785477,
+          "buckets": {
+            "50-59": {
+              "quantity": 82,
+              "green": 52,
+              "red": 30,
+              "actual_rate": 63.41,
+              "mean_score": 53.73
+            },
+            "60-69": {
+              "quantity": 94,
+              "green": 67,
+              "red": 27,
+              "actual_rate": 71.28,
+              "mean_score": 64.94
+            },
+            "70-79": {
+              "quantity": 128,
+              "green": 100,
+              "red": 28,
+              "actual_rate": 78.12,
+              "mean_score": 74.92
+            },
+            "80-89": {
+              "quantity": 216,
+              "green": 165,
+              "red": 51,
+              "actual_rate": 76.39,
+              "mean_score": 86.08
+            },
+            "90-100": {
+              "quantity": 113,
+              "green": 92,
+              "red": 21,
+              "actual_rate": 81.42,
+              "mean_score": 91.86
+            },
+            "<50": {
+              "quantity": 168,
+              "green": 102,
+              "red": 66,
+              "actual_rate": 60.71,
+              "mean_score": 33.3
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 801,
+          "green": 578,
+          "red": 223,
+          "hit_rate": 72.16,
+          "brier": 0.199717,
+          "log_loss": 0.588127,
+          "calibration_error": 0.066666,
+          "roc_auc": 0.614866,
+          "pr_auc": 0.79059,
+          "buckets": {
+            "50-59": {
+              "quantity": 166,
+              "green": 100,
+              "red": 66,
+              "actual_rate": 60.24,
+              "mean_score": 56.39
+            },
+            "60-69": {
+              "quantity": 349,
+              "green": 246,
+              "red": 103,
+              "actual_rate": 70.49,
+              "mean_score": 65.68
+            },
+            "70-79": {
+              "quantity": 261,
+              "green": 215,
+              "red": 46,
+              "actual_rate": 82.38,
+              "mean_score": 72.68
+            },
+            "<50": {
+              "quantity": 25,
+              "green": 17,
+              "red": 8,
+              "actual_rate": 68.0,
+              "mean_score": 48.36
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "shots": {
+        "quantity": 816,
+        "legacy": {
+          "quantity": 816,
+          "green": 283,
+          "red": 533,
+          "hit_rate": 34.681,
+          "brier": 0.231257,
+          "log_loss": 0.657523,
+          "calibration_error": 0.018945,
+          "roc_auc": 0.556342,
+          "pr_auc": 0.402711,
+          "buckets": {
+            "50-59": {
+              "quantity": 113,
+              "green": 54,
+              "red": 59,
+              "actual_rate": 47.79,
+              "mean_score": 54.04
+            },
+            "60-69": {
+              "quantity": 31,
+              "green": 12,
+              "red": 19,
+              "actual_rate": 38.71,
+              "mean_score": 63.96
+            },
+            "70-79": {
+              "quantity": 2,
+              "green": 1,
+              "red": 1,
+              "actual_rate": 50.0,
+              "mean_score": 71.3
+            },
+            "<50": {
+              "quantity": 670,
+              "green": 216,
+              "red": 454,
+              "actual_rate": 32.24,
+              "mean_score": 32.22
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 801,
+          "green": 279,
+          "red": 522,
+          "hit_rate": 34.831,
+          "brier": 0.253196,
+          "log_loss": 0.725875,
+          "calibration_error": 0.125113,
+          "roc_auc": 0.586921,
+          "pr_auc": 0.414155,
+          "buckets": {
+            "50-59": {
+              "quantity": 75,
+              "green": 28,
+              "red": 47,
+              "actual_rate": 37.33,
+              "mean_score": 53.09
+            },
+            "60-69": {
+              "quantity": 48,
+              "green": 19,
+              "red": 29,
+              "actual_rate": 39.58,
+              "mean_score": 64.33
+            },
+            "70-79": {
+              "quantity": 30,
+              "green": 14,
+              "red": 16,
+              "actual_rate": 46.67,
+              "mean_score": 74.16
+            },
+            "80-89": {
+              "quantity": 69,
+              "green": 34,
+              "red": 35,
+              "actual_rate": 49.28,
+              "mean_score": 85.07
+            },
+            "90-100": {
+              "quantity": 9,
+              "green": 3,
+              "red": 6,
+              "actual_rate": 33.33,
+              "mean_score": 92.15
+            },
+            "<50": {
+              "quantity": 570,
+              "green": 181,
+              "red": 389,
+              "actual_rate": 31.75,
+              "mean_score": 25.04
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 801,
+          "green": 279,
+          "red": 522,
+          "hit_rate": 34.831,
+          "brier": 0.225165,
+          "log_loss": 0.642208,
+          "calibration_error": 0.035025,
+          "roc_auc": 0.592593,
+          "pr_auc": 0.432826,
+          "buckets": {
+            "<50": {
+              "quantity": 801,
+              "green": 279,
+              "red": 522,
+              "actual_rate": 34.83,
+              "mean_score": 31.33
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "shots_on_target": {
+        "quantity": 1035,
+        "legacy": {
+          "quantity": 1035,
+          "green": 645,
+          "red": 390,
+          "hit_rate": 62.319,
+          "brier": 0.267937,
+          "log_loss": 0.734839,
+          "calibration_error": 0.14698,
+          "roc_auc": 0.530692,
+          "pr_auc": 0.650281,
+          "buckets": {
+            "50-59": {
+              "quantity": 292,
+              "green": 176,
+              "red": 116,
+              "actual_rate": 60.27,
+              "mean_score": 54.73
+            },
+            "60-69": {
+              "quantity": 175,
+              "green": 120,
+              "red": 55,
+              "actual_rate": 68.57,
+              "mean_score": 64.53
+            },
+            "70-79": {
+              "quantity": 53,
+              "green": 38,
+              "red": 15,
+              "actual_rate": 71.7,
+              "mean_score": 73.5
+            },
+            "80-89": {
+              "quantity": 2,
+              "green": 0,
+              "red": 2,
+              "actual_rate": 0.0,
+              "mean_score": 81.2
+            },
+            "<50": {
+              "quantity": 513,
+              "green": 311,
+              "red": 202,
+              "actual_rate": 60.62,
+              "mean_score": 36.01
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_raw": {
+          "quantity": 1032,
+          "green": 643,
+          "red": 389,
+          "hit_rate": 62.306,
+          "brier": 0.285049,
+          "log_loss": 0.801844,
+          "calibration_error": 0.171234,
+          "roc_auc": 0.49515,
+          "pr_auc": 0.610514,
+          "buckets": {
+            "50-59": {
+              "quantity": 196,
+              "green": 119,
+              "red": 77,
+              "actual_rate": 60.71,
+              "mean_score": 54.2
+            },
+            "60-69": {
+              "quantity": 155,
+              "green": 103,
+              "red": 52,
+              "actual_rate": 66.45,
+              "mean_score": 64.97
+            },
+            "70-79": {
+              "quantity": 143,
+              "green": 101,
+              "red": 42,
+              "actual_rate": 70.63,
+              "mean_score": 74.67
+            },
+            "80-89": {
+              "quantity": 163,
+              "green": 92,
+              "red": 71,
+              "actual_rate": 56.44,
+              "mean_score": 85.76
+            },
+            "90-100": {
+              "quantity": 67,
+              "green": 39,
+              "red": 28,
+              "actual_rate": 58.21,
+              "mean_score": 91.74
+            },
+            "<50": {
+              "quantity": 308,
+              "green": 189,
+              "red": 119,
+              "actual_rate": 61.36,
+              "mean_score": 33.56
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "v2_calibrated": {
+          "quantity": 1032,
+          "green": 643,
+          "red": 389,
+          "hit_rate": 62.306,
+          "brier": 0.240058,
+          "log_loss": 0.674141,
+          "calibration_error": 0.050987,
+          "roc_auc": 0.504262,
+          "pr_auc": 0.617699,
+          "buckets": {
+            "50-59": {
+              "quantity": 285,
+              "green": 174,
+              "red": 111,
+              "actual_rate": 61.05,
+              "mean_score": 56.32
+            },
+            "60-69": {
+              "quantity": 455,
+              "green": 288,
+              "red": 167,
+              "actual_rate": 63.3,
+              "mean_score": 64.77
+            },
+            "70-79": {
+              "quantity": 227,
+              "green": 141,
+              "red": 86,
+              "actual_rate": 62.11,
+              "mean_score": 72.45
+            },
+            "<50": {
+              "quantity": 65,
+              "green": 40,
+              "red": 25,
+              "actual_rate": 61.54,
+              "mean_score": 47.73
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    }
+  },
+  "component_configuration_by_family": {
+    "cards": {
+      "chosen_variant": "G_v2_complete",
+      "enabled_components": [
+        "recency",
+        "strength",
+        "matchup",
+        "uncertainty"
+      ],
+      "zero_weight_components": [],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.333574,
+          "log_loss": 3.116175,
+          "calibration_error": 0.249494,
+          "roc_auc": 0.584603,
+          "pr_auc": 0.72284,
+          "buckets": {
+            "50-59": {
+              "quantity": 248,
+              "green": 119,
+              "red": 129,
+              "actual_rate": 47.98,
+              "mean_score": 50.68
+            },
+            "60-69": {
+              "quantity": 156,
+              "green": 87,
+              "red": 69,
+              "actual_rate": 55.77,
+              "mean_score": 64.54
+            },
+            "70-79": {
+              "quantity": 89,
+              "green": 50,
+              "red": 39,
+              "actual_rate": 56.18,
+              "mean_score": 74.33
+            },
+            "80-89": {
+              "quantity": 66,
+              "green": 35,
+              "red": 31,
+              "actual_rate": 53.03,
+              "mean_score": 82.24
+            },
+            "90-100": {
+              "quantity": 477,
+              "green": 286,
+              "red": 191,
+              "actual_rate": 59.96,
+              "mean_score": 99.98
+            },
+            "<50": {
+              "quantity": 592,
+              "green": 245,
+              "red": 347,
+              "actual_rate": 41.39,
+              "mean_score": 14.45
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.325159,
+          "log_loss": 2.501093,
+          "calibration_error": 0.231634,
+          "roc_auc": 0.586175,
+          "pr_auc": 0.671226,
+          "buckets": {
+            "50-59": {
+              "quantity": 184,
+              "green": 94,
+              "red": 90,
+              "actual_rate": 51.09,
+              "mean_score": 52.97
+            },
+            "60-69": {
+              "quantity": 138,
+              "green": 79,
+              "red": 59,
+              "actual_rate": 57.25,
+              "mean_score": 65.13
+            },
+            "70-79": {
+              "quantity": 101,
+              "green": 60,
+              "red": 41,
+              "actual_rate": 59.41,
+              "mean_score": 74.52
+            },
+            "80-89": {
+              "quantity": 51,
+              "green": 24,
+              "red": 27,
+              "actual_rate": 47.06,
+              "mean_score": 82.82
+            },
+            "90-100": {
+              "quantity": 477,
+              "green": 286,
+              "red": 191,
+              "actual_rate": 59.96,
+              "mean_score": 98.28
+            },
+            "<50": {
+              "quantity": 677,
+              "green": 279,
+              "red": 398,
+              "actual_rate": 41.21,
+              "mean_score": 19.58
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.333574,
+          "log_loss": 3.116175,
+          "calibration_error": 0.249494,
+          "roc_auc": 0.584603,
+          "pr_auc": 0.72284,
+          "buckets": {
+            "50-59": {
+              "quantity": 248,
+              "green": 119,
+              "red": 129,
+              "actual_rate": 47.98,
+              "mean_score": 50.68
+            },
+            "60-69": {
+              "quantity": 156,
+              "green": 87,
+              "red": 69,
+              "actual_rate": 55.77,
+              "mean_score": 64.54
+            },
+            "70-79": {
+              "quantity": 89,
+              "green": 50,
+              "red": 39,
+              "actual_rate": 56.18,
+              "mean_score": 74.33
+            },
+            "80-89": {
+              "quantity": 66,
+              "green": 35,
+              "red": 31,
+              "actual_rate": 53.03,
+              "mean_score": 82.24
+            },
+            "90-100": {
+              "quantity": 477,
+              "green": 286,
+              "red": 191,
+              "actual_rate": 59.96,
+              "mean_score": 99.98
+            },
+            "<50": {
+              "quantity": 592,
+              "green": 245,
+              "red": 347,
+              "actual_rate": 41.39,
+              "mean_score": 14.45
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.331721,
+          "log_loss": 3.008274,
+          "calibration_error": 0.246535,
+          "roc_auc": 0.582378,
+          "pr_auc": 0.699732,
+          "buckets": {
+            "50-59": {
+              "quantity": 249,
+              "green": 118,
+              "red": 131,
+              "actual_rate": 47.39,
+              "mean_score": 50.95
+            },
+            "60-69": {
+              "quantity": 151,
+              "green": 82,
+              "red": 69,
+              "actual_rate": 54.3,
+              "mean_score": 64.49
+            },
+            "70-79": {
+              "quantity": 98,
+              "green": 58,
+              "red": 40,
+              "actual_rate": 59.18,
+              "mean_score": 74.33
+            },
+            "80-89": {
+              "quantity": 59,
+              "green": 31,
+              "red": 28,
+              "actual_rate": 52.54,
+              "mean_score": 82.55
+            },
+            "90-100": {
+              "quantity": 476,
+              "green": 286,
+              "red": 190,
+              "actual_rate": 60.08,
+              "mean_score": 99.38
+            },
+            "<50": {
+              "quantity": 595,
+              "green": 247,
+              "red": 348,
+              "actual_rate": 41.51,
+              "mean_score": 15.04
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.296228,
+          "log_loss": 0.863185,
+          "calibration_error": 0.190141,
+          "roc_auc": 0.590854,
+          "pr_auc": 0.601896,
+          "buckets": {
+            "50-59": {
+              "quantity": 297,
+              "green": 145,
+              "red": 152,
+              "actual_rate": 48.82,
+              "mean_score": 51.82
+            },
+            "60-69": {
+              "quantity": 157,
+              "green": 88,
+              "red": 69,
+              "actual_rate": 56.05,
+              "mean_score": 65.21
+            },
+            "70-79": {
+              "quantity": 98,
+              "green": 54,
+              "red": 44,
+              "actual_rate": 55.1,
+              "mean_score": 74.08
+            },
+            "80-89": {
+              "quantity": 165,
+              "green": 90,
+              "red": 75,
+              "actual_rate": 54.55,
+              "mean_score": 88.35
+            },
+            "90-100": {
+              "quantity": 319,
+              "green": 200,
+              "red": 119,
+              "actual_rate": 62.7,
+              "mean_score": 92.4
+            },
+            "<50": {
+              "quantity": 592,
+              "green": 245,
+              "red": 347,
+              "actual_rate": 41.39,
+              "mean_score": 21.6
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.324048,
+          "log_loss": 2.471047,
+          "calibration_error": 0.229827,
+          "roc_auc": 0.585471,
+          "pr_auc": 0.664575,
+          "buckets": {
+            "50-59": {
+              "quantity": 186,
+              "green": 95,
+              "red": 91,
+              "actual_rate": 51.08,
+              "mean_score": 53.1
+            },
+            "60-69": {
+              "quantity": 141,
+              "green": 79,
+              "red": 62,
+              "actual_rate": 56.03,
+              "mean_score": 65.16
+            },
+            "70-79": {
+              "quantity": 99,
+              "green": 60,
+              "red": 39,
+              "actual_rate": 60.61,
+              "mean_score": 74.55
+            },
+            "80-89": {
+              "quantity": 59,
+              "green": 30,
+              "red": 29,
+              "actual_rate": 50.85,
+              "mean_score": 83.68
+            },
+            "90-100": {
+              "quantity": 467,
+              "green": 279,
+              "red": 188,
+              "actual_rate": 59.74,
+              "mean_score": 98.07
+            },
+            "<50": {
+              "quantity": 676,
+              "green": 279,
+              "red": 397,
+              "actual_rate": 41.27,
+              "mean_score": 19.77
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 1977,
+          "green": 1033,
+          "red": 944,
+          "hit_rate": 52.251,
+          "brier": 0.287618,
+          "log_loss": 0.826577,
+          "calibration_error": 0.170129,
+          "roc_auc": 0.587605,
+          "pr_auc": 0.598865,
+          "buckets": {
+            "50-59": {
+              "quantity": 262,
+              "green": 136,
+              "red": 126,
+              "actual_rate": 51.91,
+              "mean_score": 53.53
+            },
+            "60-69": {
+              "quantity": 201,
+              "green": 115,
+              "red": 86,
+              "actual_rate": 57.21,
+              "mean_score": 64.98
+            },
+            "70-79": {
+              "quantity": 135,
+              "green": 79,
+              "red": 56,
+              "actual_rate": 58.52,
+              "mean_score": 74.46
+            },
+            "80-89": {
+              "quantity": 342,
+              "green": 211,
+              "red": 131,
+              "actual_rate": 61.7,
+              "mean_score": 86.69
+            },
+            "90-100": {
+              "quantity": 233,
+              "green": 143,
+              "red": 90,
+              "actual_rate": 61.37,
+              "mean_score": 92.52
+            },
+            "<50": {
+              "quantity": 804,
+              "green": 349,
+              "red": 455,
+              "actual_rate": 43.41,
+              "mean_score": 26.38
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.289662,
+          "log_loss": 0.836585,
+          "calibration_error": 0.172937,
+          "roc_auc": 0.59274,
+          "pr_auc": 0.589357,
+          "buckets": {
+            "50-59": {
+              "quantity": 213,
+              "green": 108,
+              "red": 105,
+              "actual_rate": 50.7,
+              "mean_score": 53.32
+            },
+            "60-69": {
+              "quantity": 163,
+              "green": 96,
+              "red": 67,
+              "actual_rate": 58.9,
+              "mean_score": 64.9
+            },
+            "70-79": {
+              "quantity": 106,
+              "green": 58,
+              "red": 48,
+              "actual_rate": 54.72,
+              "mean_score": 74.67
+            },
+            "80-89": {
+              "quantity": 237,
+              "green": 138,
+              "red": 99,
+              "actual_rate": 58.23,
+              "mean_score": 86.83
+            },
+            "90-100": {
+              "quantity": 233,
+              "green": 143,
+              "red": 90,
+              "actual_rate": 61.37,
+              "mean_score": 92.52
+            },
+            "<50": {
+              "quantity": 676,
+              "green": 279,
+              "red": 397,
+              "actual_rate": 41.27,
+              "mean_score": 25.79
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.290411,
+          "log_loss": 0.83887,
+          "calibration_error": 0.173103,
+          "roc_auc": 0.59248,
+          "pr_auc": 0.58943,
+          "buckets": {
+            "50-59": {
+              "quantity": 213,
+              "green": 109,
+              "red": 104,
+              "actual_rate": 51.17,
+              "mean_score": 53.31
+            },
+            "60-69": {
+              "quantity": 161,
+              "green": 94,
+              "red": 67,
+              "actual_rate": 58.39,
+              "mean_score": 64.99
+            },
+            "70-79": {
+              "quantity": 99,
+              "green": 54,
+              "red": 45,
+              "actual_rate": 54.55,
+              "mean_score": 74.34
+            },
+            "80-89": {
+              "quantity": 245,
+              "green": 143,
+              "red": 102,
+              "actual_rate": 58.37,
+              "mean_score": 86.86
+            },
+            "90-100": {
+              "quantity": 233,
+              "green": 143,
+              "red": 90,
+              "actual_rate": 61.37,
+              "mean_score": 92.52
+            },
+            "<50": {
+              "quantity": 677,
+              "green": 279,
+              "red": 398,
+              "actual_rate": 41.21,
+              "mean_score": 25.75
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 1628,
+          "green": 822,
+          "red": 806,
+          "hit_rate": 50.491,
+          "brier": 0.292106,
+          "log_loss": 0.871487,
+          "calibration_error": 0.176815,
+          "roc_auc": 0.592608,
+          "pr_auc": 0.597009,
+          "buckets": {
+            "50-59": {
+              "quantity": 210,
+              "green": 109,
+              "red": 101,
+              "actual_rate": 51.9,
+              "mean_score": 53.34
+            },
+            "60-69": {
+              "quantity": 153,
+              "green": 89,
+              "red": 64,
+              "actual_rate": 58.17,
+              "mean_score": 65.18
+            },
+            "70-79": {
+              "quantity": 100,
+              "green": 54,
+              "red": 46,
+              "actual_rate": 54.0,
+              "mean_score": 74.32
+            },
+            "80-89": {
+              "quantity": 232,
+              "green": 134,
+              "red": 98,
+              "actual_rate": 57.76,
+              "mean_score": 86.79
+            },
+            "90-100": {
+              "quantity": 250,
+              "green": 154,
+              "red": 96,
+              "actual_rate": 61.6,
+              "mean_score": 93.23
+            },
+            "<50": {
+              "quantity": 683,
+              "green": 282,
+              "red": 401,
+              "actual_rate": 41.29,
+              "mean_score": 25.57
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "corners": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.273582,
+          "log_loss": 2.512546,
+          "calibration_error": 0.218844,
+          "roc_auc": 0.577535,
+          "pr_auc": 0.869435,
+          "buckets": {
+            "50-59": {
+              "quantity": 215,
+              "green": 152,
+              "red": 63,
+              "actual_rate": 70.7,
+              "mean_score": 50.67
+            },
+            "60-69": {
+              "quantity": 180,
+              "green": 118,
+              "red": 62,
+              "actual_rate": 65.56,
+              "mean_score": 64.84
+            },
+            "70-79": {
+              "quantity": 118,
+              "green": 76,
+              "red": 42,
+              "actual_rate": 64.41,
+              "mean_score": 74.15
+            },
+            "80-89": {
+              "quantity": 137,
+              "green": 98,
+              "red": 39,
+              "actual_rate": 71.53,
+              "mean_score": 82.66
+            },
+            "90-100": {
+              "quantity": 706,
+              "green": 551,
+              "red": 155,
+              "actual_rate": 78.05,
+              "mean_score": 99.93
+            },
+            "<50": {
+              "quantity": 272,
+              "green": 168,
+              "red": 104,
+              "actual_rate": 61.76,
+              "mean_score": 13.71
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.268678,
+          "log_loss": 2.068066,
+          "calibration_error": 0.218121,
+          "roc_auc": 0.578865,
+          "pr_auc": 0.84535,
+          "buckets": {
+            "50-59": {
+              "quantity": 178,
+              "green": 129,
+              "red": 49,
+              "actual_rate": 72.47,
+              "mean_score": 52.93
+            },
+            "60-69": {
+              "quantity": 165,
+              "green": 103,
+              "red": 62,
+              "actual_rate": 62.42,
+              "mean_score": 66.38
+            },
+            "70-79": {
+              "quantity": 137,
+              "green": 92,
+              "red": 45,
+              "actual_rate": 67.15,
+              "mean_score": 75.02
+            },
+            "80-89": {
+              "quantity": 111,
+              "green": 79,
+              "red": 32,
+              "actual_rate": 71.17,
+              "mean_score": 83.72
+            },
+            "90-100": {
+              "quantity": 706,
+              "green": 551,
+              "red": 155,
+              "actual_rate": 78.05,
+              "mean_score": 99.13
+            },
+            "<50": {
+              "quantity": 331,
+              "green": 209,
+              "red": 122,
+              "actual_rate": 63.14,
+              "mean_score": 20.78
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.273323,
+          "log_loss": 2.255062,
+          "calibration_error": 0.21851,
+          "roc_auc": 0.579013,
+          "pr_auc": 0.843792,
+          "buckets": {
+            "50-59": {
+              "quantity": 194,
+              "green": 135,
+              "red": 59,
+              "actual_rate": 69.59,
+              "mean_score": 50.99
+            },
+            "60-69": {
+              "quantity": 176,
+              "green": 115,
+              "red": 61,
+              "actual_rate": 65.34,
+              "mean_score": 64.95
+            },
+            "70-79": {
+              "quantity": 125,
+              "green": 82,
+              "red": 43,
+              "actual_rate": 65.6,
+              "mean_score": 74.46
+            },
+            "80-89": {
+              "quantity": 130,
+              "green": 92,
+              "red": 38,
+              "actual_rate": 70.77,
+              "mean_score": 82.82
+            },
+            "90-100": {
+              "quantity": 706,
+              "green": 551,
+              "red": 155,
+              "actual_rate": 78.05,
+              "mean_score": 99.86
+            },
+            "<50": {
+              "quantity": 297,
+              "green": 188,
+              "red": 109,
+              "actual_rate": 63.3,
+              "mean_score": 16.77
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.272186,
+          "log_loss": 2.374351,
+          "calibration_error": 0.219018,
+          "roc_auc": 0.578859,
+          "pr_auc": 0.853238,
+          "buckets": {
+            "50-59": {
+              "quantity": 212,
+              "green": 149,
+              "red": 63,
+              "actual_rate": 70.28,
+              "mean_score": 50.98
+            },
+            "60-69": {
+              "quantity": 164,
+              "green": 109,
+              "red": 55,
+              "actual_rate": 66.46,
+              "mean_score": 64.75
+            },
+            "70-79": {
+              "quantity": 129,
+              "green": 81,
+              "red": 48,
+              "actual_rate": 62.79,
+              "mean_score": 74.35
+            },
+            "80-89": {
+              "quantity": 146,
+              "green": 106,
+              "red": 40,
+              "actual_rate": 72.6,
+              "mean_score": 82.98
+            },
+            "90-100": {
+              "quantity": 704,
+              "green": 549,
+              "red": 155,
+              "actual_rate": 77.98,
+              "mean_score": 99.64
+            },
+            "<50": {
+              "quantity": 273,
+              "green": 169,
+              "red": 104,
+              "actual_rate": 61.9,
+              "mean_score": 14.17
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.247021,
+          "log_loss": 0.740502,
+          "calibration_error": 0.165694,
+          "roc_auc": 0.582327,
+          "pr_auc": 0.768964,
+          "buckets": {
+            "50-59": {
+              "quantity": 263,
+              "green": 185,
+              "red": 78,
+              "actual_rate": 70.34,
+              "mean_score": 51.89
+            },
+            "60-69": {
+              "quantity": 196,
+              "green": 127,
+              "red": 69,
+              "actual_rate": 64.8,
+              "mean_score": 65.14
+            },
+            "70-79": {
+              "quantity": 174,
+              "green": 117,
+              "red": 57,
+              "actual_rate": 67.24,
+              "mean_score": 74.68
+            },
+            "80-89": {
+              "quantity": 236,
+              "green": 180,
+              "red": 56,
+              "actual_rate": 76.27,
+              "mean_score": 88.19
+            },
+            "90-100": {
+              "quantity": 487,
+              "green": 386,
+              "red": 101,
+              "actual_rate": 79.26,
+              "mean_score": 93.3
+            },
+            "<50": {
+              "quantity": 272,
+              "green": 168,
+              "red": 104,
+              "actual_rate": 61.76,
+              "mean_score": 20.91
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.267528,
+          "log_loss": 1.903972,
+          "calibration_error": 0.216073,
+          "roc_auc": 0.578508,
+          "pr_auc": 0.823466,
+          "buckets": {
+            "50-59": {
+              "quantity": 171,
+              "green": 123,
+              "red": 48,
+              "actual_rate": 71.93,
+              "mean_score": 53.24
+            },
+            "60-69": {
+              "quantity": 150,
+              "green": 94,
+              "red": 56,
+              "actual_rate": 62.67,
+              "mean_score": 66.14
+            },
+            "70-79": {
+              "quantity": 146,
+              "green": 95,
+              "red": 51,
+              "actual_rate": 65.07,
+              "mean_score": 75.05
+            },
+            "80-89": {
+              "quantity": 125,
+              "green": 93,
+              "red": 32,
+              "actual_rate": 74.4,
+              "mean_score": 83.94
+            },
+            "90-100": {
+              "quantity": 701,
+              "green": 546,
+              "red": 155,
+              "actual_rate": 77.89,
+              "mean_score": 98.94
+            },
+            "<50": {
+              "quantity": 335,
+              "green": 212,
+              "red": 123,
+              "actual_rate": 63.28,
+              "mean_score": 21.33
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 1977,
+          "green": 1414,
+          "red": 563,
+          "hit_rate": 71.523,
+          "brier": 0.244863,
+          "log_loss": 0.724073,
+          "calibration_error": 0.159965,
+          "roc_auc": 0.574977,
+          "pr_auc": 0.765134,
+          "buckets": {
+            "50-59": {
+              "quantity": 243,
+              "green": 168,
+              "red": 75,
+              "actual_rate": 69.14,
+              "mean_score": 53.3
+            },
+            "60-69": {
+              "quantity": 231,
+              "green": 152,
+              "red": 79,
+              "actual_rate": 65.8,
+              "mean_score": 65.18
+            },
+            "70-79": {
+              "quantity": 225,
+              "green": 153,
+              "red": 72,
+              "actual_rate": 68.0,
+              "mean_score": 74.79
+            },
+            "80-89": {
+              "quantity": 449,
+              "green": 341,
+              "red": 108,
+              "actual_rate": 75.95,
+              "mean_score": 87.01
+            },
+            "90-100": {
+              "quantity": 436,
+              "green": 345,
+              "red": 91,
+              "actual_rate": 79.13,
+              "mean_score": 93.23
+            },
+            "<50": {
+              "quantity": 393,
+              "green": 255,
+              "red": 138,
+              "actual_rate": 64.89,
+              "mean_score": 26.75
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.243145,
+          "log_loss": 0.723213,
+          "calibration_error": 0.159524,
+          "roc_auc": 0.58273,
+          "pr_auc": 0.766297,
+          "buckets": {
+            "50-59": {
+              "quantity": 201,
+              "green": 141,
+              "red": 60,
+              "actual_rate": 70.15,
+              "mean_score": 53.23
+            },
+            "60-69": {
+              "quantity": 195,
+              "green": 127,
+              "red": 68,
+              "actual_rate": 65.13,
+              "mean_score": 65.25
+            },
+            "70-79": {
+              "quantity": 180,
+              "green": 121,
+              "red": 59,
+              "actual_rate": 67.22,
+              "mean_score": 74.84
+            },
+            "80-89": {
+              "quantity": 290,
+              "green": 225,
+              "red": 65,
+              "actual_rate": 77.59,
+              "mean_score": 87.46
+            },
+            "90-100": {
+              "quantity": 430,
+              "green": 339,
+              "red": 91,
+              "actual_rate": 78.84,
+              "mean_score": 93.25
+            },
+            "<50": {
+              "quantity": 332,
+              "green": 210,
+              "red": 122,
+              "actual_rate": 63.25,
+              "mean_score": 26.76
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.243865,
+          "log_loss": 0.726769,
+          "calibration_error": 0.163093,
+          "roc_auc": 0.582493,
+          "pr_auc": 0.762607,
+          "buckets": {
+            "50-59": {
+              "quantity": 199,
+              "green": 138,
+              "red": 61,
+              "actual_rate": 69.35,
+              "mean_score": 53.31
+            },
+            "60-69": {
+              "quantity": 189,
+              "green": 125,
+              "red": 64,
+              "actual_rate": 66.14,
+              "mean_score": 65.18
+            },
+            "70-79": {
+              "quantity": 181,
+              "green": 120,
+              "red": 61,
+              "actual_rate": 66.3,
+              "mean_score": 74.71
+            },
+            "80-89": {
+              "quantity": 284,
+              "green": 219,
+              "red": 65,
+              "actual_rate": 77.11,
+              "mean_score": 87.6
+            },
+            "90-100": {
+              "quantity": 438,
+              "green": 346,
+              "red": 92,
+              "actual_rate": 79.0,
+              "mean_score": 93.3
+            },
+            "<50": {
+              "quantity": 337,
+              "green": 215,
+              "red": 122,
+              "actual_rate": 63.8,
+              "mean_score": 26.97
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 1628,
+          "green": 1163,
+          "red": 465,
+          "hit_rate": 71.437,
+          "brier": 0.245389,
+          "log_loss": 0.75688,
+          "calibration_error": 0.168531,
+          "roc_auc": 0.581376,
+          "pr_auc": 0.763742,
+          "buckets": {
+            "50-59": {
+              "quantity": 213,
+              "green": 148,
+              "red": 65,
+              "actual_rate": 69.48,
+              "mean_score": 53.51
+            },
+            "60-69": {
+              "quantity": 184,
+              "green": 125,
+              "red": 59,
+              "actual_rate": 67.93,
+              "mean_score": 65.12
+            },
+            "70-79": {
+              "quantity": 170,
+              "green": 110,
+              "red": 60,
+              "actual_rate": 64.71,
+              "mean_score": 74.56
+            },
+            "80-89": {
+              "quantity": 286,
+              "green": 220,
+              "red": 66,
+              "actual_rate": 76.92,
+              "mean_score": 87.6
+            },
+            "90-100": {
+              "quantity": 436,
+              "green": 345,
+              "red": 91,
+              "actual_rate": 79.13,
+              "mean_score": 93.63
+            },
+            "<50": {
+              "quantity": 339,
+              "green": 215,
+              "red": 124,
+              "actual_rate": 63.42,
+              "mean_score": 26.66
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "fouls": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.260632,
+          "log_loss": 2.673153,
+          "calibration_error": 0.247973,
+          "roc_auc": 0.539427,
+          "pr_auc": 0.918212,
+          "buckets": {
+            "50-59": {
+              "quantity": 86,
+              "green": 61,
+              "red": 25,
+              "actual_rate": 70.93,
+              "mean_score": 50.24
+            },
+            "60-69": {
+              "quantity": 74,
+              "green": 63,
+              "red": 11,
+              "actual_rate": 85.14,
+              "mean_score": 64.93
+            },
+            "70-79": {
+              "quantity": 41,
+              "green": 29,
+              "red": 12,
+              "actual_rate": 70.73,
+              "mean_score": 74.6
+            },
+            "80-89": {
+              "quantity": 40,
+              "green": 31,
+              "red": 9,
+              "actual_rate": 77.5,
+              "mean_score": 82.27
+            },
+            "90-100": {
+              "quantity": 387,
+              "green": 322,
+              "red": 65,
+              "actual_rate": 83.2,
+              "mean_score": 100.0
+            },
+            "<50": {
+              "quantity": 116,
+              "green": 94,
+              "red": 22,
+              "actual_rate": 81.03,
+              "mean_score": 9.26
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.254994,
+          "log_loss": 2.344816,
+          "calibration_error": 0.237295,
+          "roc_auc": 0.548247,
+          "pr_auc": 0.908581,
+          "buckets": {
+            "50-59": {
+              "quantity": 69,
+              "green": 53,
+              "red": 16,
+              "actual_rate": 76.81,
+              "mean_score": 53.46
+            },
+            "60-69": {
+              "quantity": 57,
+              "green": 48,
+              "red": 9,
+              "actual_rate": 84.21,
+              "mean_score": 65.65
+            },
+            "70-79": {
+              "quantity": 59,
+              "green": 42,
+              "red": 17,
+              "actual_rate": 71.19,
+              "mean_score": 74.53
+            },
+            "80-89": {
+              "quantity": 34,
+              "green": 28,
+              "red": 6,
+              "actual_rate": 82.35,
+              "mean_score": 83.57
+            },
+            "90-100": {
+              "quantity": 387,
+              "green": 322,
+              "red": 65,
+              "actual_rate": 83.2,
+              "mean_score": 99.53
+            },
+            "<50": {
+              "quantity": 138,
+              "green": 107,
+              "red": 31,
+              "actual_rate": 77.54,
+              "mean_score": 16.47
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.260632,
+          "log_loss": 2.673153,
+          "calibration_error": 0.247973,
+          "roc_auc": 0.539427,
+          "pr_auc": 0.918212,
+          "buckets": {
+            "50-59": {
+              "quantity": 86,
+              "green": 61,
+              "red": 25,
+              "actual_rate": 70.93,
+              "mean_score": 50.24
+            },
+            "60-69": {
+              "quantity": 74,
+              "green": 63,
+              "red": 11,
+              "actual_rate": 85.14,
+              "mean_score": 64.93
+            },
+            "70-79": {
+              "quantity": 41,
+              "green": 29,
+              "red": 12,
+              "actual_rate": 70.73,
+              "mean_score": 74.6
+            },
+            "80-89": {
+              "quantity": 40,
+              "green": 31,
+              "red": 9,
+              "actual_rate": 77.5,
+              "mean_score": 82.27
+            },
+            "90-100": {
+              "quantity": 387,
+              "green": 322,
+              "red": 65,
+              "actual_rate": 83.2,
+              "mean_score": 100.0
+            },
+            "<50": {
+              "quantity": 116,
+              "green": 94,
+              "red": 22,
+              "actual_rate": 81.03,
+              "mean_score": 9.26
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.259688,
+          "log_loss": 2.591569,
+          "calibration_error": 0.243395,
+          "roc_auc": 0.543206,
+          "pr_auc": 0.912251,
+          "buckets": {
+            "50-59": {
+              "quantity": 85,
+              "green": 60,
+              "red": 25,
+              "actual_rate": 70.59,
+              "mean_score": 50.68
+            },
+            "60-69": {
+              "quantity": 69,
+              "green": 58,
+              "red": 11,
+              "actual_rate": 84.06,
+              "mean_score": 64.87
+            },
+            "70-79": {
+              "quantity": 46,
+              "green": 34,
+              "red": 12,
+              "actual_rate": 73.91,
+              "mean_score": 74.56
+            },
+            "80-89": {
+              "quantity": 39,
+              "green": 30,
+              "red": 9,
+              "actual_rate": 76.92,
+              "mean_score": 82.36
+            },
+            "90-100": {
+              "quantity": 387,
+              "green": 322,
+              "red": 65,
+              "actual_rate": 83.2,
+              "mean_score": 99.86
+            },
+            "<50": {
+              "quantity": 118,
+              "green": 96,
+              "red": 22,
+              "actual_rate": 81.36,
+              "mean_score": 10.14
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.229684,
+          "log_loss": 0.687682,
+          "calibration_error": 0.189726,
+          "roc_auc": 0.548929,
+          "pr_auc": 0.831809,
+          "buckets": {
+            "50-59": {
+              "quantity": 104,
+              "green": 77,
+              "red": 27,
+              "actual_rate": 74.04,
+              "mean_score": 51.51
+            },
+            "60-69": {
+              "quantity": 80,
+              "green": 67,
+              "red": 13,
+              "actual_rate": 83.75,
+              "mean_score": 64.9
+            },
+            "70-79": {
+              "quantity": 57,
+              "green": 40,
+              "red": 17,
+              "actual_rate": 70.18,
+              "mean_score": 74.44
+            },
+            "80-89": {
+              "quantity": 196,
+              "green": 162,
+              "red": 34,
+              "actual_rate": 82.65,
+              "mean_score": 88.27
+            },
+            "90-100": {
+              "quantity": 191,
+              "green": 160,
+              "red": 31,
+              "actual_rate": 83.77,
+              "mean_score": 92.49
+            },
+            "<50": {
+              "quantity": 116,
+              "green": 94,
+              "red": 22,
+              "actual_rate": 81.03,
+              "mean_score": 18.48
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.254354,
+          "log_loss": 2.29057,
+          "calibration_error": 0.234647,
+          "roc_auc": 0.55173,
+          "pr_auc": 0.905585,
+          "buckets": {
+            "50-59": {
+              "quantity": 67,
+              "green": 51,
+              "red": 16,
+              "actual_rate": 76.12,
+              "mean_score": 53.71
+            },
+            "60-69": {
+              "quantity": 59,
+              "green": 49,
+              "red": 10,
+              "actual_rate": 83.05,
+              "mean_score": 65.63
+            },
+            "70-79": {
+              "quantity": 57,
+              "green": 41,
+              "red": 16,
+              "actual_rate": 71.93,
+              "mean_score": 74.76
+            },
+            "80-89": {
+              "quantity": 36,
+              "green": 30,
+              "red": 6,
+              "actual_rate": 83.33,
+              "mean_score": 83.67
+            },
+            "90-100": {
+              "quantity": 386,
+              "green": 321,
+              "red": 65,
+              "actual_rate": 83.16,
+              "mean_score": 99.47
+            },
+            "<50": {
+              "quantity": 139,
+              "green": 108,
+              "red": 31,
+              "actual_rate": 77.7,
+              "mean_score": 16.83
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 951,
+          "green": 758,
+          "red": 193,
+          "hit_rate": 79.706,
+          "brier": 0.228922,
+          "log_loss": 0.678544,
+          "calibration_error": 0.178196,
+          "roc_auc": 0.550696,
+          "pr_auc": 0.827503,
+          "buckets": {
+            "50-59": {
+              "quantity": 93,
+              "green": 72,
+              "red": 21,
+              "actual_rate": 77.42,
+              "mean_score": 53.72
+            },
+            "60-69": {
+              "quantity": 100,
+              "green": 75,
+              "red": 25,
+              "actual_rate": 75.0,
+              "mean_score": 65.37
+            },
+            "70-79": {
+              "quantity": 89,
+              "green": 72,
+              "red": 17,
+              "actual_rate": 80.9,
+              "mean_score": 74.6
+            },
+            "80-89": {
+              "quantity": 316,
+              "green": 254,
+              "red": 62,
+              "actual_rate": 80.38,
+              "mean_score": 87.16
+            },
+            "90-100": {
+              "quantity": 176,
+              "green": 147,
+              "red": 29,
+              "actual_rate": 83.52,
+              "mean_score": 92.45
+            },
+            "<50": {
+              "quantity": 177,
+              "green": 138,
+              "red": 39,
+              "actual_rate": 77.97,
+              "mean_score": 24.27
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.224765,
+          "log_loss": 0.670658,
+          "calibration_error": 0.176724,
+          "roc_auc": 0.554531,
+          "pr_auc": 0.834572,
+          "buckets": {
+            "50-59": {
+              "quantity": 77,
+              "green": 60,
+              "red": 17,
+              "actual_rate": 77.92,
+              "mean_score": 53.72
+            },
+            "60-69": {
+              "quantity": 78,
+              "green": 61,
+              "red": 17,
+              "actual_rate": 78.21,
+              "mean_score": 65.14
+            },
+            "70-79": {
+              "quantity": 66,
+              "green": 52,
+              "red": 14,
+              "actual_rate": 78.79,
+              "mean_score": 74.61
+            },
+            "80-89": {
+              "quantity": 210,
+              "green": 173,
+              "red": 37,
+              "actual_rate": 82.38,
+              "mean_score": 87.85
+            },
+            "90-100": {
+              "quantity": 175,
+              "green": 147,
+              "red": 28,
+              "actual_rate": 84.0,
+              "mean_score": 92.46
+            },
+            "<50": {
+              "quantity": 138,
+              "green": 107,
+              "red": 31,
+              "actual_rate": 77.54,
+              "mean_score": 24.21
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.225308,
+          "log_loss": 0.672228,
+          "calibration_error": 0.178632,
+          "roc_auc": 0.554578,
+          "pr_auc": 0.834698,
+          "buckets": {
+            "50-59": {
+              "quantity": 77,
+              "green": 60,
+              "red": 17,
+              "actual_rate": 77.92,
+              "mean_score": 53.41
+            },
+            "60-69": {
+              "quantity": 80,
+              "green": 63,
+              "red": 17,
+              "actual_rate": 78.75,
+              "mean_score": 65.11
+            },
+            "70-79": {
+              "quantity": 61,
+              "green": 48,
+              "red": 13,
+              "actual_rate": 78.69,
+              "mean_score": 74.44
+            },
+            "80-89": {
+              "quantity": 212,
+              "green": 175,
+              "red": 37,
+              "actual_rate": 82.55,
+              "mean_score": 87.79
+            },
+            "90-100": {
+              "quantity": 176,
+              "green": 147,
+              "red": 29,
+              "actual_rate": 83.52,
+              "mean_score": 92.45
+            },
+            "<50": {
+              "quantity": 138,
+              "green": 107,
+              "red": 31,
+              "actual_rate": 77.54,
+              "mean_score": 24.12
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 744,
+          "green": 600,
+          "red": 144,
+          "hit_rate": 80.645,
+          "brier": 0.22637,
+          "log_loss": 0.679097,
+          "calibration_error": 0.179852,
+          "roc_auc": 0.552639,
+          "pr_auc": 0.829685,
+          "buckets": {
+            "50-59": {
+              "quantity": 76,
+              "green": 59,
+              "red": 17,
+              "actual_rate": 77.63,
+              "mean_score": 53.72
+            },
+            "60-69": {
+              "quantity": 77,
+              "green": 62,
+              "red": 15,
+              "actual_rate": 80.52,
+              "mean_score": 64.92
+            },
+            "70-79": {
+              "quantity": 60,
+              "green": 46,
+              "red": 14,
+              "actual_rate": 76.67,
+              "mean_score": 74.49
+            },
+            "80-89": {
+              "quantity": 212,
+              "green": 175,
+              "red": 37,
+              "actual_rate": 82.55,
+              "mean_score": 87.76
+            },
+            "90-100": {
+              "quantity": 177,
+              "green": 148,
+              "red": 29,
+              "actual_rate": 83.62,
+              "mean_score": 92.72
+            },
+            "<50": {
+              "quantity": 142,
+              "green": 110,
+              "red": 32,
+              "actual_rate": 77.46,
+              "mean_score": 24.55
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "goals": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.282106,
+          "log_loss": 2.28515,
+          "calibration_error": 0.211008,
+          "roc_auc": 0.584921,
+          "pr_auc": 0.819939,
+          "buckets": {
+            "50-59": {
+              "quantity": 258,
+              "green": 164,
+              "red": 94,
+              "actual_rate": 63.57,
+              "mean_score": 51.07
+            },
+            "60-69": {
+              "quantity": 216,
+              "green": 147,
+              "red": 69,
+              "actual_rate": 68.06,
+              "mean_score": 64.84
+            },
+            "70-79": {
+              "quantity": 138,
+              "green": 96,
+              "red": 42,
+              "actual_rate": 69.57,
+              "mean_score": 73.98
+            },
+            "80-89": {
+              "quantity": 180,
+              "green": 131,
+              "red": 49,
+              "actual_rate": 72.78,
+              "mean_score": 83.23
+            },
+            "90-100": {
+              "quantity": 579,
+              "green": 432,
+              "red": 147,
+              "actual_rate": 74.61,
+              "mean_score": 99.64
+            },
+            "<50": {
+              "quantity": 443,
+              "green": 256,
+              "red": 187,
+              "actual_rate": 57.79,
+              "mean_score": 18.56
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.281726,
+          "log_loss": 2.284396,
+          "calibration_error": 0.20857,
+          "roc_auc": 0.586362,
+          "pr_auc": 0.815738,
+          "buckets": {
+            "50-59": {
+              "quantity": 220,
+              "green": 139,
+              "red": 81,
+              "actual_rate": 63.18,
+              "mean_score": 52.72
+            },
+            "60-69": {
+              "quantity": 198,
+              "green": 135,
+              "red": 63,
+              "actual_rate": 68.18,
+              "mean_score": 65.3
+            },
+            "70-79": {
+              "quantity": 158,
+              "green": 114,
+              "red": 44,
+              "actual_rate": 72.15,
+              "mean_score": 74.88
+            },
+            "80-89": {
+              "quantity": 160,
+              "green": 116,
+              "red": 44,
+              "actual_rate": 72.5,
+              "mean_score": 84.06
+            },
+            "90-100": {
+              "quantity": 578,
+              "green": 431,
+              "red": 147,
+              "actual_rate": 74.57,
+              "mean_score": 99.67
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 21.86
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.282106,
+          "log_loss": 2.28515,
+          "calibration_error": 0.211008,
+          "roc_auc": 0.584921,
+          "pr_auc": 0.819939,
+          "buckets": {
+            "50-59": {
+              "quantity": 258,
+              "green": 164,
+              "red": 94,
+              "actual_rate": 63.57,
+              "mean_score": 51.07
+            },
+            "60-69": {
+              "quantity": 216,
+              "green": 147,
+              "red": 69,
+              "actual_rate": 68.06,
+              "mean_score": 64.84
+            },
+            "70-79": {
+              "quantity": 138,
+              "green": 96,
+              "red": 42,
+              "actual_rate": 69.57,
+              "mean_score": 73.98
+            },
+            "80-89": {
+              "quantity": 180,
+              "green": 131,
+              "red": 49,
+              "actual_rate": 72.78,
+              "mean_score": 83.23
+            },
+            "90-100": {
+              "quantity": 579,
+              "green": 432,
+              "red": 147,
+              "actual_rate": 74.61,
+              "mean_score": 99.64
+            },
+            "<50": {
+              "quantity": 443,
+              "green": 256,
+              "red": 187,
+              "actual_rate": 57.79,
+              "mean_score": 18.56
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.282106,
+          "log_loss": 2.28515,
+          "calibration_error": 0.211008,
+          "roc_auc": 0.584921,
+          "pr_auc": 0.819939,
+          "buckets": {
+            "50-59": {
+              "quantity": 258,
+              "green": 164,
+              "red": 94,
+              "actual_rate": 63.57,
+              "mean_score": 51.07
+            },
+            "60-69": {
+              "quantity": 216,
+              "green": 147,
+              "red": 69,
+              "actual_rate": 68.06,
+              "mean_score": 64.84
+            },
+            "70-79": {
+              "quantity": 138,
+              "green": 96,
+              "red": 42,
+              "actual_rate": 69.57,
+              "mean_score": 73.98
+            },
+            "80-89": {
+              "quantity": 180,
+              "green": 131,
+              "red": 49,
+              "actual_rate": 72.78,
+              "mean_score": 83.23
+            },
+            "90-100": {
+              "quantity": 579,
+              "green": 432,
+              "red": 147,
+              "actual_rate": 74.61,
+              "mean_score": 99.64
+            },
+            "<50": {
+              "quantity": 443,
+              "green": 256,
+              "red": 187,
+              "actual_rate": 57.79,
+              "mean_score": 18.56
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.258383,
+          "log_loss": 0.764537,
+          "calibration_error": 0.163965,
+          "roc_auc": 0.58024,
+          "pr_auc": 0.723393,
+          "buckets": {
+            "50-59": {
+              "quantity": 313,
+              "green": 203,
+              "red": 110,
+              "actual_rate": 64.86,
+              "mean_score": 52.12
+            },
+            "60-69": {
+              "quantity": 243,
+              "green": 165,
+              "red": 78,
+              "actual_rate": 67.9,
+              "mean_score": 64.8
+            },
+            "70-79": {
+              "quantity": 208,
+              "green": 148,
+              "red": 60,
+              "actual_rate": 71.15,
+              "mean_score": 74.67
+            },
+            "80-89": {
+              "quantity": 271,
+              "green": 211,
+              "red": 60,
+              "actual_rate": 77.86,
+              "mean_score": 87.02
+            },
+            "90-100": {
+              "quantity": 336,
+              "green": 243,
+              "red": 93,
+              "actual_rate": 72.32,
+              "mean_score": 93.22
+            },
+            "<50": {
+              "quantity": 443,
+              "green": 256,
+              "red": 187,
+              "actual_rate": 57.79,
+              "mean_score": 24.46
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.281726,
+          "log_loss": 2.284396,
+          "calibration_error": 0.20857,
+          "roc_auc": 0.586362,
+          "pr_auc": 0.815738,
+          "buckets": {
+            "50-59": {
+              "quantity": 220,
+              "green": 139,
+              "red": 81,
+              "actual_rate": 63.18,
+              "mean_score": 52.72
+            },
+            "60-69": {
+              "quantity": 198,
+              "green": 135,
+              "red": 63,
+              "actual_rate": 68.18,
+              "mean_score": 65.3
+            },
+            "70-79": {
+              "quantity": 158,
+              "green": 114,
+              "red": 44,
+              "actual_rate": 72.15,
+              "mean_score": 74.88
+            },
+            "80-89": {
+              "quantity": 160,
+              "green": 116,
+              "red": 44,
+              "actual_rate": 72.5,
+              "mean_score": 84.06
+            },
+            "90-100": {
+              "quantity": 578,
+              "green": 431,
+              "red": 147,
+              "actual_rate": 74.57,
+              "mean_score": 99.67
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 21.86
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.258103,
+          "log_loss": 0.763952,
+          "calibration_error": 0.164266,
+          "roc_auc": 0.581776,
+          "pr_auc": 0.72186,
+          "buckets": {
+            "50-59": {
+              "quantity": 265,
+              "green": 173,
+              "red": 92,
+              "actual_rate": 65.28,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 227,
+              "green": 155,
+              "red": 72,
+              "actual_rate": 68.28,
+              "mean_score": 64.92
+            },
+            "70-79": {
+              "quantity": 210,
+              "green": 149,
+              "red": 61,
+              "actual_rate": 70.95,
+              "mean_score": 74.59
+            },
+            "80-89": {
+              "quantity": 276,
+              "green": 215,
+              "red": 61,
+              "actual_rate": 77.9,
+              "mean_score": 87.0
+            },
+            "90-100": {
+              "quantity": 336,
+              "green": 243,
+              "red": 93,
+              "actual_rate": 72.32,
+              "mean_score": 93.22
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 27.09
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.257983,
+          "log_loss": 0.763702,
+          "calibration_error": 0.164533,
+          "roc_auc": 0.582011,
+          "pr_auc": 0.721907,
+          "buckets": {
+            "50-59": {
+              "quantity": 269,
+              "green": 176,
+              "red": 93,
+              "actual_rate": 65.43,
+              "mean_score": 53.4
+            },
+            "60-69": {
+              "quantity": 227,
+              "green": 155,
+              "red": 72,
+              "actual_rate": 68.28,
+              "mean_score": 65.06
+            },
+            "70-79": {
+              "quantity": 205,
+              "green": 146,
+              "red": 59,
+              "actual_rate": 71.22,
+              "mean_score": 74.66
+            },
+            "80-89": {
+              "quantity": 277,
+              "green": 215,
+              "red": 62,
+              "actual_rate": 77.62,
+              "mean_score": 86.97
+            },
+            "90-100": {
+              "quantity": 336,
+              "green": 243,
+              "red": 93,
+              "actual_rate": 72.32,
+              "mean_score": 93.22
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 27.08
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.258103,
+          "log_loss": 0.763952,
+          "calibration_error": 0.164266,
+          "roc_auc": 0.58178,
+          "pr_auc": 0.721858,
+          "buckets": {
+            "50-59": {
+              "quantity": 265,
+              "green": 173,
+              "red": 92,
+              "actual_rate": 65.28,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 227,
+              "green": 155,
+              "red": 72,
+              "actual_rate": 68.28,
+              "mean_score": 64.92
+            },
+            "70-79": {
+              "quantity": 210,
+              "green": 149,
+              "red": 61,
+              "actual_rate": 70.95,
+              "mean_score": 74.59
+            },
+            "80-89": {
+              "quantity": 276,
+              "green": 215,
+              "red": 61,
+              "actual_rate": 77.9,
+              "mean_score": 87.0
+            },
+            "90-100": {
+              "quantity": 336,
+              "green": 243,
+              "red": 93,
+              "actual_rate": 72.32,
+              "mean_score": 93.22
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 27.09
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 1814,
+          "green": 1226,
+          "red": 588,
+          "hit_rate": 67.585,
+          "brier": 0.258103,
+          "log_loss": 0.763952,
+          "calibration_error": 0.164266,
+          "roc_auc": 0.58178,
+          "pr_auc": 0.721858,
+          "buckets": {
+            "50-59": {
+              "quantity": 265,
+              "green": 173,
+              "red": 92,
+              "actual_rate": 65.28,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 227,
+              "green": 155,
+              "red": 72,
+              "actual_rate": 68.28,
+              "mean_score": 64.92
+            },
+            "70-79": {
+              "quantity": 210,
+              "green": 149,
+              "red": 61,
+              "actual_rate": 70.95,
+              "mean_score": 74.59
+            },
+            "80-89": {
+              "quantity": 276,
+              "green": 215,
+              "red": 61,
+              "actual_rate": 77.9,
+              "mean_score": 87.0
+            },
+            "90-100": {
+              "quantity": 336,
+              "green": 243,
+              "red": 93,
+              "actual_rate": 72.32,
+              "mean_score": 93.22
+            },
+            "<50": {
+              "quantity": 500,
+              "green": 291,
+              "red": 209,
+              "actual_rate": 58.2,
+              "mean_score": 27.09
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "goals_first_half": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.273924,
+          "log_loss": 2.313233,
+          "calibration_error": 0.216119,
+          "roc_auc": 0.547328,
+          "pr_auc": 0.834547,
+          "buckets": {
+            "50-59": {
+              "quantity": 125,
+              "green": 86,
+              "red": 39,
+              "actual_rate": 68.8,
+              "mean_score": 50.76
+            },
+            "60-69": {
+              "quantity": 110,
+              "green": 80,
+              "red": 30,
+              "actual_rate": 72.73,
+              "mean_score": 64.82
+            },
+            "70-79": {
+              "quantity": 75,
+              "green": 59,
+              "red": 16,
+              "actual_rate": 78.67,
+              "mean_score": 74.26
+            },
+            "80-89": {
+              "quantity": 91,
+              "green": 70,
+              "red": 21,
+              "actual_rate": 76.92,
+              "mean_score": 83.41
+            },
+            "90-100": {
+              "quantity": 285,
+              "green": 213,
+              "red": 72,
+              "actual_rate": 74.74,
+              "mean_score": 99.46
+            },
+            "<50": {
+              "quantity": 152,
+              "green": 98,
+              "red": 54,
+              "actual_rate": 64.47,
+              "mean_score": 18.28
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.273402,
+          "log_loss": 2.312275,
+          "calibration_error": 0.215979,
+          "roc_auc": 0.550547,
+          "pr_auc": 0.831058,
+          "buckets": {
+            "50-59": {
+              "quantity": 94,
+              "green": 68,
+              "red": 26,
+              "actual_rate": 72.34,
+              "mean_score": 52.04
+            },
+            "60-69": {
+              "quantity": 105,
+              "green": 75,
+              "red": 30,
+              "actual_rate": 71.43,
+              "mean_score": 65.35
+            },
+            "70-79": {
+              "quantity": 87,
+              "green": 70,
+              "red": 17,
+              "actual_rate": 80.46,
+              "mean_score": 75.25
+            },
+            "80-89": {
+              "quantity": 81,
+              "green": 62,
+              "red": 19,
+              "actual_rate": 76.54,
+              "mean_score": 84.46
+            },
+            "90-100": {
+              "quantity": 282,
+              "green": 211,
+              "red": 71,
+              "actual_rate": 74.82,
+              "mean_score": 99.6
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 23.96
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.273924,
+          "log_loss": 2.313233,
+          "calibration_error": 0.216119,
+          "roc_auc": 0.547328,
+          "pr_auc": 0.834547,
+          "buckets": {
+            "50-59": {
+              "quantity": 125,
+              "green": 86,
+              "red": 39,
+              "actual_rate": 68.8,
+              "mean_score": 50.76
+            },
+            "60-69": {
+              "quantity": 110,
+              "green": 80,
+              "red": 30,
+              "actual_rate": 72.73,
+              "mean_score": 64.82
+            },
+            "70-79": {
+              "quantity": 75,
+              "green": 59,
+              "red": 16,
+              "actual_rate": 78.67,
+              "mean_score": 74.26
+            },
+            "80-89": {
+              "quantity": 91,
+              "green": 70,
+              "red": 21,
+              "actual_rate": 76.92,
+              "mean_score": 83.41
+            },
+            "90-100": {
+              "quantity": 285,
+              "green": 213,
+              "red": 72,
+              "actual_rate": 74.74,
+              "mean_score": 99.46
+            },
+            "<50": {
+              "quantity": 152,
+              "green": 98,
+              "red": 54,
+              "actual_rate": 64.47,
+              "mean_score": 18.28
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.273924,
+          "log_loss": 2.313233,
+          "calibration_error": 0.216119,
+          "roc_auc": 0.547328,
+          "pr_auc": 0.834547,
+          "buckets": {
+            "50-59": {
+              "quantity": 125,
+              "green": 86,
+              "red": 39,
+              "actual_rate": 68.8,
+              "mean_score": 50.76
+            },
+            "60-69": {
+              "quantity": 110,
+              "green": 80,
+              "red": 30,
+              "actual_rate": 72.73,
+              "mean_score": 64.82
+            },
+            "70-79": {
+              "quantity": 75,
+              "green": 59,
+              "red": 16,
+              "actual_rate": 78.67,
+              "mean_score": 74.26
+            },
+            "80-89": {
+              "quantity": 91,
+              "green": 70,
+              "red": 21,
+              "actual_rate": 76.92,
+              "mean_score": 83.41
+            },
+            "90-100": {
+              "quantity": 285,
+              "green": 213,
+              "red": 72,
+              "actual_rate": 74.74,
+              "mean_score": 99.46
+            },
+            "<50": {
+              "quantity": 152,
+              "green": 98,
+              "red": 54,
+              "actual_rate": 64.47,
+              "mean_score": 18.28
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.24932,
+          "log_loss": 0.736906,
+          "calibration_error": 0.1701,
+          "roc_auc": 0.548787,
+          "pr_auc": 0.757459,
+          "buckets": {
+            "50-59": {
+              "quantity": 156,
+              "green": 109,
+              "red": 47,
+              "actual_rate": 69.87,
+              "mean_score": 52.06
+            },
+            "60-69": {
+              "quantity": 125,
+              "green": 93,
+              "red": 32,
+              "actual_rate": 74.4,
+              "mean_score": 65.03
+            },
+            "70-79": {
+              "quantity": 109,
+              "green": 82,
+              "red": 27,
+              "actual_rate": 75.23,
+              "mean_score": 74.68
+            },
+            "80-89": {
+              "quantity": 151,
+              "green": 115,
+              "red": 36,
+              "actual_rate": 76.16,
+              "mean_score": 87.04
+            },
+            "90-100": {
+              "quantity": 145,
+              "green": 109,
+              "red": 36,
+              "actual_rate": 75.17,
+              "mean_score": 92.99
+            },
+            "<50": {
+              "quantity": 152,
+              "green": 98,
+              "red": 54,
+              "actual_rate": 64.47,
+              "mean_score": 24.88
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.273402,
+          "log_loss": 2.312275,
+          "calibration_error": 0.215979,
+          "roc_auc": 0.550547,
+          "pr_auc": 0.831058,
+          "buckets": {
+            "50-59": {
+              "quantity": 94,
+              "green": 68,
+              "red": 26,
+              "actual_rate": 72.34,
+              "mean_score": 52.04
+            },
+            "60-69": {
+              "quantity": 105,
+              "green": 75,
+              "red": 30,
+              "actual_rate": 71.43,
+              "mean_score": 65.35
+            },
+            "70-79": {
+              "quantity": 87,
+              "green": 70,
+              "red": 17,
+              "actual_rate": 80.46,
+              "mean_score": 75.25
+            },
+            "80-89": {
+              "quantity": 81,
+              "green": 62,
+              "red": 19,
+              "actual_rate": 76.54,
+              "mean_score": 84.46
+            },
+            "90-100": {
+              "quantity": 282,
+              "green": 211,
+              "red": 71,
+              "actual_rate": 74.82,
+              "mean_score": 99.6
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 23.96
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.248945,
+          "log_loss": 0.73619,
+          "calibration_error": 0.173383,
+          "roc_auc": 0.552912,
+          "pr_auc": 0.757575,
+          "buckets": {
+            "50-59": {
+              "quantity": 123,
+              "green": 90,
+              "red": 33,
+              "actual_rate": 73.17,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 113,
+              "green": 82,
+              "red": 31,
+              "actual_rate": 72.57,
+              "mean_score": 64.97
+            },
+            "70-79": {
+              "quantity": 113,
+              "green": 88,
+              "red": 25,
+              "actual_rate": 77.88,
+              "mean_score": 74.38
+            },
+            "80-89": {
+              "quantity": 155,
+              "green": 117,
+              "red": 38,
+              "actual_rate": 75.48,
+              "mean_score": 86.97
+            },
+            "90-100": {
+              "quantity": 145,
+              "green": 109,
+              "red": 36,
+              "actual_rate": 75.17,
+              "mean_score": 92.99
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 29.29
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.248717,
+          "log_loss": 0.73567,
+          "calibration_error": 0.171511,
+          "roc_auc": 0.553289,
+          "pr_auc": 0.756712,
+          "buckets": {
+            "50-59": {
+              "quantity": 121,
+              "green": 88,
+              "red": 33,
+              "actual_rate": 72.73,
+              "mean_score": 53.15
+            },
+            "60-69": {
+              "quantity": 118,
+              "green": 87,
+              "red": 31,
+              "actual_rate": 73.73,
+              "mean_score": 65.04
+            },
+            "70-79": {
+              "quantity": 111,
+              "green": 85,
+              "red": 26,
+              "actual_rate": 76.58,
+              "mean_score": 74.54
+            },
+            "80-89": {
+              "quantity": 154,
+              "green": 117,
+              "red": 37,
+              "actual_rate": 75.97,
+              "mean_score": 87.02
+            },
+            "90-100": {
+              "quantity": 145,
+              "green": 109,
+              "red": 36,
+              "actual_rate": 75.17,
+              "mean_score": 92.99
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 29.27
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.248945,
+          "log_loss": 0.73619,
+          "calibration_error": 0.173383,
+          "roc_auc": 0.552912,
+          "pr_auc": 0.757573,
+          "buckets": {
+            "50-59": {
+              "quantity": 123,
+              "green": 90,
+              "red": 33,
+              "actual_rate": 73.17,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 113,
+              "green": 82,
+              "red": 31,
+              "actual_rate": 72.57,
+              "mean_score": 64.97
+            },
+            "70-79": {
+              "quantity": 113,
+              "green": 88,
+              "red": 25,
+              "actual_rate": 77.88,
+              "mean_score": 74.38
+            },
+            "80-89": {
+              "quantity": 155,
+              "green": 117,
+              "red": 38,
+              "actual_rate": 75.48,
+              "mean_score": 86.97
+            },
+            "90-100": {
+              "quantity": 145,
+              "green": 109,
+              "red": 36,
+              "actual_rate": 75.17,
+              "mean_score": 92.99
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 29.29
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 838,
+          "green": 606,
+          "red": 232,
+          "hit_rate": 72.315,
+          "brier": 0.248945,
+          "log_loss": 0.73619,
+          "calibration_error": 0.173383,
+          "roc_auc": 0.552912,
+          "pr_auc": 0.757573,
+          "buckets": {
+            "50-59": {
+              "quantity": 123,
+              "green": 90,
+              "red": 33,
+              "actual_rate": 73.17,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 113,
+              "green": 82,
+              "red": 31,
+              "actual_rate": 72.57,
+              "mean_score": 64.97
+            },
+            "70-79": {
+              "quantity": 113,
+              "green": 88,
+              "red": 25,
+              "actual_rate": 77.88,
+              "mean_score": 74.38
+            },
+            "80-89": {
+              "quantity": 155,
+              "green": 117,
+              "red": 38,
+              "actual_rate": 75.48,
+              "mean_score": 86.97
+            },
+            "90-100": {
+              "quantity": 145,
+              "green": 109,
+              "red": 36,
+              "actual_rate": 75.17,
+              "mean_score": 92.99
+            },
+            "<50": {
+              "quantity": 189,
+              "green": 120,
+              "red": 69,
+              "actual_rate": 63.49,
+              "mean_score": 29.29
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "offsides": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.273941,
+          "log_loss": 2.97606,
+          "calibration_error": 0.23583,
+          "roc_auc": 0.595017,
+          "pr_auc": 0.903721,
+          "buckets": {
+            "50-59": {
+              "quantity": 80,
+              "green": 48,
+              "red": 32,
+              "actual_rate": 60.0,
+              "mean_score": 50.19
+            },
+            "60-69": {
+              "quantity": 51,
+              "green": 30,
+              "red": 21,
+              "actual_rate": 58.82,
+              "mean_score": 65.75
+            },
+            "70-79": {
+              "quantity": 27,
+              "green": 22,
+              "red": 5,
+              "actual_rate": 81.48,
+              "mean_score": 74.6
+            },
+            "80-89": {
+              "quantity": 39,
+              "green": 34,
+              "red": 5,
+              "actual_rate": 87.18,
+              "mean_score": 82.66
+            },
+            "90-100": {
+              "quantity": 390,
+              "green": 303,
+              "red": 87,
+              "actual_rate": 77.69,
+              "mean_score": 99.95
+            },
+            "<50": {
+              "quantity": 132,
+              "green": 81,
+              "red": 51,
+              "actual_rate": 61.36,
+              "mean_score": 10.04
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.268286,
+          "log_loss": 2.531337,
+          "calibration_error": 0.225097,
+          "roc_auc": 0.590662,
+          "pr_auc": 0.879615,
+          "buckets": {
+            "50-59": {
+              "quantity": 56,
+              "green": 35,
+              "red": 21,
+              "actual_rate": 62.5,
+              "mean_score": 53.11
+            },
+            "60-69": {
+              "quantity": 42,
+              "green": 25,
+              "red": 17,
+              "actual_rate": 59.52,
+              "mean_score": 66.65
+            },
+            "70-79": {
+              "quantity": 40,
+              "green": 31,
+              "red": 9,
+              "actual_rate": 77.5,
+              "mean_score": 74.34
+            },
+            "80-89": {
+              "quantity": 31,
+              "green": 28,
+              "red": 3,
+              "actual_rate": 90.32,
+              "mean_score": 83.21
+            },
+            "90-100": {
+              "quantity": 390,
+              "green": 303,
+              "red": 87,
+              "actual_rate": 77.69,
+              "mean_score": 99.03
+            },
+            "<50": {
+              "quantity": 160,
+              "green": 96,
+              "red": 64,
+              "actual_rate": 60.0,
+              "mean_score": 18.17
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.273644,
+          "log_loss": 2.712179,
+          "calibration_error": 0.233761,
+          "roc_auc": 0.595084,
+          "pr_auc": 0.881843,
+          "buckets": {
+            "50-59": {
+              "quantity": 74,
+              "green": 43,
+              "red": 31,
+              "actual_rate": 58.11,
+              "mean_score": 50.44
+            },
+            "60-69": {
+              "quantity": 50,
+              "green": 30,
+              "red": 20,
+              "actual_rate": 60.0,
+              "mean_score": 65.89
+            },
+            "70-79": {
+              "quantity": 28,
+              "green": 23,
+              "red": 5,
+              "actual_rate": 82.14,
+              "mean_score": 74.78
+            },
+            "80-89": {
+              "quantity": 38,
+              "green": 33,
+              "red": 5,
+              "actual_rate": 86.84,
+              "mean_score": 82.73
+            },
+            "90-100": {
+              "quantity": 390,
+              "green": 303,
+              "red": 87,
+              "actual_rate": 77.69,
+              "mean_score": 99.91
+            },
+            "<50": {
+              "quantity": 139,
+              "green": 86,
+              "red": 53,
+              "actual_rate": 61.87,
+              "mean_score": 12.09
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.273137,
+          "log_loss": 2.88959,
+          "calibration_error": 0.230557,
+          "roc_auc": 0.594489,
+          "pr_auc": 0.89407,
+          "buckets": {
+            "50-59": {
+              "quantity": 81,
+              "green": 48,
+              "red": 33,
+              "actual_rate": 59.26,
+              "mean_score": 50.27
+            },
+            "60-69": {
+              "quantity": 52,
+              "green": 31,
+              "red": 21,
+              "actual_rate": 59.62,
+              "mean_score": 65.7
+            },
+            "70-79": {
+              "quantity": 26,
+              "green": 21,
+              "red": 5,
+              "actual_rate": 80.77,
+              "mean_score": 74.52
+            },
+            "80-89": {
+              "quantity": 40,
+              "green": 34,
+              "red": 6,
+              "actual_rate": 85.0,
+              "mean_score": 82.81
+            },
+            "90-100": {
+              "quantity": 389,
+              "green": 303,
+              "red": 86,
+              "actual_rate": 77.89,
+              "mean_score": 99.69
+            },
+            "<50": {
+              "quantity": 131,
+              "green": 81,
+              "red": 50,
+              "actual_rate": 61.83,
+              "mean_score": 9.89
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.23843,
+          "log_loss": 0.71376,
+          "calibration_error": 0.163131,
+          "roc_auc": 0.585211,
+          "pr_auc": 0.770799,
+          "buckets": {
+            "50-59": {
+              "quantity": 87,
+              "green": 51,
+              "red": 36,
+              "actual_rate": 58.62,
+              "mean_score": 50.76
+            },
+            "60-69": {
+              "quantity": 62,
+              "green": 42,
+              "red": 20,
+              "actual_rate": 67.74,
+              "mean_score": 64.84
+            },
+            "70-79": {
+              "quantity": 46,
+              "green": 40,
+              "red": 6,
+              "actual_rate": 86.96,
+              "mean_score": 74.43
+            },
+            "80-89": {
+              "quantity": 231,
+              "green": 184,
+              "red": 47,
+              "actual_rate": 79.65,
+              "mean_score": 88.14
+            },
+            "90-100": {
+              "quantity": 161,
+              "green": 120,
+              "red": 41,
+              "actual_rate": 74.53,
+              "mean_score": 92.4
+            },
+            "<50": {
+              "quantity": 132,
+              "green": 81,
+              "red": 51,
+              "actual_rate": 61.36,
+              "mean_score": 20.06
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.267553,
+          "log_loss": 2.388852,
+          "calibration_error": 0.226697,
+          "roc_auc": 0.593721,
+          "pr_auc": 0.868384,
+          "buckets": {
+            "50-59": {
+              "quantity": 58,
+              "green": 36,
+              "red": 22,
+              "actual_rate": 62.07,
+              "mean_score": 53.12
+            },
+            "60-69": {
+              "quantity": 46,
+              "green": 27,
+              "red": 19,
+              "actual_rate": 58.7,
+              "mean_score": 66.7
+            },
+            "70-79": {
+              "quantity": 36,
+              "green": 29,
+              "red": 7,
+              "actual_rate": 80.56,
+              "mean_score": 74.63
+            },
+            "80-89": {
+              "quantity": 44,
+              "green": 40,
+              "red": 4,
+              "actual_rate": 90.91,
+              "mean_score": 85.08
+            },
+            "90-100": {
+              "quantity": 377,
+              "green": 291,
+              "red": 86,
+              "actual_rate": 77.19,
+              "mean_score": 99.11
+            },
+            "<50": {
+              "quantity": 158,
+              "green": 95,
+              "red": 63,
+              "actual_rate": 60.13,
+              "mean_score": 17.86
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 924,
+          "green": 658,
+          "red": 266,
+          "hit_rate": 71.212,
+          "brier": 0.238695,
+          "log_loss": 0.70512,
+          "calibration_error": 0.158149,
+          "roc_auc": 0.584095,
+          "pr_auc": 0.760294,
+          "buckets": {
+            "50-59": {
+              "quantity": 73,
+              "green": 45,
+              "red": 28,
+              "actual_rate": 61.64,
+              "mean_score": 53.2
+            },
+            "60-69": {
+              "quantity": 82,
+              "green": 58,
+              "red": 24,
+              "actual_rate": 70.73,
+              "mean_score": 64.83
+            },
+            "70-79": {
+              "quantity": 62,
+              "green": 50,
+              "red": 12,
+              "actual_rate": 80.65,
+              "mean_score": 74.79
+            },
+            "80-89": {
+              "quantity": 355,
+              "green": 276,
+              "red": 79,
+              "actual_rate": 77.75,
+              "mean_score": 87.05
+            },
+            "90-100": {
+              "quantity": 135,
+              "green": 99,
+              "red": 36,
+              "actual_rate": 73.33,
+              "mean_score": 92.39
+            },
+            "<50": {
+              "quantity": 217,
+              "green": 130,
+              "red": 87,
+              "actual_rate": 59.91,
+              "mean_score": 26.38
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.234656,
+          "log_loss": 0.699482,
+          "calibration_error": 0.161649,
+          "roc_auc": 0.58122,
+          "pr_auc": 0.765304,
+          "buckets": {
+            "50-59": {
+              "quantity": 59,
+              "green": 36,
+              "red": 23,
+              "actual_rate": 61.02,
+              "mean_score": 53.21
+            },
+            "60-69": {
+              "quantity": 64,
+              "green": 44,
+              "red": 20,
+              "actual_rate": 68.75,
+              "mean_score": 65.0
+            },
+            "70-79": {
+              "quantity": 57,
+              "green": 51,
+              "red": 6,
+              "actual_rate": 89.47,
+              "mean_score": 75.48
+            },
+            "80-89": {
+              "quantity": 244,
+              "green": 192,
+              "red": 52,
+              "actual_rate": 78.69,
+              "mean_score": 87.63
+            },
+            "90-100": {
+              "quantity": 135,
+              "green": 99,
+              "red": 36,
+              "actual_rate": 73.33,
+              "mean_score": 92.38
+            },
+            "<50": {
+              "quantity": 160,
+              "green": 96,
+              "red": 64,
+              "actual_rate": 60.0,
+              "mean_score": 26.44
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.235383,
+          "log_loss": 0.701876,
+          "calibration_error": 0.157227,
+          "roc_auc": 0.580985,
+          "pr_auc": 0.765108,
+          "buckets": {
+            "50-59": {
+              "quantity": 58,
+              "green": 35,
+              "red": 23,
+              "actual_rate": 60.34,
+              "mean_score": 52.78
+            },
+            "60-69": {
+              "quantity": 66,
+              "green": 46,
+              "red": 20,
+              "actual_rate": 69.7,
+              "mean_score": 65.04
+            },
+            "70-79": {
+              "quantity": 46,
+              "green": 40,
+              "red": 6,
+              "actual_rate": 86.96,
+              "mean_score": 74.92
+            },
+            "80-89": {
+              "quantity": 253,
+              "green": 201,
+              "red": 52,
+              "actual_rate": 79.45,
+              "mean_score": 87.44
+            },
+            "90-100": {
+              "quantity": 136,
+              "green": 100,
+              "red": 36,
+              "actual_rate": 73.53,
+              "mean_score": 92.45
+            },
+            "<50": {
+              "quantity": 160,
+              "green": 96,
+              "red": 64,
+              "actual_rate": 60.0,
+              "mean_score": 26.19
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 719,
+          "green": 518,
+          "red": 201,
+          "hit_rate": 72.045,
+          "brier": 0.235828,
+          "log_loss": 0.73507,
+          "calibration_error": 0.157991,
+          "roc_auc": 0.582378,
+          "pr_auc": 0.760418,
+          "buckets": {
+            "50-59": {
+              "quantity": 58,
+              "green": 35,
+              "red": 23,
+              "actual_rate": 60.34,
+              "mean_score": 52.75
+            },
+            "60-69": {
+              "quantity": 65,
+              "green": 45,
+              "red": 20,
+              "actual_rate": 69.23,
+              "mean_score": 65.05
+            },
+            "70-79": {
+              "quantity": 46,
+              "green": 40,
+              "red": 6,
+              "actual_rate": 86.96,
+              "mean_score": 74.88
+            },
+            "80-89": {
+              "quantity": 251,
+              "green": 199,
+              "red": 52,
+              "actual_rate": 79.28,
+              "mean_score": 87.39
+            },
+            "90-100": {
+              "quantity": 139,
+              "green": 103,
+              "red": 36,
+              "actual_rate": 74.1,
+              "mean_score": 93.06
+            },
+            "<50": {
+              "quantity": 160,
+              "green": 96,
+              "red": 64,
+              "actual_rate": 60.0,
+              "mean_score": 26.11
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "shots": {
+      "chosen_variant": "H_recency_uncertainty",
+      "enabled_components": [
+        "recency",
+        "uncertainty"
+      ],
+      "zero_weight_components": [
+        "matchup",
+        "strength"
+      ],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.317718,
+          "log_loss": 3.309633,
+          "calibration_error": 0.258841,
+          "roc_auc": 0.543902,
+          "pr_auc": 0.477904,
+          "buckets": {
+            "50-59": {
+              "quantity": 79,
+              "green": 29,
+              "red": 50,
+              "actual_rate": 36.71,
+              "mean_score": 50.0
+            },
+            "60-69": {
+              "quantity": 50,
+              "green": 23,
+              "red": 27,
+              "actual_rate": 46.0,
+              "mean_score": 65.3
+            },
+            "70-79": {
+              "quantity": 15,
+              "green": 4,
+              "red": 11,
+              "actual_rate": 26.67,
+              "mean_score": 75.0
+            },
+            "80-89": {
+              "quantity": 4,
+              "green": 3,
+              "red": 1,
+              "actual_rate": 75.0,
+              "mean_score": 81.88
+            },
+            "90-100": {
+              "quantity": 102,
+              "green": 33,
+              "red": 69,
+              "actual_rate": 32.35,
+              "mean_score": 100.0
+            },
+            "<50": {
+              "quantity": 506,
+              "green": 142,
+              "red": 364,
+              "actual_rate": 28.06,
+              "mean_score": 8.5
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.31258,
+          "log_loss": 2.857226,
+          "calibration_error": 0.243967,
+          "roc_auc": 0.537618,
+          "pr_auc": 0.43556,
+          "buckets": {
+            "50-59": {
+              "quantity": 47,
+              "green": 13,
+              "red": 34,
+              "actual_rate": 27.66,
+              "mean_score": 52.62
+            },
+            "60-69": {
+              "quantity": 43,
+              "green": 22,
+              "red": 21,
+              "actual_rate": 51.16,
+              "mean_score": 65.44
+            },
+            "70-79": {
+              "quantity": 13,
+              "green": 4,
+              "red": 9,
+              "actual_rate": 30.77,
+              "mean_score": 75.6
+            },
+            "80-89": {
+              "quantity": 3,
+              "green": 2,
+              "red": 1,
+              "actual_rate": 66.67,
+              "mean_score": 82.34
+            },
+            "90-100": {
+              "quantity": 102,
+              "green": 33,
+              "red": 69,
+              "actual_rate": 32.35,
+              "mean_score": 97.76
+            },
+            "<50": {
+              "quantity": 548,
+              "green": 160,
+              "red": 388,
+              "actual_rate": 29.2,
+              "mean_score": 12.13
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.31743,
+          "log_loss": 3.001861,
+          "calibration_error": 0.263922,
+          "roc_auc": 0.545875,
+          "pr_auc": 0.45718,
+          "buckets": {
+            "50-59": {
+              "quantity": 69,
+              "green": 22,
+              "red": 47,
+              "actual_rate": 31.88,
+              "mean_score": 50.04
+            },
+            "60-69": {
+              "quantity": 50,
+              "green": 23,
+              "red": 27,
+              "actual_rate": 46.0,
+              "mean_score": 65.33
+            },
+            "70-79": {
+              "quantity": 16,
+              "green": 5,
+              "red": 11,
+              "actual_rate": 31.25,
+              "mean_score": 75.34
+            },
+            "80-89": {
+              "quantity": 3,
+              "green": 2,
+              "red": 1,
+              "actual_rate": 66.67,
+              "mean_score": 82.5
+            },
+            "90-100": {
+              "quantity": 102,
+              "green": 33,
+              "red": 69,
+              "actual_rate": 32.35,
+              "mean_score": 99.96
+            },
+            "<50": {
+              "quantity": 516,
+              "green": 149,
+              "red": 367,
+              "actual_rate": 28.88,
+              "mean_score": 9.33
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.316929,
+          "log_loss": 3.226087,
+          "calibration_error": 0.258135,
+          "roc_auc": 0.542264,
+          "pr_auc": 0.469046,
+          "buckets": {
+            "50-59": {
+              "quantity": 76,
+              "green": 27,
+              "red": 49,
+              "actual_rate": 35.53,
+              "mean_score": 50.0
+            },
+            "60-69": {
+              "quantity": 48,
+              "green": 21,
+              "red": 27,
+              "actual_rate": 43.75,
+              "mean_score": 64.74
+            },
+            "70-79": {
+              "quantity": 17,
+              "green": 6,
+              "red": 11,
+              "actual_rate": 35.29,
+              "mean_score": 74.49
+            },
+            "80-89": {
+              "quantity": 4,
+              "green": 3,
+              "red": 1,
+              "actual_rate": 75.0,
+              "mean_score": 81.88
+            },
+            "90-100": {
+              "quantity": 102,
+              "green": 33,
+              "red": 69,
+              "actual_rate": 32.35,
+              "mean_score": 100.0
+            },
+            "<50": {
+              "quantity": 509,
+              "green": 144,
+              "red": 365,
+              "actual_rate": 28.29,
+              "mean_score": 9.01
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.278373,
+          "log_loss": 0.822686,
+          "calibration_error": 0.18714,
+          "roc_auc": 0.539047,
+          "pr_auc": 0.337901,
+          "buckets": {
+            "50-59": {
+              "quantity": 89,
+              "green": 32,
+              "red": 57,
+              "actual_rate": 35.96,
+              "mean_score": 50.88
+            },
+            "60-69": {
+              "quantity": 43,
+              "green": 21,
+              "red": 22,
+              "actual_rate": 48.84,
+              "mean_score": 63.92
+            },
+            "70-79": {
+              "quantity": 15,
+              "green": 5,
+              "red": 10,
+              "actual_rate": 33.33,
+              "mean_score": 72.06
+            },
+            "80-89": {
+              "quantity": 64,
+              "green": 25,
+              "red": 39,
+              "actual_rate": 39.06,
+              "mean_score": 88.06
+            },
+            "90-100": {
+              "quantity": 39,
+              "green": 9,
+              "red": 30,
+              "actual_rate": 23.08,
+              "mean_score": 91.77
+            },
+            "<50": {
+              "quantity": 506,
+              "green": 142,
+              "red": 364,
+              "actual_rate": 28.06,
+              "mean_score": 16.65
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.311823,
+          "log_loss": 2.657957,
+          "calibration_error": 0.242681,
+          "roc_auc": 0.538269,
+          "pr_auc": 0.42497,
+          "buckets": {
+            "50-59": {
+              "quantity": 48,
+              "green": 14,
+              "red": 34,
+              "actual_rate": 29.17,
+              "mean_score": 53.22
+            },
+            "60-69": {
+              "quantity": 39,
+              "green": 20,
+              "red": 19,
+              "actual_rate": 51.28,
+              "mean_score": 65.9
+            },
+            "70-79": {
+              "quantity": 14,
+              "green": 4,
+              "red": 10,
+              "actual_rate": 28.57,
+              "mean_score": 75.13
+            },
+            "80-89": {
+              "quantity": 9,
+              "green": 2,
+              "red": 7,
+              "actual_rate": 22.22,
+              "mean_score": 87.31
+            },
+            "90-100": {
+              "quantity": 96,
+              "green": 33,
+              "red": 63,
+              "actual_rate": 34.38,
+              "mean_score": 98.28
+            },
+            "<50": {
+              "quantity": 550,
+              "green": 161,
+              "red": 389,
+              "actual_rate": 29.27,
+              "mean_score": 12.46
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 963,
+          "green": 300,
+          "red": 663,
+          "hit_rate": 31.153,
+          "brier": 0.275214,
+          "log_loss": 0.801094,
+          "calibration_error": 0.173799,
+          "roc_auc": 0.531448,
+          "pr_auc": 0.335642,
+          "buckets": {
+            "50-59": {
+              "quantity": 67,
+              "green": 21,
+              "red": 46,
+              "actual_rate": 31.34,
+              "mean_score": 53.49
+            },
+            "60-69": {
+              "quantity": 47,
+              "green": 22,
+              "red": 25,
+              "actual_rate": 46.81,
+              "mean_score": 63.42
+            },
+            "70-79": {
+              "quantity": 20,
+              "green": 3,
+              "red": 17,
+              "actual_rate": 15.0,
+              "mean_score": 74.18
+            },
+            "80-89": {
+              "quantity": 98,
+              "green": 40,
+              "red": 58,
+              "actual_rate": 40.82,
+              "mean_score": 86.18
+            },
+            "90-100": {
+              "quantity": 27,
+              "green": 5,
+              "red": 22,
+              "actual_rate": 18.52,
+              "mean_score": 92.3
+            },
+            "<50": {
+              "quantity": 704,
+              "green": 209,
+              "red": 495,
+              "actual_rate": 29.69,
+              "mean_score": 19.96
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.274857,
+          "log_loss": 0.805273,
+          "calibration_error": 0.172266,
+          "roc_auc": 0.53323,
+          "pr_auc": 0.33217,
+          "buckets": {
+            "50-59": {
+              "quantity": 57,
+              "green": 21,
+              "red": 36,
+              "actual_rate": 36.84,
+              "mean_score": 53.32
+            },
+            "60-69": {
+              "quantity": 36,
+              "green": 17,
+              "red": 19,
+              "actual_rate": 47.22,
+              "mean_score": 63.78
+            },
+            "70-79": {
+              "quantity": 22,
+              "green": 4,
+              "red": 18,
+              "actual_rate": 18.18,
+              "mean_score": 75.41
+            },
+            "80-89": {
+              "quantity": 66,
+              "green": 27,
+              "red": 39,
+              "actual_rate": 40.91,
+              "mean_score": 86.48
+            },
+            "90-100": {
+              "quantity": 27,
+              "green": 5,
+              "red": 22,
+              "actual_rate": 18.52,
+              "mean_score": 92.3
+            },
+            "<50": {
+              "quantity": 548,
+              "green": 160,
+              "red": 388,
+              "actual_rate": 29.2,
+              "mean_score": 19.65
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.275364,
+          "log_loss": 0.807601,
+          "calibration_error": 0.170605,
+          "roc_auc": 0.533333,
+          "pr_auc": 0.332003,
+          "buckets": {
+            "50-59": {
+              "quantity": 53,
+              "green": 19,
+              "red": 34,
+              "actual_rate": 35.85,
+              "mean_score": 53.15
+            },
+            "60-69": {
+              "quantity": 38,
+              "green": 19,
+              "red": 19,
+              "actual_rate": 50.0,
+              "mean_score": 63.63
+            },
+            "70-79": {
+              "quantity": 17,
+              "green": 3,
+              "red": 14,
+              "actual_rate": 17.65,
+              "mean_score": 74.64
+            },
+            "80-89": {
+              "quantity": 71,
+              "green": 28,
+              "red": 43,
+              "actual_rate": 39.44,
+              "mean_score": 86.29
+            },
+            "90-100": {
+              "quantity": 27,
+              "green": 5,
+              "red": 22,
+              "actual_rate": 18.52,
+              "mean_score": 92.37
+            },
+            "<50": {
+              "quantity": 550,
+              "green": 160,
+              "red": 390,
+              "actual_rate": 29.09,
+              "mean_score": 19.68
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 756,
+          "green": 234,
+          "red": 522,
+          "hit_rate": 30.952,
+          "brier": 0.275907,
+          "log_loss": 0.838194,
+          "calibration_error": 0.174622,
+          "roc_auc": 0.535125,
+          "pr_auc": 0.333032,
+          "buckets": {
+            "50-59": {
+              "quantity": 54,
+              "green": 18,
+              "red": 36,
+              "actual_rate": 33.33,
+              "mean_score": 52.45
+            },
+            "60-69": {
+              "quantity": 41,
+              "green": 21,
+              "red": 20,
+              "actual_rate": 51.22,
+              "mean_score": 63.76
+            },
+            "70-79": {
+              "quantity": 17,
+              "green": 3,
+              "red": 14,
+              "actual_rate": 17.65,
+              "mean_score": 75.01
+            },
+            "80-89": {
+              "quantity": 71,
+              "green": 28,
+              "red": 43,
+              "actual_rate": 39.44,
+              "mean_score": 86.26
+            },
+            "90-100": {
+              "quantity": 27,
+              "green": 5,
+              "red": 22,
+              "actual_rate": 18.52,
+              "mean_score": 92.3
+            },
+            "<50": {
+              "quantity": 546,
+              "green": 159,
+              "red": 387,
+              "actual_rate": 29.12,
+              "mean_score": 19.3
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    },
+    "shots_on_target": {
+      "chosen_variant": "G_v2_complete",
+      "enabled_components": [
+        "recency",
+        "strength",
+        "matchup",
+        "uncertainty"
+      ],
+      "zero_weight_components": [],
+      "development_metrics": {
+        "A_base": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.335391,
+          "log_loss": 3.089326,
+          "calibration_error": 0.25631,
+          "roc_auc": 0.564055,
+          "pr_auc": 0.759364,
+          "buckets": {
+            "50-59": {
+              "quantity": 239,
+              "green": 136,
+              "red": 103,
+              "actual_rate": 56.9,
+              "mean_score": 50.28
+            },
+            "60-69": {
+              "quantity": 158,
+              "green": 101,
+              "red": 57,
+              "actual_rate": 63.92,
+              "mean_score": 64.89
+            },
+            "70-79": {
+              "quantity": 94,
+              "green": 67,
+              "red": 27,
+              "actual_rate": 71.28,
+              "mean_score": 74.19
+            },
+            "80-89": {
+              "quantity": 102,
+              "green": 64,
+              "red": 38,
+              "actual_rate": 62.75,
+              "mean_score": 82.58
+            },
+            "90-100": {
+              "quantity": 443,
+              "green": 293,
+              "red": 150,
+              "actual_rate": 66.14,
+              "mean_score": 99.92
+            },
+            "<50": {
+              "quantity": 581,
+              "green": 309,
+              "red": 272,
+              "actual_rate": 53.18,
+              "mean_score": 14.54
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.32831,
+          "log_loss": 2.447969,
+          "calibration_error": 0.241662,
+          "roc_auc": 0.558842,
+          "pr_auc": 0.715378,
+          "buckets": {
+            "50-59": {
+              "quantity": 188,
+              "green": 100,
+              "red": 88,
+              "actual_rate": 53.19,
+              "mean_score": 52.48
+            },
+            "60-69": {
+              "quantity": 153,
+              "green": 100,
+              "red": 53,
+              "actual_rate": 65.36,
+              "mean_score": 65.58
+            },
+            "70-79": {
+              "quantity": 108,
+              "green": 74,
+              "red": 34,
+              "actual_rate": 68.52,
+              "mean_score": 74.99
+            },
+            "80-89": {
+              "quantity": 78,
+              "green": 50,
+              "red": 28,
+              "actual_rate": 64.1,
+              "mean_score": 83.4
+            },
+            "90-100": {
+              "quantity": 443,
+              "green": 293,
+              "red": 150,
+              "actual_rate": 66.14,
+              "mean_score": 97.83
+            },
+            "<50": {
+              "quantity": 647,
+              "green": 353,
+              "red": 294,
+              "actual_rate": 54.56,
+              "mean_score": 19.53
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.335166,
+          "log_loss": 2.816494,
+          "calibration_error": 0.25616,
+          "roc_auc": 0.566077,
+          "pr_auc": 0.73837,
+          "buckets": {
+            "50-59": {
+              "quantity": 209,
+              "green": 118,
+              "red": 91,
+              "actual_rate": 56.46,
+              "mean_score": 50.61
+            },
+            "60-69": {
+              "quantity": 153,
+              "green": 98,
+              "red": 55,
+              "actual_rate": 64.05,
+              "mean_score": 65.07
+            },
+            "70-79": {
+              "quantity": 99,
+              "green": 72,
+              "red": 27,
+              "actual_rate": 72.73,
+              "mean_score": 74.47
+            },
+            "80-89": {
+              "quantity": 97,
+              "green": 59,
+              "red": 38,
+              "actual_rate": 60.82,
+              "mean_score": 82.74
+            },
+            "90-100": {
+              "quantity": 443,
+              "green": 293,
+              "red": 150,
+              "actual_rate": 66.14,
+              "mean_score": 99.87
+            },
+            "<50": {
+              "quantity": 616,
+              "green": 330,
+              "red": 286,
+              "actual_rate": 53.57,
+              "mean_score": 16.56
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.334393,
+          "log_loss": 3.062108,
+          "calibration_error": 0.253883,
+          "roc_auc": 0.562797,
+          "pr_auc": 0.753944,
+          "buckets": {
+            "50-59": {
+              "quantity": 241,
+              "green": 136,
+              "red": 105,
+              "actual_rate": 56.43,
+              "mean_score": 50.45
+            },
+            "60-69": {
+              "quantity": 153,
+              "green": 99,
+              "red": 54,
+              "actual_rate": 64.71,
+              "mean_score": 64.8
+            },
+            "70-79": {
+              "quantity": 101,
+              "green": 70,
+              "red": 31,
+              "actual_rate": 69.31,
+              "mean_score": 74.32
+            },
+            "80-89": {
+              "quantity": 108,
+              "green": 68,
+              "red": 40,
+              "actual_rate": 62.96,
+              "mean_score": 82.67
+            },
+            "90-100": {
+              "quantity": 443,
+              "green": 293,
+              "red": 150,
+              "actual_rate": 66.14,
+              "mean_score": 99.92
+            },
+            "<50": {
+              "quantity": 571,
+              "green": 304,
+              "red": 267,
+              "actual_rate": 53.24,
+              "mean_score": 14.71
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.2989,
+          "log_loss": 0.871974,
+          "calibration_error": 0.200271,
+          "roc_auc": 0.562441,
+          "pr_auc": 0.651501,
+          "buckets": {
+            "50-59": {
+              "quantity": 280,
+              "green": 162,
+              "red": 118,
+              "actual_rate": 57.86,
+              "mean_score": 51.39
+            },
+            "60-69": {
+              "quantity": 165,
+              "green": 107,
+              "red": 58,
+              "actual_rate": 64.85,
+              "mean_score": 64.76
+            },
+            "70-79": {
+              "quantity": 140,
+              "green": 93,
+              "red": 47,
+              "actual_rate": 66.43,
+              "mean_score": 74.2
+            },
+            "80-89": {
+              "quantity": 172,
+              "green": 123,
+              "red": 49,
+              "actual_rate": 71.51,
+              "mean_score": 88.19
+            },
+            "90-100": {
+              "quantity": 279,
+              "green": 176,
+              "red": 103,
+              "actual_rate": 63.08,
+              "mean_score": 92.26
+            },
+            "<50": {
+              "quantity": 581,
+              "green": 309,
+              "red": 272,
+              "actual_rate": 53.18,
+              "mean_score": 21.41
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.327423,
+          "log_loss": 2.310227,
+          "calibration_error": 0.241416,
+          "roc_auc": 0.559614,
+          "pr_auc": 0.706695,
+          "buckets": {
+            "50-59": {
+              "quantity": 180,
+              "green": 95,
+              "red": 85,
+              "actual_rate": 52.78,
+              "mean_score": 52.69
+            },
+            "60-69": {
+              "quantity": 151,
+              "green": 100,
+              "red": 51,
+              "actual_rate": 66.23,
+              "mean_score": 65.69
+            },
+            "70-79": {
+              "quantity": 114,
+              "green": 75,
+              "red": 39,
+              "actual_rate": 65.79,
+              "mean_score": 75.21
+            },
+            "80-89": {
+              "quantity": 94,
+              "green": 62,
+              "red": 32,
+              "actual_rate": 65.96,
+              "mean_score": 84.29
+            },
+            "90-100": {
+              "quantity": 430,
+              "green": 284,
+              "red": 146,
+              "actual_rate": 66.05,
+              "mean_score": 98.12
+            },
+            "<50": {
+              "quantity": 648,
+              "green": 354,
+              "red": 294,
+              "actual_rate": 54.63,
+              "mean_score": 20.13
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 1962,
+          "green": 1157,
+          "red": 805,
+          "hit_rate": 58.97,
+          "brier": 0.293524,
+          "log_loss": 0.842452,
+          "calibration_error": 0.189072,
+          "roc_auc": 0.557468,
+          "pr_auc": 0.633328,
+          "buckets": {
+            "50-59": {
+              "quantity": 262,
+              "green": 145,
+              "red": 117,
+              "actual_rate": 55.34,
+              "mean_score": 53.27
+            },
+            "60-69": {
+              "quantity": 210,
+              "green": 133,
+              "red": 77,
+              "actual_rate": 63.33,
+              "mean_score": 64.7
+            },
+            "70-79": {
+              "quantity": 180,
+              "green": 115,
+              "red": 65,
+              "actual_rate": 63.89,
+              "mean_score": 74.49
+            },
+            "80-89": {
+              "quantity": 331,
+              "green": 227,
+              "red": 104,
+              "actual_rate": 68.58,
+              "mean_score": 86.19
+            },
+            "90-100": {
+              "quantity": 195,
+              "green": 115,
+              "red": 80,
+              "actual_rate": 58.97,
+              "mean_score": 92.53
+            },
+            "<50": {
+              "quantity": 784,
+              "green": 422,
+              "red": 362,
+              "actual_rate": 53.83,
+              "mean_score": 25.79
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "H_recency_uncertainty": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.294164,
+          "log_loss": 0.849595,
+          "calibration_error": 0.187153,
+          "roc_auc": 0.557271,
+          "pr_auc": 0.641127,
+          "buckets": {
+            "50-59": {
+              "quantity": 216,
+              "green": 119,
+              "red": 97,
+              "actual_rate": 55.09,
+              "mean_score": 53.02
+            },
+            "60-69": {
+              "quantity": 175,
+              "green": 113,
+              "red": 62,
+              "actual_rate": 64.57,
+              "mean_score": 64.69
+            },
+            "70-79": {
+              "quantity": 147,
+              "green": 99,
+              "red": 48,
+              "actual_rate": 67.35,
+              "mean_score": 74.79
+            },
+            "80-89": {
+              "quantity": 239,
+              "green": 172,
+              "red": 67,
+              "actual_rate": 71.97,
+              "mean_score": 86.27
+            },
+            "90-100": {
+              "quantity": 194,
+              "green": 114,
+              "red": 80,
+              "actual_rate": 58.76,
+              "mean_score": 92.54
+            },
+            "<50": {
+              "quantity": 646,
+              "green": 353,
+              "red": 293,
+              "actual_rate": 54.64,
+              "mean_score": 25.65
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "I_complete_without_strength": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.294817,
+          "log_loss": 0.852417,
+          "calibration_error": 0.190971,
+          "roc_auc": 0.557439,
+          "pr_auc": 0.639944,
+          "buckets": {
+            "50-59": {
+              "quantity": 207,
+              "green": 114,
+              "red": 93,
+              "actual_rate": 55.07,
+              "mean_score": 53.15
+            },
+            "60-69": {
+              "quantity": 173,
+              "green": 114,
+              "red": 59,
+              "actual_rate": 65.9,
+              "mean_score": 64.76
+            },
+            "70-79": {
+              "quantity": 134,
+              "green": 88,
+              "red": 46,
+              "actual_rate": 65.67,
+              "mean_score": 74.46
+            },
+            "80-89": {
+              "quantity": 251,
+              "green": 180,
+              "red": 71,
+              "actual_rate": 71.71,
+              "mean_score": 86.23
+            },
+            "90-100": {
+              "quantity": 195,
+              "green": 115,
+              "red": 80,
+              "actual_rate": 58.97,
+              "mean_score": 92.61
+            },
+            "<50": {
+              "quantity": 657,
+              "green": 359,
+              "red": 298,
+              "actual_rate": 54.64,
+              "mean_score": 25.87
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "J_complete_without_matchup": {
+          "quantity": 1617,
+          "green": 970,
+          "red": 647,
+          "hit_rate": 59.988,
+          "brier": 0.296342,
+          "log_loss": 0.876946,
+          "calibration_error": 0.196283,
+          "roc_auc": 0.557515,
+          "pr_auc": 0.641198,
+          "buckets": {
+            "50-59": {
+              "quantity": 220,
+              "green": 121,
+              "red": 99,
+              "actual_rate": 55.0,
+              "mean_score": 53.03
+            },
+            "60-69": {
+              "quantity": 165,
+              "green": 112,
+              "red": 53,
+              "actual_rate": 67.88,
+              "mean_score": 64.7
+            },
+            "70-79": {
+              "quantity": 131,
+              "green": 85,
+              "red": 46,
+              "actual_rate": 64.89,
+              "mean_score": 74.53
+            },
+            "80-89": {
+              "quantity": 250,
+              "green": 179,
+              "red": 71,
+              "actual_rate": 71.6,
+              "mean_score": 86.24
+            },
+            "90-100": {
+              "quantity": 195,
+              "green": 115,
+              "red": 80,
+              "actual_rate": 58.97,
+              "mean_score": 92.53
+            },
+            "<50": {
+              "quantity": 656,
+              "green": 358,
+              "red": 298,
+              "actual_rate": 54.57,
+              "mean_score": 25.13
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      }
+    }
+  },
+  "bootstrap": {
+    "v2_raw_vs_legacy": {
+      "seed": 20260918,
+      "repetitions": 2000,
+      "fixture_clusters": 451,
+      "candidate_count": 6830,
+      "comparison": "v2_score minus legacy_score",
+      "brier": {
+        "mean_delta": -0.016598,
+        "ci95_low": -0.023243,
+        "ci95_high": -0.009745
+      },
+      "log_loss": {
+        "mean_delta": -0.022351,
+        "ci95_low": -0.039027,
+        "ci95_high": -0.005271
+      },
+      "roc_auc": {
+        "mean_delta": 0.018231,
+        "ci95_low": 0.002669,
+        "ci95_high": 0.033334
+      },
+      "pr_auc": {
+        "mean_delta": 0.00358,
+        "ci95_low": -0.010008,
+        "ci95_high": 0.017314
+      }
+    },
+    "v2_calibrated_vs_legacy": {
+      "seed": 20260918,
+      "repetitions": 2000,
+      "fixture_clusters": 451,
+      "candidate_count": 6830,
+      "comparison": "v2_calibrated_probability minus legacy_score",
+      "brier": {
+        "mean_delta": -0.042081,
+        "ci95_low": -0.048838,
+        "ci95_high": -0.035653
+      },
+      "log_loss": {
+        "mean_delta": -0.092636,
+        "ci95_low": -0.107844,
+        "ci95_high": -0.078213
+      },
+      "roc_auc": {
+        "mean_delta": 0.048254,
+        "ci95_low": 0.032727,
+        "ci95_high": 0.063892
+      },
+      "pr_auc": {
+        "mean_delta": 0.031488,
+        "ci95_low": 0.017296,
+        "ci95_high": 0.045356
+      }
+    }
+  },
+  "experimental_selection_profiles": {
+    "SHADOW_CONSERVATIVE": {
+      "minimum_probability": 75,
+      "maximum_uncertainty": 35,
+      "minimum_data_quality": 65,
+      "minimum_sample": 5
+    },
+    "SHADOW_BALANCED": {
+      "minimum_probability": 65,
+      "maximum_uncertainty": 55,
+      "minimum_data_quality": 45,
+      "minimum_sample": 3
+    }
+  },
+  "warnings": [
+    "V2 permanece exclusivamente Shadow.",
+    "Configurações foram escolhidas no desenvolvimento; avaliação permaneceu congelada.",
+    "Odds e ROI não foram reconstruídos."
+  ]
+}

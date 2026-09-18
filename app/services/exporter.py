@@ -2,6 +2,7 @@ import os
 import json
 
 import pandas as pd
+from openpyxl import Workbook
 
 
 def _ensure_dir(path: str):
@@ -145,3 +146,30 @@ def export_alert(alert, rule_name: str, base_dir: str):
     rule_path = os.path.join(base_dir, f"regra_{alert.rule_id}.xlsx")
     _upsert_excel(general_path, row, "alert_id")
     _upsert_excel(rule_path, row, "alert_id")
+
+
+def export_history_report(alerts, path: str) -> int:
+    """Generate a fresh, compact report from the database history."""
+    columns = (
+        "ID", "Data/hora", "Status", "Regra", "Liga", "Mandante", "Visitante", "Mercado",
+        "Minuto do alerta", "Minuto do resultado", "Placar na entrada", "Placar HT", "Placar FT",
+        "Odd", "Valor apostado", "Observação", "IA - nota", "IA - veredito", "IA - comentário",
+        "ML - nota", "ML - veredito", "Link",
+    )
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet("Histórico")
+    sheet.append(columns)
+    total = 0
+    for alert in alerts:
+        created_at = getattr(alert, "created_at", None)
+        sheet.append((
+            alert.id, created_at.strftime("%Y-%m-%d %H:%M:%S") if created_at else "", str(alert.status or "pending").upper(),
+            alert.rule_name or "", alert.league, alert.home_team, alert.away_team,
+            alert.market_label or alert.target_text or alert.market_key, alert.alert_minute, alert.result_minute,
+            alert.initial_score, alert.ht_score, alert.ft_score, alert.stake_odd, alert.stake_amount, alert.bet_note,
+            alert.ai_score, alert.ai_verdict, alert.ai_commentary, alert.ml_pred_score, alert.ml_pred_verdict, alert.url,
+        ))
+        total += 1
+    _ensure_dir(os.path.dirname(path) or ".")
+    workbook.save(path)
+    return total

@@ -78,6 +78,30 @@ def send_message(token: str, chat_id: str, text: str):
         return False, str(exc)
 
 
+def get_updates(token: str, offset: int | None = None):
+    """Fetch pending bot updates without holding the worker in a long poll."""
+    if not token:
+        return False, "Token ausente.", []
+    params = {"timeout": 0, "allowed_updates": '["message"]'}
+    if offset is not None:
+        params["offset"] = int(offset)
+    try:
+        response = _telegram_session().get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params=params,
+            timeout=12,
+        )
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}: {response.text[:180]}", []
+        body = response.json()
+        if not body.get("ok"):
+            return False, str(body.get("description") or "Resposta invalida do Telegram."), []
+        updates = body.get("result") or []
+        return True, "ok", updates if isinstance(updates, list) else []
+    except (requests.RequestException, ValueError) as exc:
+        return False, str(exc), []
+
+
 def edit_message_text(token: str, chat_id: str, message_id: int, text: str):
     if not token or not chat_id or not message_id:
         return False, "Token/chat_id/message_id ausente."

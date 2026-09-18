@@ -1,0 +1,3219 @@
+{
+  "run_id": 1,
+  "duration_ms": 3893,
+  "report": {
+    "coverage": {
+      "candidates": 550,
+      "resolved": 334,
+      "unresolved": 216,
+      "leakage_blocked": 0,
+      "strength_available": 396,
+      "matchup_available": 8
+    },
+    "legacy": {
+      "quantity": 334,
+      "green": 192,
+      "red": 142,
+      "hit_rate": 57.485,
+      "brier": 0.238309,
+      "log_loss": 0.673916,
+      "calibration_error": 0.098281,
+      "roc_auc": 0.66056,
+      "pr_auc": 0.731129,
+      "buckets": {
+        "50-59": {
+          "quantity": 86,
+          "green": 55,
+          "red": 31,
+          "actual_rate": 63.95,
+          "mean_score": 54.52
+        },
+        "60-69": {
+          "quantity": 63,
+          "green": 47,
+          "red": 16,
+          "actual_rate": 74.6,
+          "mean_score": 64.5
+        },
+        "70-79": {
+          "quantity": 18,
+          "green": 15,
+          "red": 3,
+          "actual_rate": 83.33,
+          "mean_score": 73.13
+        },
+        "80-89": {
+          "quantity": 2,
+          "green": 2,
+          "red": 0,
+          "actual_rate": 100.0,
+          "mean_score": 80.9
+        },
+        "<50": {
+          "quantity": 165,
+          "green": 73,
+          "red": 92,
+          "actual_rate": 44.24,
+          "mean_score": 34.47
+        }
+      },
+      "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+    },
+    "v2": {
+      "quantity": 334,
+      "green": 192,
+      "red": 142,
+      "hit_rate": 57.485,
+      "brier": 0.229723,
+      "log_loss": 0.660931,
+      "calibration_error": 0.10479,
+      "roc_auc": 0.68761,
+      "pr_auc": 0.744558,
+      "buckets": {
+        "50-59": {
+          "quantity": 50,
+          "green": 24,
+          "red": 26,
+          "actual_rate": 48.0,
+          "mean_score": 55.07
+        },
+        "60-69": {
+          "quantity": 45,
+          "green": 27,
+          "red": 18,
+          "actual_rate": 60.0,
+          "mean_score": 66.53
+        },
+        "70-79": {
+          "quantity": 41,
+          "green": 24,
+          "red": 17,
+          "actual_rate": 58.54,
+          "mean_score": 75.2
+        },
+        "80-89": {
+          "quantity": 57,
+          "green": 44,
+          "red": 13,
+          "actual_rate": 77.19,
+          "mean_score": 85.6
+        },
+        "90-100": {
+          "quantity": 41,
+          "green": 33,
+          "red": 8,
+          "actual_rate": 80.49,
+          "mean_score": 92.22
+        },
+        "<50": {
+          "quantity": 100,
+          "green": 40,
+          "red": 60,
+          "actual_rate": 40.0,
+          "mean_score": 27.91
+        }
+      },
+      "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+    },
+    "by_market": {
+      "cards": {
+        "quantity": 75,
+        "resolved": 45,
+        "green": 26,
+        "red": 19,
+        "hit_rate": 57.78,
+        "conclusion_eligible": true
+      },
+      "corners": {
+        "quantity": 75,
+        "resolved": 45,
+        "green": 21,
+        "red": 24,
+        "hit_rate": 46.67,
+        "conclusion_eligible": true
+      },
+      "fouls": {
+        "quantity": 75,
+        "resolved": 42,
+        "green": 41,
+        "red": 1,
+        "hit_rate": 97.62,
+        "conclusion_eligible": true
+      },
+      "offsides": {
+        "quantity": 75,
+        "resolved": 42,
+        "green": 31,
+        "red": 11,
+        "hit_rate": 73.81,
+        "conclusion_eligible": true
+      },
+      "shots": {
+        "quantity": 75,
+        "resolved": 42,
+        "green": 11,
+        "red": 31,
+        "hit_rate": 26.19,
+        "conclusion_eligible": true
+      },
+      "shots_on_target": {
+        "quantity": 75,
+        "resolved": 45,
+        "green": 24,
+        "red": 21,
+        "hit_rate": 53.33,
+        "conclusion_eligible": true
+      },
+      "goals": {
+        "quantity": 50,
+        "resolved": 50,
+        "green": 25,
+        "red": 25,
+        "hit_rate": 50.0,
+        "conclusion_eligible": true
+      },
+      "corners_first_half": {
+        "quantity": 25,
+        "resolved": 0,
+        "green": 0,
+        "red": 0,
+        "hit_rate": null,
+        "conclusion_eligible": false
+      },
+      "goals_first_half": {
+        "quantity": 25,
+        "resolved": 23,
+        "green": 13,
+        "red": 10,
+        "hit_rate": 56.52,
+        "conclusion_eligible": false
+      }
+    },
+    "by_league": {
+      "Brazil Campeonato Gaucho 2": {
+        "quantity": 110,
+        "resolved": 51,
+        "green": 34,
+        "red": 17,
+        "hit_rate": 66.67,
+        "conclusion_eligible": true
+      },
+      "Colombia Primera A": {
+        "quantity": 44,
+        "resolved": 42,
+        "green": 28,
+        "red": 14,
+        "hit_rate": 66.67,
+        "conclusion_eligible": true
+      },
+      "Colombia Primera B": {
+        "quantity": 44,
+        "resolved": 42,
+        "green": 17,
+        "red": 25,
+        "hit_rate": 40.48,
+        "conclusion_eligible": true
+      },
+      "Germany Regionalliga North": {
+        "quantity": 44,
+        "resolved": 6,
+        "green": 4,
+        "red": 2,
+        "hit_rate": 66.67,
+        "conclusion_eligible": false
+      },
+      "Lithuania A Lyga": {
+        "quantity": 44,
+        "resolved": 42,
+        "green": 24,
+        "red": 18,
+        "hit_rate": 57.14,
+        "conclusion_eligible": true
+      },
+      "Sweden 1.div Norra": {
+        "quantity": 44,
+        "resolved": 42,
+        "green": 15,
+        "red": 27,
+        "hit_rate": 35.71,
+        "conclusion_eligible": true
+      },
+      "Brazil Copa Parana": {
+        "quantity": 22,
+        "resolved": 2,
+        "green": 2,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Czechia Div 2 Women": {
+        "quantity": 22,
+        "resolved": 3,
+        "green": 3,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Germany Oberliga Niedersachsen": {
+        "quantity": 22,
+        "resolved": 3,
+        "green": 3,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Germany Regionalliga North East": {
+        "quantity": 22,
+        "resolved": 3,
+        "green": 3,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Hungary NBI Women": {
+        "quantity": 22,
+        "resolved": 2,
+        "green": 2,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Mexico Liga MX": {
+        "quantity": 22,
+        "resolved": 21,
+        "green": 21,
+        "red": 0,
+        "hit_rate": 100.0,
+        "conclusion_eligible": false
+      },
+      "Mexico Liga de Expansion": {
+        "quantity": 22,
+        "resolved": 21,
+        "green": 12,
+        "red": 9,
+        "hit_rate": 57.14,
+        "conclusion_eligible": false
+      },
+      "Serbia Prva Liga": {
+        "quantity": 22,
+        "resolved": 12,
+        "green": 3,
+        "red": 9,
+        "hit_rate": 25.0,
+        "conclusion_eligible": false
+      },
+      "Sweden 1.div Södra": {
+        "quantity": 22,
+        "resolved": 21,
+        "green": 7,
+        "red": 14,
+        "hit_rate": 33.33,
+        "conclusion_eligible": false
+      },
+      "USA MLS": {
+        "quantity": 22,
+        "resolved": 21,
+        "green": 14,
+        "red": 7,
+        "hit_rate": 66.67,
+        "conclusion_eligible": false
+      }
+    },
+    "by_temporal_confidence": {
+      "MEDIUM": {
+        "quantity": 550,
+        "resolved": 334,
+        "green": 192,
+        "red": 142,
+        "hit_rate": 57.49,
+        "conclusion_eligible": true
+      }
+    },
+    "by_data_quality": {
+      "LOW": {
+        "quantity": 304,
+        "resolved": 123,
+        "green": 66,
+        "red": 57,
+        "hit_rate": 53.66,
+        "conclusion_eligible": true
+      },
+      "MEDIUM": {
+        "quantity": 246,
+        "resolved": 211,
+        "green": 126,
+        "red": 85,
+        "hit_rate": 59.72,
+        "conclusion_eligible": true
+      }
+    },
+    "by_uncertainty": {
+      "MEDIUM": {
+        "quantity": 357,
+        "resolved": 240,
+        "green": 125,
+        "red": 115,
+        "hit_rate": 52.08,
+        "conclusion_eligible": true
+      },
+      "HIGH": {
+        "quantity": 97,
+        "resolved": 0,
+        "green": 0,
+        "red": 0,
+        "hit_rate": null,
+        "conclusion_eligible": false
+      },
+      "LOW": {
+        "quantity": 96,
+        "resolved": 94,
+        "green": 67,
+        "red": 27,
+        "hit_rate": 71.28,
+        "conclusion_eligible": true
+      }
+    },
+    "by_matchup": {
+      "False": {
+        "quantity": 542,
+        "resolved": 330,
+        "green": 190,
+        "red": 140,
+        "hit_rate": 57.58,
+        "conclusion_eligible": true
+      },
+      "True": {
+        "quantity": 8,
+        "resolved": 4,
+        "green": 2,
+        "red": 2,
+        "hit_rate": 50.0,
+        "conclusion_eligible": false
+      }
+    },
+    "by_strength": {
+      "True": {
+        "quantity": 396,
+        "resolved": 224,
+        "green": 132,
+        "red": 92,
+        "hit_rate": 58.93,
+        "conclusion_eligible": true
+      },
+      "False": {
+        "quantity": 154,
+        "resolved": 110,
+        "green": 60,
+        "red": 50,
+        "hit_rate": 54.55,
+        "conclusion_eligible": true
+      }
+    },
+    "by_historical_opponent_strength": {
+      "UNKNOWN": {
+        "quantity": 334,
+        "resolved": 220,
+        "green": 118,
+        "red": 102,
+        "hit_rate": 53.64,
+        "conclusion_eligible": true
+      },
+      "SIMILAR": {
+        "quantity": 210,
+        "resolved": 114,
+        "green": 74,
+        "red": 40,
+        "hit_rate": 64.91,
+        "conclusion_eligible": true
+      },
+      "CURRENT_WEAKER": {
+        "quantity": 6,
+        "resolved": 0,
+        "green": 0,
+        "red": 0,
+        "hit_rate": null,
+        "conclusion_eligible": false
+      }
+    },
+    "by_recency_shift": {
+      "STABLE": {
+        "quantity": 287,
+        "resolved": 212,
+        "green": 130,
+        "red": 82,
+        "hit_rate": 61.32,
+        "conclusion_eligible": true
+      },
+      "UNKNOWN": {
+        "quantity": 154,
+        "resolved": 33,
+        "green": 18,
+        "red": 15,
+        "hit_rate": 54.55,
+        "conclusion_eligible": true
+      },
+      "POSITIVE": {
+        "quantity": 62,
+        "resolved": 51,
+        "green": 29,
+        "red": 22,
+        "hit_rate": 56.86,
+        "conclusion_eligible": true
+      },
+      "NEGATIVE": {
+        "quantity": 47,
+        "resolved": 38,
+        "green": 15,
+        "red": 23,
+        "hit_rate": 39.47,
+        "conclusion_eligible": true
+      }
+    },
+    "by_legacy_status": {
+      "REJECTED": {
+        "quantity": 541,
+        "resolved": 327,
+        "green": 186,
+        "red": 141,
+        "hit_rate": 56.88,
+        "conclusion_eligible": true
+      },
+      "APPROVED": {
+        "quantity": 9,
+        "resolved": 7,
+        "green": 6,
+        "red": 1,
+        "hit_rate": 85.71,
+        "conclusion_eligible": false
+      }
+    },
+    "ablation": {
+      "A_base": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.2452,
+        "log_loss": 1.537259,
+        "calibration_error": 0.149526,
+        "roc_auc": 0.693366,
+        "pr_auc": 0.80397,
+        "buckets": {
+          "50-59": {
+            "quantity": 34,
+            "green": 16,
+            "red": 18,
+            "actual_rate": 47.06,
+            "mean_score": 51.5
+          },
+          "60-69": {
+            "quantity": 30,
+            "green": 17,
+            "red": 13,
+            "actual_rate": 56.67,
+            "mean_score": 63.24
+          },
+          "70-79": {
+            "quantity": 38,
+            "green": 22,
+            "red": 16,
+            "actual_rate": 57.89,
+            "mean_score": 73.27
+          },
+          "80-89": {
+            "quantity": 33,
+            "green": 24,
+            "red": 9,
+            "actual_rate": 72.73,
+            "mean_score": 82.13
+          },
+          "90-100": {
+            "quantity": 86,
+            "green": 66,
+            "red": 20,
+            "actual_rate": 76.74,
+            "mean_score": 98.32
+          },
+          "<50": {
+            "quantity": 80,
+            "green": 29,
+            "red": 51,
+            "actual_rate": 36.25,
+            "mean_score": 18.72
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "B_recency": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.239937,
+        "log_loss": 0.907337,
+        "calibration_error": 0.150526,
+        "roc_auc": 0.698977,
+        "pr_auc": 0.775988,
+        "buckets": {
+          "50-59": {
+            "quantity": 30,
+            "green": 14,
+            "red": 16,
+            "actual_rate": 46.67,
+            "mean_score": 54.4
+          },
+          "60-69": {
+            "quantity": 29,
+            "green": 15,
+            "red": 14,
+            "actual_rate": 51.72,
+            "mean_score": 64.9
+          },
+          "70-79": {
+            "quantity": 38,
+            "green": 24,
+            "red": 14,
+            "actual_rate": 63.16,
+            "mean_score": 74.61
+          },
+          "80-89": {
+            "quantity": 32,
+            "green": 23,
+            "red": 9,
+            "actual_rate": 71.88,
+            "mean_score": 84.22
+          },
+          "90-100": {
+            "quantity": 82,
+            "green": 63,
+            "red": 19,
+            "actual_rate": 76.83,
+            "mean_score": 97.25
+          },
+          "<50": {
+            "quantity": 90,
+            "green": 35,
+            "red": 55,
+            "actual_rate": 38.89,
+            "mean_score": 23.2
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "C_strength": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.244897,
+        "log_loss": 1.335678,
+        "calibration_error": 0.145961,
+        "roc_auc": 0.698796,
+        "pr_auc": 0.792396,
+        "buckets": {
+          "50-59": {
+            "quantity": 32,
+            "green": 16,
+            "red": 16,
+            "actual_rate": 50.0,
+            "mean_score": 51.97
+          },
+          "60-69": {
+            "quantity": 29,
+            "green": 16,
+            "red": 13,
+            "actual_rate": 55.17,
+            "mean_score": 63.34
+          },
+          "70-79": {
+            "quantity": 40,
+            "green": 24,
+            "red": 16,
+            "actual_rate": 60.0,
+            "mean_score": 73.59
+          },
+          "80-89": {
+            "quantity": 32,
+            "green": 23,
+            "red": 9,
+            "actual_rate": 71.88,
+            "mean_score": 82.5
+          },
+          "90-100": {
+            "quantity": 85,
+            "green": 65,
+            "red": 20,
+            "actual_rate": 76.47,
+            "mean_score": 98.34
+          },
+          "<50": {
+            "quantity": 83,
+            "green": 30,
+            "red": 53,
+            "actual_rate": 36.14,
+            "mean_score": 19.87
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "D_matchup": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.24499,
+        "log_loss": 1.537035,
+        "calibration_error": 0.1491,
+        "roc_auc": 0.692642,
+        "pr_auc": 0.801405,
+        "buckets": {
+          "50-59": {
+            "quantity": 34,
+            "green": 16,
+            "red": 18,
+            "actual_rate": 47.06,
+            "mean_score": 51.5
+          },
+          "60-69": {
+            "quantity": 30,
+            "green": 17,
+            "red": 13,
+            "actual_rate": 56.67,
+            "mean_score": 63.06
+          },
+          "70-79": {
+            "quantity": 38,
+            "green": 22,
+            "red": 16,
+            "actual_rate": 57.89,
+            "mean_score": 73.27
+          },
+          "80-89": {
+            "quantity": 33,
+            "green": 24,
+            "red": 9,
+            "actual_rate": 72.73,
+            "mean_score": 82.13
+          },
+          "90-100": {
+            "quantity": 86,
+            "green": 66,
+            "red": 20,
+            "actual_rate": 76.74,
+            "mean_score": 98.24
+          },
+          "<50": {
+            "quantity": 80,
+            "green": 29,
+            "red": 51,
+            "actual_rate": 36.25,
+            "mean_score": 18.72
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "E_dispersion_uncertainty": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.228427,
+        "log_loss": 0.667477,
+        "calibration_error": 0.098237,
+        "roc_auc": 0.696126,
+        "pr_auc": 0.755143,
+        "buckets": {
+          "50-59": {
+            "quantity": 49,
+            "green": 26,
+            "red": 23,
+            "actual_rate": 53.06,
+            "mean_score": 53.39
+          },
+          "60-69": {
+            "quantity": 38,
+            "green": 21,
+            "red": 17,
+            "actual_rate": 55.26,
+            "mean_score": 65.78
+          },
+          "70-79": {
+            "quantity": 43,
+            "green": 27,
+            "red": 16,
+            "actual_rate": 62.79,
+            "mean_score": 74.78
+          },
+          "80-89": {
+            "quantity": 32,
+            "green": 25,
+            "red": 7,
+            "actual_rate": 78.12,
+            "mean_score": 85.69
+          },
+          "90-100": {
+            "quantity": 59,
+            "green": 46,
+            "red": 13,
+            "actual_rate": 77.97,
+            "mean_score": 92.27
+          },
+          "<50": {
+            "quantity": 80,
+            "green": 29,
+            "red": 51,
+            "actual_rate": 36.25,
+            "mean_score": 24.5
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "F_recency_strength_matchup": {
+        "quantity": 301,
+        "green": 174,
+        "red": 127,
+        "hit_rate": 57.807,
+        "brier": 0.239685,
+        "log_loss": 0.934127,
+        "calibration_error": 0.150233,
+        "roc_auc": 0.698502,
+        "pr_auc": 0.774116,
+        "buckets": {
+          "50-59": {
+            "quantity": 30,
+            "green": 14,
+            "red": 16,
+            "actual_rate": 46.67,
+            "mean_score": 54.43
+          },
+          "60-69": {
+            "quantity": 29,
+            "green": 15,
+            "red": 14,
+            "actual_rate": 51.72,
+            "mean_score": 64.68
+          },
+          "70-79": {
+            "quantity": 38,
+            "green": 24,
+            "red": 14,
+            "actual_rate": 63.16,
+            "mean_score": 74.6
+          },
+          "80-89": {
+            "quantity": 35,
+            "green": 25,
+            "red": 10,
+            "actual_rate": 71.43,
+            "mean_score": 84.68
+          },
+          "90-100": {
+            "quantity": 79,
+            "green": 61,
+            "red": 18,
+            "actual_rate": 77.22,
+            "mean_score": 97.48
+          },
+          "<50": {
+            "quantity": 90,
+            "green": 35,
+            "red": 55,
+            "actual_rate": 38.89,
+            "mean_score": 23.19
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "G_v2_complete": {
+        "quantity": 334,
+        "green": 192,
+        "red": 142,
+        "hit_rate": 57.485,
+        "brier": 0.229723,
+        "log_loss": 0.660931,
+        "calibration_error": 0.10479,
+        "roc_auc": 0.68761,
+        "pr_auc": 0.744558,
+        "buckets": {
+          "50-59": {
+            "quantity": 50,
+            "green": 24,
+            "red": 26,
+            "actual_rate": 48.0,
+            "mean_score": 55.07
+          },
+          "60-69": {
+            "quantity": 45,
+            "green": 27,
+            "red": 18,
+            "actual_rate": 60.0,
+            "mean_score": 66.53
+          },
+          "70-79": {
+            "quantity": 41,
+            "green": 24,
+            "red": 17,
+            "actual_rate": 58.54,
+            "mean_score": 75.2
+          },
+          "80-89": {
+            "quantity": 57,
+            "green": 44,
+            "red": 13,
+            "actual_rate": 77.19,
+            "mean_score": 85.6
+          },
+          "90-100": {
+            "quantity": 41,
+            "green": 33,
+            "red": 8,
+            "actual_rate": 80.49,
+            "mean_score": 92.22
+          },
+          "<50": {
+            "quantity": 100,
+            "green": 40,
+            "red": 60,
+            "actual_rate": 40.0,
+            "mean_score": 27.91
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      }
+    },
+    "raw_frequency_100": {
+      "quantity": 69,
+      "by_sample": {
+        "3": {
+          "quantity": 64,
+          "resolved": 64,
+          "green": 50,
+          "red": 14,
+          "hit_rate": 78.12,
+          "conclusion_eligible": true
+        },
+        "4-5": {
+          "quantity": 5,
+          "resolved": 5,
+          "green": 5,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        }
+      },
+      "by_strength": {
+        "SIMILAR": {
+          "quantity": 45,
+          "resolved": 45,
+          "green": 35,
+          "red": 10,
+          "hit_rate": 77.78,
+          "conclusion_eligible": true
+        },
+        "UNKNOWN": {
+          "quantity": 24,
+          "resolved": 24,
+          "green": 20,
+          "red": 4,
+          "hit_rate": 83.33,
+          "conclusion_eligible": false
+        }
+      }
+    },
+    "largest_legacy_v2_divergences": [
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "cards_home",
+        "line": 1.5,
+        "scope": "home",
+        "legacy_score": 16.1,
+        "v2_score": 86.13,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "offsides_home",
+        "line": 0.5,
+        "scope": "home",
+        "legacy_score": 16.1,
+        "v2_score": 86.13,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "fouls_home",
+        "line": 7.5,
+        "scope": "home",
+        "legacy_score": 16.1,
+        "v2_score": 86.13,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "cards_home",
+        "line": 1.5,
+        "scope": "home",
+        "legacy_score": 39.6,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "offsides_home",
+        "line": 0.5,
+        "scope": "home",
+        "legacy_score": 39.6,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "fouls_home",
+        "line": 7.5,
+        "scope": "home",
+        "legacy_score": 39.6,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "corners",
+        "line": 8.5,
+        "scope": "total",
+        "legacy_score": 40.4,
+        "v2_score": 92.01,
+        "settlement": "RED"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "cards",
+        "line": 4.5,
+        "scope": "total",
+        "legacy_score": 40.4,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "offsides",
+        "line": 1.5,
+        "scope": "total",
+        "legacy_score": 40.4,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "fouls",
+        "line": 15.5,
+        "scope": "total",
+        "legacy_score": 40.4,
+        "v2_score": 92.01,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "over15",
+        "line": 1.5,
+        "scope": "total",
+        "legacy_score": 42.3,
+        "v2_score": 92.82,
+        "settlement": "RED"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "fouls_away",
+        "line": 7.5,
+        "scope": "away",
+        "legacy_score": 42.2,
+        "v2_score": 92.4,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "cards_away",
+        "line": 1.5,
+        "scope": "away",
+        "legacy_score": 42.2,
+        "v2_score": 92.14,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "goal_ht",
+        "line": 0.5,
+        "scope": "total",
+        "legacy_score": 42.3,
+        "v2_score": 92.07,
+        "settlement": "RED"
+      },
+      {
+        "fixture_external_id": "12228614",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "offsides_away",
+        "line": 0.5,
+        "scope": "away",
+        "legacy_score": 42.2,
+        "v2_score": 91.71,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "offsides_away",
+        "line": 0.5,
+        "scope": "away",
+        "legacy_score": 42.3,
+        "v2_score": 89.27,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "fouls_away",
+        "line": 7.5,
+        "scope": "away",
+        "legacy_score": 42.3,
+        "v2_score": 88.64,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "13035086",
+        "league": "Brazil Campeonato Gaucho 2",
+        "market_type": "cards_away",
+        "line": 1.5,
+        "scope": "away",
+        "legacy_score": 42.3,
+        "v2_score": 88.3,
+        "settlement": "GREEN"
+      },
+      {
+        "fixture_external_id": "12099999",
+        "league": "Colombia Primera A",
+        "market_type": "fouls_away",
+        "line": 7.5,
+        "scope": "away",
+        "legacy_score": 37.9,
+        "v2_score": 83.38,
+        "settlement": "RED"
+      },
+      {
+        "fixture_external_id": "12221982",
+        "league": "Mexico Liga de Expansion",
+        "market_type": "cards_away",
+        "line": 1.5,
+        "scope": "away",
+        "legacy_score": 37.9,
+        "v2_score": 83.16,
+        "settlement": "GREEN"
+      }
+    ],
+    "development": {
+      "coverage": {
+        "candidates": 352,
+        "resolved": 218,
+        "unresolved": 134,
+        "leakage_blocked": 0,
+        "strength_available": 308,
+        "matchup_available": 8
+      },
+      "legacy": {
+        "quantity": 218,
+        "green": 127,
+        "red": 91,
+        "hit_rate": 58.257,
+        "brier": 0.218031,
+        "log_loss": 0.628543,
+        "calibration_error": 0.085248,
+        "roc_auc": 0.71593,
+        "pr_auc": 0.765089,
+        "buckets": {
+          "50-59": {
+            "quantity": 72,
+            "green": 49,
+            "red": 23,
+            "actual_rate": 68.06,
+            "mean_score": 54.17
+          },
+          "60-69": {
+            "quantity": 43,
+            "green": 34,
+            "red": 9,
+            "actual_rate": 79.07,
+            "mean_score": 64.43
+          },
+          "70-79": {
+            "quantity": 16,
+            "green": 13,
+            "red": 3,
+            "actual_rate": 81.25,
+            "mean_score": 72.88
+          },
+          "80-89": {
+            "quantity": 2,
+            "green": 2,
+            "red": 0,
+            "actual_rate": 100.0,
+            "mean_score": 80.9
+          },
+          "<50": {
+            "quantity": 85,
+            "green": 29,
+            "red": 56,
+            "actual_rate": 34.12,
+            "mean_score": 34.79
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "v2": {
+        "quantity": 218,
+        "green": 127,
+        "red": 91,
+        "hit_rate": 58.257,
+        "brier": 0.238825,
+        "log_loss": 0.681752,
+        "calibration_error": 0.131178,
+        "roc_auc": 0.667085,
+        "pr_auc": 0.745143,
+        "buckets": {
+          "50-59": {
+            "quantity": 27,
+            "green": 13,
+            "red": 14,
+            "actual_rate": 48.15,
+            "mean_score": 54.53
+          },
+          "60-69": {
+            "quantity": 29,
+            "green": 18,
+            "red": 11,
+            "actual_rate": 62.07,
+            "mean_score": 66.4
+          },
+          "70-79": {
+            "quantity": 30,
+            "green": 16,
+            "red": 14,
+            "actual_rate": 53.33,
+            "mean_score": 75.48
+          },
+          "80-89": {
+            "quantity": 41,
+            "green": 29,
+            "red": 12,
+            "actual_rate": 70.73,
+            "mean_score": 85.66
+          },
+          "90-100": {
+            "quantity": 29,
+            "green": 24,
+            "red": 5,
+            "actual_rate": 82.76,
+            "mean_score": 92.28
+          },
+          "<50": {
+            "quantity": 62,
+            "green": 27,
+            "red": 35,
+            "actual_rate": 43.55,
+            "mean_score": 27.27
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "by_market": {
+        "cards": {
+          "quantity": 48,
+          "resolved": 30,
+          "green": 17,
+          "red": 13,
+          "hit_rate": 56.67,
+          "conclusion_eligible": true
+        },
+        "corners": {
+          "quantity": 48,
+          "resolved": 30,
+          "green": 15,
+          "red": 15,
+          "hit_rate": 50.0,
+          "conclusion_eligible": true
+        },
+        "fouls": {
+          "quantity": 48,
+          "resolved": 27,
+          "green": 27,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "offsides": {
+          "quantity": 48,
+          "resolved": 27,
+          "green": 17,
+          "red": 10,
+          "hit_rate": 62.96,
+          "conclusion_eligible": false
+        },
+        "shots": {
+          "quantity": 48,
+          "resolved": 27,
+          "green": 8,
+          "red": 19,
+          "hit_rate": 29.63,
+          "conclusion_eligible": false
+        },
+        "shots_on_target": {
+          "quantity": 48,
+          "resolved": 30,
+          "green": 16,
+          "red": 14,
+          "hit_rate": 53.33,
+          "conclusion_eligible": true
+        },
+        "goals": {
+          "quantity": 32,
+          "resolved": 32,
+          "green": 17,
+          "red": 15,
+          "hit_rate": 53.12,
+          "conclusion_eligible": true
+        },
+        "corners_first_half": {
+          "quantity": 16,
+          "resolved": 0,
+          "green": 0,
+          "red": 0,
+          "hit_rate": null,
+          "conclusion_eligible": false
+        },
+        "goals_first_half": {
+          "quantity": 16,
+          "resolved": 15,
+          "green": 10,
+          "red": 5,
+          "hit_rate": 66.67,
+          "conclusion_eligible": false
+        }
+      },
+      "by_league": {
+        "Germany Regionalliga North": {
+          "quantity": 44,
+          "resolved": 6,
+          "green": 4,
+          "red": 2,
+          "hit_rate": 66.67,
+          "conclusion_eligible": false
+        },
+        "Lithuania A Lyga": {
+          "quantity": 44,
+          "resolved": 42,
+          "green": 24,
+          "red": 18,
+          "hit_rate": 57.14,
+          "conclusion_eligible": true
+        },
+        "Sweden 1.div Norra": {
+          "quantity": 44,
+          "resolved": 42,
+          "green": 15,
+          "red": 27,
+          "hit_rate": 35.71,
+          "conclusion_eligible": true
+        },
+        "Colombia Primera A": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 16,
+          "red": 5,
+          "hit_rate": 76.19,
+          "conclusion_eligible": false
+        },
+        "Czechia Div 2 Women": {
+          "quantity": 22,
+          "resolved": 3,
+          "green": 3,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Germany Oberliga Niedersachsen": {
+          "quantity": 22,
+          "resolved": 3,
+          "green": 3,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Germany Regionalliga North East": {
+          "quantity": 22,
+          "resolved": 3,
+          "green": 3,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Hungary NBI Women": {
+          "quantity": 22,
+          "resolved": 2,
+          "green": 2,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Mexico Liga MX": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 21,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Mexico Liga de Expansion": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 12,
+          "red": 9,
+          "hit_rate": 57.14,
+          "conclusion_eligible": false
+        },
+        "Serbia Prva Liga": {
+          "quantity": 22,
+          "resolved": 12,
+          "green": 3,
+          "red": 9,
+          "hit_rate": 25.0,
+          "conclusion_eligible": false
+        },
+        "Sweden 1.div Södra": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 7,
+          "red": 14,
+          "hit_rate": 33.33,
+          "conclusion_eligible": false
+        },
+        "USA MLS": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 14,
+          "red": 7,
+          "hit_rate": 66.67,
+          "conclusion_eligible": false
+        }
+      },
+      "by_temporal_confidence": {
+        "MEDIUM": {
+          "quantity": 352,
+          "resolved": 218,
+          "green": 127,
+          "red": 91,
+          "hit_rate": 58.26,
+          "conclusion_eligible": true
+        }
+      },
+      "by_data_quality": {
+        "MEDIUM": {
+          "quantity": 200,
+          "resolved": 181,
+          "green": 106,
+          "red": 75,
+          "hit_rate": 58.56,
+          "conclusion_eligible": true
+        },
+        "LOW": {
+          "quantity": 152,
+          "resolved": 37,
+          "green": 21,
+          "red": 16,
+          "hit_rate": 56.76,
+          "conclusion_eligible": true
+        }
+      },
+      "by_uncertainty": {
+        "MEDIUM": {
+          "quantity": 191,
+          "resolved": 129,
+          "green": 63,
+          "red": 66,
+          "hit_rate": 48.84,
+          "conclusion_eligible": true
+        },
+        "LOW": {
+          "quantity": 91,
+          "resolved": 89,
+          "green": 64,
+          "red": 25,
+          "hit_rate": 71.91,
+          "conclusion_eligible": true
+        },
+        "HIGH": {
+          "quantity": 70,
+          "resolved": 0,
+          "green": 0,
+          "red": 0,
+          "hit_rate": null,
+          "conclusion_eligible": false
+        }
+      },
+      "by_matchup": {
+        "False": {
+          "quantity": 344,
+          "resolved": 214,
+          "green": 125,
+          "red": 89,
+          "hit_rate": 58.41,
+          "conclusion_eligible": true
+        },
+        "True": {
+          "quantity": 8,
+          "resolved": 4,
+          "green": 2,
+          "red": 2,
+          "hit_rate": 50.0,
+          "conclusion_eligible": false
+        }
+      },
+      "by_strength": {
+        "True": {
+          "quantity": 308,
+          "resolved": 194,
+          "green": 112,
+          "red": 82,
+          "hit_rate": 57.73,
+          "conclusion_eligible": true
+        },
+        "False": {
+          "quantity": 44,
+          "resolved": 24,
+          "green": 15,
+          "red": 9,
+          "hit_rate": 62.5,
+          "conclusion_eligible": false
+        }
+      },
+      "by_historical_opponent_strength": {
+        "UNKNOWN": {
+          "quantity": 184,
+          "resolved": 116,
+          "green": 63,
+          "red": 53,
+          "hit_rate": 54.31,
+          "conclusion_eligible": true
+        },
+        "SIMILAR": {
+          "quantity": 162,
+          "resolved": 102,
+          "green": 64,
+          "red": 38,
+          "hit_rate": 62.75,
+          "conclusion_eligible": true
+        },
+        "CURRENT_WEAKER": {
+          "quantity": 6,
+          "resolved": 0,
+          "green": 0,
+          "red": 0,
+          "hit_rate": null,
+          "conclusion_eligible": false
+        }
+      },
+      "by_recency_shift": {
+        "STABLE": {
+          "quantity": 194,
+          "resolved": 157,
+          "green": 93,
+          "red": 64,
+          "hit_rate": 59.24,
+          "conclusion_eligible": true
+        },
+        "UNKNOWN": {
+          "quantity": 94,
+          "resolved": 9,
+          "green": 4,
+          "red": 5,
+          "hit_rate": 44.44,
+          "conclusion_eligible": false
+        },
+        "POSITIVE": {
+          "quantity": 33,
+          "resolved": 28,
+          "green": 20,
+          "red": 8,
+          "hit_rate": 71.43,
+          "conclusion_eligible": false
+        },
+        "NEGATIVE": {
+          "quantity": 31,
+          "resolved": 24,
+          "green": 10,
+          "red": 14,
+          "hit_rate": 41.67,
+          "conclusion_eligible": false
+        }
+      },
+      "by_legacy_status": {
+        "REJECTED": {
+          "quantity": 346,
+          "resolved": 212,
+          "green": 122,
+          "red": 90,
+          "hit_rate": 57.55,
+          "conclusion_eligible": true
+        },
+        "APPROVED": {
+          "quantity": 6,
+          "resolved": 6,
+          "green": 5,
+          "red": 1,
+          "hit_rate": 83.33,
+          "conclusion_eligible": false
+        }
+      },
+      "ablation": {
+        "A_base": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.262494,
+          "log_loss": 1.695676,
+          "calibration_error": 0.181969,
+          "roc_auc": 0.656504,
+          "pr_auc": 0.785039,
+          "buckets": {
+            "50-59": {
+              "quantity": 21,
+              "green": 10,
+              "red": 11,
+              "actual_rate": 47.62,
+              "mean_score": 51.37
+            },
+            "60-69": {
+              "quantity": 17,
+              "green": 12,
+              "red": 5,
+              "actual_rate": 70.59,
+              "mean_score": 64.49
+            },
+            "70-79": {
+              "quantity": 26,
+              "green": 14,
+              "red": 12,
+              "actual_rate": 53.85,
+              "mean_score": 73.05
+            },
+            "80-89": {
+              "quantity": 27,
+              "green": 19,
+              "red": 8,
+              "actual_rate": 70.37,
+              "mean_score": 82.6
+            },
+            "90-100": {
+              "quantity": 62,
+              "green": 45,
+              "red": 17,
+              "actual_rate": 72.58,
+              "mean_score": 98.16
+            },
+            "<50": {
+              "quantity": 56,
+              "green": 23,
+              "red": 33,
+              "actual_rate": 41.07,
+              "mean_score": 19.55
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.255408,
+          "log_loss": 0.840803,
+          "calibration_error": 0.170436,
+          "roc_auc": 0.665674,
+          "pr_auc": 0.753549,
+          "buckets": {
+            "50-59": {
+              "quantity": 18,
+              "green": 9,
+              "red": 9,
+              "actual_rate": 50.0,
+              "mean_score": 54.01
+            },
+            "60-69": {
+              "quantity": 19,
+              "green": 12,
+              "red": 7,
+              "actual_rate": 63.16,
+              "mean_score": 66.02
+            },
+            "70-79": {
+              "quantity": 27,
+              "green": 15,
+              "red": 12,
+              "actual_rate": 55.56,
+              "mean_score": 74.64
+            },
+            "80-89": {
+              "quantity": 25,
+              "green": 18,
+              "red": 7,
+              "actual_rate": 72.0,
+              "mean_score": 84.7
+            },
+            "90-100": {
+              "quantity": 59,
+              "green": 43,
+              "red": 16,
+              "actual_rate": 72.88,
+              "mean_score": 96.82
+            },
+            "<50": {
+              "quantity": 61,
+              "green": 26,
+              "red": 35,
+              "actual_rate": 42.62,
+              "mean_score": 23.11
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.262053,
+          "log_loss": 1.405318,
+          "calibration_error": 0.173927,
+          "roc_auc": 0.664823,
+          "pr_auc": 0.773768,
+          "buckets": {
+            "50-59": {
+              "quantity": 20,
+              "green": 11,
+              "red": 9,
+              "actual_rate": 55.0,
+              "mean_score": 52.04
+            },
+            "60-69": {
+              "quantity": 16,
+              "green": 11,
+              "red": 5,
+              "actual_rate": 68.75,
+              "mean_score": 64.76
+            },
+            "70-79": {
+              "quantity": 28,
+              "green": 16,
+              "red": 12,
+              "actual_rate": 57.14,
+              "mean_score": 73.51
+            },
+            "80-89": {
+              "quantity": 26,
+              "green": 18,
+              "red": 8,
+              "actual_rate": 69.23,
+              "mean_score": 83.08
+            },
+            "90-100": {
+              "quantity": 61,
+              "green": 44,
+              "red": 17,
+              "actual_rate": 72.13,
+              "mean_score": 98.19
+            },
+            "<50": {
+              "quantity": 58,
+              "green": 23,
+              "red": 35,
+              "actual_rate": 39.66,
+              "mean_score": 20.62
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.262192,
+          "log_loss": 1.695353,
+          "calibration_error": 0.181867,
+          "roc_auc": 0.655275,
+          "pr_auc": 0.780863,
+          "buckets": {
+            "50-59": {
+              "quantity": 21,
+              "green": 10,
+              "red": 11,
+              "actual_rate": 47.62,
+              "mean_score": 51.37
+            },
+            "60-69": {
+              "quantity": 17,
+              "green": 12,
+              "red": 5,
+              "actual_rate": 70.59,
+              "mean_score": 64.17
+            },
+            "70-79": {
+              "quantity": 26,
+              "green": 14,
+              "red": 12,
+              "actual_rate": 53.85,
+              "mean_score": 73.05
+            },
+            "80-89": {
+              "quantity": 27,
+              "green": 19,
+              "red": 8,
+              "actual_rate": 70.37,
+              "mean_score": 82.6
+            },
+            "90-100": {
+              "quantity": 62,
+              "green": 45,
+              "red": 17,
+              "actual_rate": 72.58,
+              "mean_score": 98.04
+            },
+            "<50": {
+              "quantity": 56,
+              "green": 23,
+              "red": 33,
+              "actual_rate": 41.07,
+              "mean_score": 19.55
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.241852,
+          "log_loss": 0.702129,
+          "calibration_error": 0.129652,
+          "roc_auc": 0.668699,
+          "pr_auc": 0.755705,
+          "buckets": {
+            "50-59": {
+              "quantity": 27,
+              "green": 15,
+              "red": 12,
+              "actual_rate": 55.56,
+              "mean_score": 52.72
+            },
+            "60-69": {
+              "quantity": 26,
+              "green": 16,
+              "red": 10,
+              "actual_rate": 61.54,
+              "mean_score": 65.82
+            },
+            "70-79": {
+              "quantity": 33,
+              "green": 19,
+              "red": 14,
+              "actual_rate": 57.58,
+              "mean_score": 75.2
+            },
+            "80-89": {
+              "quantity": 20,
+              "green": 13,
+              "red": 7,
+              "actual_rate": 65.0,
+              "mean_score": 85.01
+            },
+            "90-100": {
+              "quantity": 47,
+              "green": 37,
+              "red": 10,
+              "actual_rate": 78.72,
+              "mean_score": 92.31
+            },
+            "<50": {
+              "quantity": 56,
+              "green": 23,
+              "red": 33,
+              "actual_rate": 41.07,
+              "mean_score": 24.98
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 209,
+          "green": 123,
+          "red": 86,
+          "hit_rate": 58.852,
+          "brier": 0.255015,
+          "log_loss": 0.879227,
+          "calibration_error": 0.169996,
+          "roc_auc": 0.665769,
+          "pr_auc": 0.75331,
+          "buckets": {
+            "50-59": {
+              "quantity": 18,
+              "green": 9,
+              "red": 9,
+              "actual_rate": 50.0,
+              "mean_score": 54.07
+            },
+            "60-69": {
+              "quantity": 19,
+              "green": 12,
+              "red": 7,
+              "actual_rate": 63.16,
+              "mean_score": 65.69
+            },
+            "70-79": {
+              "quantity": 27,
+              "green": 15,
+              "red": 12,
+              "actual_rate": 55.56,
+              "mean_score": 74.63
+            },
+            "80-89": {
+              "quantity": 26,
+              "green": 18,
+              "red": 8,
+              "actual_rate": 69.23,
+              "mean_score": 84.87
+            },
+            "90-100": {
+              "quantity": 58,
+              "green": 43,
+              "red": 15,
+              "actual_rate": 74.14,
+              "mean_score": 96.88
+            },
+            "<50": {
+              "quantity": 61,
+              "green": 26,
+              "red": 35,
+              "actual_rate": 42.62,
+              "mean_score": 23.1
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 218,
+          "green": 127,
+          "red": 91,
+          "hit_rate": 58.257,
+          "brier": 0.238825,
+          "log_loss": 0.681752,
+          "calibration_error": 0.131178,
+          "roc_auc": 0.667085,
+          "pr_auc": 0.745143,
+          "buckets": {
+            "50-59": {
+              "quantity": 27,
+              "green": 13,
+              "red": 14,
+              "actual_rate": 48.15,
+              "mean_score": 54.53
+            },
+            "60-69": {
+              "quantity": 29,
+              "green": 18,
+              "red": 11,
+              "actual_rate": 62.07,
+              "mean_score": 66.4
+            },
+            "70-79": {
+              "quantity": 30,
+              "green": 16,
+              "red": 14,
+              "actual_rate": 53.33,
+              "mean_score": 75.48
+            },
+            "80-89": {
+              "quantity": 41,
+              "green": 29,
+              "red": 12,
+              "actual_rate": 70.73,
+              "mean_score": 85.66
+            },
+            "90-100": {
+              "quantity": 29,
+              "green": 24,
+              "red": 5,
+              "actual_rate": 82.76,
+              "mean_score": 92.28
+            },
+            "<50": {
+              "quantity": 62,
+              "green": 27,
+              "red": 35,
+              "actual_rate": 43.55,
+              "mean_score": 27.27
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "raw_frequency_100": {
+        "quantity": 48,
+        "by_sample": {
+          "3": {
+            "quantity": 43,
+            "resolved": 43,
+            "green": 32,
+            "red": 11,
+            "hit_rate": 74.42,
+            "conclusion_eligible": true
+          },
+          "4-5": {
+            "quantity": 5,
+            "resolved": 5,
+            "green": 5,
+            "red": 0,
+            "hit_rate": 100.0,
+            "conclusion_eligible": false
+          }
+        },
+        "by_strength": {
+          "SIMILAR": {
+            "quantity": 37,
+            "resolved": 37,
+            "green": 27,
+            "red": 10,
+            "hit_rate": 72.97,
+            "conclusion_eligible": true
+          },
+          "UNKNOWN": {
+            "quantity": 11,
+            "resolved": 11,
+            "green": 10,
+            "red": 1,
+            "hit_rate": 90.91,
+            "conclusion_eligible": false
+          }
+        }
+      },
+      "largest_legacy_v2_divergences": [
+        {
+          "fixture_external_id": "12221982",
+          "league": "Mexico Liga de Expansion",
+          "market_type": "cards_away",
+          "line": 1.5,
+          "scope": "away",
+          "legacy_score": 37.9,
+          "v2_score": 83.16,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11354639",
+          "league": "Sweden 1.div Norra",
+          "market_type": "shots_away",
+          "line": 10.5,
+          "scope": "away",
+          "legacy_score": 39.6,
+          "v2_score": 84.8,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "12043540",
+          "league": "Serbia Prva Liga",
+          "market_type": "shots_on_target_away",
+          "line": 3.5,
+          "scope": "away",
+          "legacy_score": 42.1,
+          "v2_score": 84.48,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "13093222",
+          "league": "Mexico Liga MX",
+          "market_type": "corners_away",
+          "line": 2.5,
+          "scope": "away",
+          "legacy_score": 51.5,
+          "v2_score": 92.58,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13093222",
+          "league": "Mexico Liga MX",
+          "market_type": "offsides_away",
+          "line": 0.5,
+          "scope": "away",
+          "legacy_score": 51.5,
+          "v2_score": 92.58,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13093222",
+          "league": "Mexico Liga MX",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 51.5,
+          "v2_score": 92.58,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11982883",
+          "league": "Lithuania A Lyga",
+          "market_type": "corners_home",
+          "line": 2.5,
+          "scope": "home",
+          "legacy_score": 52.0,
+          "v2_score": 91.89,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11982884",
+          "league": "Lithuania A Lyga",
+          "market_type": "fouls_home",
+          "line": 7.5,
+          "scope": "home",
+          "legacy_score": 51.7,
+          "v2_score": 91.41,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11068636",
+          "league": "USA MLS",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 52.0,
+          "v2_score": 91.38,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11982883",
+          "league": "Lithuania A Lyga",
+          "market_type": "offsides_home",
+          "line": 0.5,
+          "scope": "home",
+          "legacy_score": 51.5,
+          "v2_score": 90.75,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "11982884",
+          "league": "Lithuania A Lyga",
+          "market_type": "shots_on_target_home",
+          "line": 3.5,
+          "scope": "home",
+          "legacy_score": 52.0,
+          "v2_score": 91.0,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "13093222",
+          "league": "Mexico Liga MX",
+          "market_type": "shots_on_target_away",
+          "line": 3.5,
+          "scope": "away",
+          "legacy_score": 51.5,
+          "v2_score": 90.27,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11068636",
+          "league": "USA MLS",
+          "market_type": "corners_away",
+          "line": 2.5,
+          "scope": "away",
+          "legacy_score": 52.0,
+          "v2_score": 90.74,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "11982884",
+          "league": "Lithuania A Lyga",
+          "market_type": "corners_home",
+          "line": 2.5,
+          "scope": "home",
+          "legacy_score": 52.0,
+          "v2_score": 90.4,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "11354639",
+          "league": "Sweden 1.div Norra",
+          "market_type": "offsides_home",
+          "line": 0.5,
+          "scope": "home",
+          "legacy_score": 42.2,
+          "v2_score": 80.45,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "11354576",
+          "league": "Sweden 1.div Södra",
+          "market_type": "fouls_home",
+          "line": 7.5,
+          "scope": "home",
+          "legacy_score": 54.1,
+          "v2_score": 92.25,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12099628",
+          "league": "Colombia Primera A",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 51.9,
+          "v2_score": 90.0,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11354639",
+          "league": "Sweden 1.div Norra",
+          "market_type": "corners_away",
+          "line": 2.5,
+          "scope": "away",
+          "legacy_score": 51.7,
+          "v2_score": 89.58,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "11068636",
+          "league": "USA MLS",
+          "market_type": "cards_away",
+          "line": 1.5,
+          "scope": "away",
+          "legacy_score": 52.0,
+          "v2_score": 89.77,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "12099628",
+          "league": "Colombia Primera A",
+          "market_type": "offsides_away",
+          "line": 0.5,
+          "scope": "away",
+          "legacy_score": 51.9,
+          "v2_score": 89.07,
+          "settlement": "RED"
+        }
+      ]
+    },
+    "evaluation": {
+      "coverage": {
+        "candidates": 198,
+        "resolved": 116,
+        "unresolved": 82,
+        "leakage_blocked": 0,
+        "strength_available": 88,
+        "matchup_available": 0
+      },
+      "legacy": {
+        "quantity": 116,
+        "green": 65,
+        "red": 51,
+        "hit_rate": 56.034,
+        "brier": 0.276417,
+        "log_loss": 0.759186,
+        "calibration_error": 0.165121,
+        "roc_auc": 0.553997,
+        "pr_auc": 0.661637,
+        "buckets": {
+          "50-59": {
+            "quantity": 14,
+            "green": 6,
+            "red": 8,
+            "actual_rate": 42.86,
+            "mean_score": 56.31
+          },
+          "60-69": {
+            "quantity": 20,
+            "green": 13,
+            "red": 7,
+            "actual_rate": 65.0,
+            "mean_score": 64.64
+          },
+          "70-79": {
+            "quantity": 2,
+            "green": 2,
+            "red": 0,
+            "actual_rate": 100.0,
+            "mean_score": 75.1
+          },
+          "<50": {
+            "quantity": 80,
+            "green": 44,
+            "red": 36,
+            "actual_rate": 55.0,
+            "mean_score": 34.12
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "v2": {
+        "quantity": 116,
+        "green": 65,
+        "red": 51,
+        "hit_rate": 56.034,
+        "brier": 0.212619,
+        "log_loss": 0.621801,
+        "calibration_error": 0.078156,
+        "roc_auc": 0.723982,
+        "pr_auc": 0.740863,
+        "buckets": {
+          "50-59": {
+            "quantity": 23,
+            "green": 11,
+            "red": 12,
+            "actual_rate": 47.83,
+            "mean_score": 55.71
+          },
+          "60-69": {
+            "quantity": 16,
+            "green": 9,
+            "red": 7,
+            "actual_rate": 56.25,
+            "mean_score": 66.76
+          },
+          "70-79": {
+            "quantity": 11,
+            "green": 8,
+            "red": 3,
+            "actual_rate": 72.73,
+            "mean_score": 74.42
+          },
+          "80-89": {
+            "quantity": 16,
+            "green": 15,
+            "red": 1,
+            "actual_rate": 93.75,
+            "mean_score": 85.43
+          },
+          "90-100": {
+            "quantity": 12,
+            "green": 9,
+            "red": 3,
+            "actual_rate": 75.0,
+            "mean_score": 92.1
+          },
+          "<50": {
+            "quantity": 38,
+            "green": 13,
+            "red": 25,
+            "actual_rate": 34.21,
+            "mean_score": 28.94
+          }
+        },
+        "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+      },
+      "by_market": {
+        "cards": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 9,
+          "red": 6,
+          "hit_rate": 60.0,
+          "conclusion_eligible": false
+        },
+        "corners": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 6,
+          "red": 9,
+          "hit_rate": 40.0,
+          "conclusion_eligible": false
+        },
+        "fouls": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 14,
+          "red": 1,
+          "hit_rate": 93.33,
+          "conclusion_eligible": false
+        },
+        "offsides": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 14,
+          "red": 1,
+          "hit_rate": 93.33,
+          "conclusion_eligible": false
+        },
+        "shots": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 3,
+          "red": 12,
+          "hit_rate": 20.0,
+          "conclusion_eligible": false
+        },
+        "shots_on_target": {
+          "quantity": 27,
+          "resolved": 15,
+          "green": 8,
+          "red": 7,
+          "hit_rate": 53.33,
+          "conclusion_eligible": false
+        },
+        "goals": {
+          "quantity": 18,
+          "resolved": 18,
+          "green": 8,
+          "red": 10,
+          "hit_rate": 44.44,
+          "conclusion_eligible": false
+        },
+        "corners_first_half": {
+          "quantity": 9,
+          "resolved": 0,
+          "green": 0,
+          "red": 0,
+          "hit_rate": null,
+          "conclusion_eligible": false
+        },
+        "goals_first_half": {
+          "quantity": 9,
+          "resolved": 8,
+          "green": 3,
+          "red": 5,
+          "hit_rate": 37.5,
+          "conclusion_eligible": false
+        }
+      },
+      "by_league": {
+        "Brazil Campeonato Gaucho 2": {
+          "quantity": 110,
+          "resolved": 51,
+          "green": 34,
+          "red": 17,
+          "hit_rate": 66.67,
+          "conclusion_eligible": true
+        },
+        "Colombia Primera B": {
+          "quantity": 44,
+          "resolved": 42,
+          "green": 17,
+          "red": 25,
+          "hit_rate": 40.48,
+          "conclusion_eligible": true
+        },
+        "Brazil Copa Parana": {
+          "quantity": 22,
+          "resolved": 2,
+          "green": 2,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        },
+        "Colombia Primera A": {
+          "quantity": 22,
+          "resolved": 21,
+          "green": 12,
+          "red": 9,
+          "hit_rate": 57.14,
+          "conclusion_eligible": false
+        }
+      },
+      "by_temporal_confidence": {
+        "MEDIUM": {
+          "quantity": 198,
+          "resolved": 116,
+          "green": 65,
+          "red": 51,
+          "hit_rate": 56.03,
+          "conclusion_eligible": true
+        }
+      },
+      "by_data_quality": {
+        "LOW": {
+          "quantity": 152,
+          "resolved": 86,
+          "green": 45,
+          "red": 41,
+          "hit_rate": 52.33,
+          "conclusion_eligible": true
+        },
+        "MEDIUM": {
+          "quantity": 46,
+          "resolved": 30,
+          "green": 20,
+          "red": 10,
+          "hit_rate": 66.67,
+          "conclusion_eligible": true
+        }
+      },
+      "by_uncertainty": {
+        "MEDIUM": {
+          "quantity": 166,
+          "resolved": 111,
+          "green": 62,
+          "red": 49,
+          "hit_rate": 55.86,
+          "conclusion_eligible": true
+        },
+        "HIGH": {
+          "quantity": 27,
+          "resolved": 0,
+          "green": 0,
+          "red": 0,
+          "hit_rate": null,
+          "conclusion_eligible": false
+        },
+        "LOW": {
+          "quantity": 5,
+          "resolved": 5,
+          "green": 3,
+          "red": 2,
+          "hit_rate": 60.0,
+          "conclusion_eligible": false
+        }
+      },
+      "by_matchup": {
+        "False": {
+          "quantity": 198,
+          "resolved": 116,
+          "green": 65,
+          "red": 51,
+          "hit_rate": 56.03,
+          "conclusion_eligible": true
+        }
+      },
+      "by_strength": {
+        "False": {
+          "quantity": 110,
+          "resolved": 86,
+          "green": 45,
+          "red": 41,
+          "hit_rate": 52.33,
+          "conclusion_eligible": true
+        },
+        "True": {
+          "quantity": 88,
+          "resolved": 30,
+          "green": 20,
+          "red": 10,
+          "hit_rate": 66.67,
+          "conclusion_eligible": true
+        }
+      },
+      "by_historical_opponent_strength": {
+        "UNKNOWN": {
+          "quantity": 150,
+          "resolved": 104,
+          "green": 55,
+          "red": 49,
+          "hit_rate": 52.88,
+          "conclusion_eligible": true
+        },
+        "SIMILAR": {
+          "quantity": 48,
+          "resolved": 12,
+          "green": 10,
+          "red": 2,
+          "hit_rate": 83.33,
+          "conclusion_eligible": false
+        }
+      },
+      "by_recency_shift": {
+        "STABLE": {
+          "quantity": 93,
+          "resolved": 55,
+          "green": 37,
+          "red": 18,
+          "hit_rate": 67.27,
+          "conclusion_eligible": true
+        },
+        "UNKNOWN": {
+          "quantity": 60,
+          "resolved": 24,
+          "green": 14,
+          "red": 10,
+          "hit_rate": 58.33,
+          "conclusion_eligible": false
+        },
+        "POSITIVE": {
+          "quantity": 29,
+          "resolved": 23,
+          "green": 9,
+          "red": 14,
+          "hit_rate": 39.13,
+          "conclusion_eligible": false
+        },
+        "NEGATIVE": {
+          "quantity": 16,
+          "resolved": 14,
+          "green": 5,
+          "red": 9,
+          "hit_rate": 35.71,
+          "conclusion_eligible": false
+        }
+      },
+      "by_legacy_status": {
+        "REJECTED": {
+          "quantity": 195,
+          "resolved": 115,
+          "green": 64,
+          "red": 51,
+          "hit_rate": 55.65,
+          "conclusion_eligible": true
+        },
+        "APPROVED": {
+          "quantity": 3,
+          "resolved": 1,
+          "green": 1,
+          "red": 0,
+          "hit_rate": 100.0,
+          "conclusion_eligible": false
+        }
+      },
+      "ablation": {
+        "A_base": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.205911,
+          "log_loss": 1.177377,
+          "calibration_error": 0.102721,
+          "roc_auc": 0.770445,
+          "pr_auc": 0.853077,
+          "buckets": {
+            "50-59": {
+              "quantity": 13,
+              "green": 6,
+              "red": 7,
+              "actual_rate": 46.15,
+              "mean_score": 51.71
+            },
+            "60-69": {
+              "quantity": 13,
+              "green": 5,
+              "red": 8,
+              "actual_rate": 38.46,
+              "mean_score": 61.6
+            },
+            "70-79": {
+              "quantity": 12,
+              "green": 8,
+              "red": 4,
+              "actual_rate": 66.67,
+              "mean_score": 73.75
+            },
+            "80-89": {
+              "quantity": 6,
+              "green": 5,
+              "red": 1,
+              "actual_rate": 83.33,
+              "mean_score": 80.0
+            },
+            "90-100": {
+              "quantity": 24,
+              "green": 21,
+              "red": 3,
+              "actual_rate": 87.5,
+              "mean_score": 98.75
+            },
+            "<50": {
+              "quantity": 24,
+              "green": 6,
+              "red": 18,
+              "actual_rate": 25.0,
+              "mean_score": 16.79
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "B_recency": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.204791,
+          "log_loss": 1.058485,
+          "calibration_error": 0.122695,
+          "roc_auc": 0.767097,
+          "pr_auc": 0.835732,
+          "buckets": {
+            "50-59": {
+              "quantity": 12,
+              "green": 5,
+              "red": 7,
+              "actual_rate": 41.67,
+              "mean_score": 54.99
+            },
+            "60-69": {
+              "quantity": 10,
+              "green": 3,
+              "red": 7,
+              "actual_rate": 30.0,
+              "mean_score": 62.76
+            },
+            "70-79": {
+              "quantity": 11,
+              "green": 9,
+              "red": 2,
+              "actual_rate": 81.82,
+              "mean_score": 74.54
+            },
+            "80-89": {
+              "quantity": 7,
+              "green": 5,
+              "red": 2,
+              "actual_rate": 71.43,
+              "mean_score": 82.5
+            },
+            "90-100": {
+              "quantity": 23,
+              "green": 20,
+              "red": 3,
+              "actual_rate": 86.96,
+              "mean_score": 98.36
+            },
+            "<50": {
+              "quantity": 29,
+              "green": 9,
+              "red": 20,
+              "actual_rate": 31.03,
+              "mean_score": 23.4
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "C_strength": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.205924,
+          "log_loss": 1.177475,
+          "calibration_error": 0.113532,
+          "roc_auc": 0.766619,
+          "pr_auc": 0.84016,
+          "buckets": {
+            "50-59": {
+              "quantity": 12,
+              "green": 5,
+              "red": 7,
+              "actual_rate": 41.67,
+              "mean_score": 51.85
+            },
+            "60-69": {
+              "quantity": 13,
+              "green": 5,
+              "red": 8,
+              "actual_rate": 38.46,
+              "mean_score": 61.6
+            },
+            "70-79": {
+              "quantity": 12,
+              "green": 8,
+              "red": 4,
+              "actual_rate": 66.67,
+              "mean_score": 73.75
+            },
+            "80-89": {
+              "quantity": 6,
+              "green": 5,
+              "red": 1,
+              "actual_rate": 83.33,
+              "mean_score": 80.0
+            },
+            "90-100": {
+              "quantity": 24,
+              "green": 21,
+              "red": 3,
+              "actual_rate": 87.5,
+              "mean_score": 98.72
+            },
+            "<50": {
+              "quantity": 25,
+              "green": 7,
+              "red": 18,
+              "actual_rate": 28.0,
+              "mean_score": 18.12
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "D_matchup": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.205911,
+          "log_loss": 1.177377,
+          "calibration_error": 0.102721,
+          "roc_auc": 0.770445,
+          "pr_auc": 0.853077,
+          "buckets": {
+            "50-59": {
+              "quantity": 13,
+              "green": 6,
+              "red": 7,
+              "actual_rate": 46.15,
+              "mean_score": 51.71
+            },
+            "60-69": {
+              "quantity": 13,
+              "green": 5,
+              "red": 8,
+              "actual_rate": 38.46,
+              "mean_score": 61.6
+            },
+            "70-79": {
+              "quantity": 12,
+              "green": 8,
+              "red": 4,
+              "actual_rate": 66.67,
+              "mean_score": 73.75
+            },
+            "80-89": {
+              "quantity": 6,
+              "green": 5,
+              "red": 1,
+              "actual_rate": 83.33,
+              "mean_score": 80.0
+            },
+            "90-100": {
+              "quantity": 24,
+              "green": 21,
+              "red": 3,
+              "actual_rate": 87.5,
+              "mean_score": 98.75
+            },
+            "<50": {
+              "quantity": 24,
+              "green": 6,
+              "red": 18,
+              "actual_rate": 25.0,
+              "mean_score": 16.79
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "E_dispersion_uncertainty": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.197931,
+          "log_loss": 0.588757,
+          "calibration_error": 0.092311,
+          "roc_auc": 0.756815,
+          "pr_auc": 0.75833,
+          "buckets": {
+            "50-59": {
+              "quantity": 22,
+              "green": 11,
+              "red": 11,
+              "actual_rate": 50.0,
+              "mean_score": 54.21
+            },
+            "60-69": {
+              "quantity": 12,
+              "green": 5,
+              "red": 7,
+              "actual_rate": 41.67,
+              "mean_score": 65.69
+            },
+            "70-79": {
+              "quantity": 10,
+              "green": 8,
+              "red": 2,
+              "actual_rate": 80.0,
+              "mean_score": 73.39
+            },
+            "80-89": {
+              "quantity": 12,
+              "green": 12,
+              "red": 0,
+              "actual_rate": 100.0,
+              "mean_score": 86.81
+            },
+            "90-100": {
+              "quantity": 12,
+              "green": 9,
+              "red": 3,
+              "actual_rate": 75.0,
+              "mean_score": 92.1
+            },
+            "<50": {
+              "quantity": 24,
+              "green": 6,
+              "red": 18,
+              "actual_rate": 25.0,
+              "mean_score": 23.39
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "F_recency_strength_matchup": {
+          "quantity": 92,
+          "green": 51,
+          "red": 41,
+          "hit_rate": 55.435,
+          "brier": 0.204859,
+          "log_loss": 1.058844,
+          "calibration_error": 0.122733,
+          "roc_auc": 0.765662,
+          "pr_auc": 0.829368,
+          "buckets": {
+            "50-59": {
+              "quantity": 12,
+              "green": 5,
+              "red": 7,
+              "actual_rate": 41.67,
+              "mean_score": 54.99
+            },
+            "60-69": {
+              "quantity": 10,
+              "green": 3,
+              "red": 7,
+              "actual_rate": 30.0,
+              "mean_score": 62.76
+            },
+            "70-79": {
+              "quantity": 11,
+              "green": 9,
+              "red": 2,
+              "actual_rate": 81.82,
+              "mean_score": 74.54
+            },
+            "80-89": {
+              "quantity": 9,
+              "green": 7,
+              "red": 2,
+              "actual_rate": 77.78,
+              "mean_score": 84.14
+            },
+            "90-100": {
+              "quantity": 21,
+              "green": 18,
+              "red": 3,
+              "actual_rate": 85.71,
+              "mean_score": 99.14
+            },
+            "<50": {
+              "quantity": 29,
+              "green": 9,
+              "red": 20,
+              "actual_rate": 31.03,
+              "mean_score": 23.36
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        },
+        "G_v2_complete": {
+          "quantity": 116,
+          "green": 65,
+          "red": 51,
+          "hit_rate": 56.034,
+          "brier": 0.212619,
+          "log_loss": 0.621801,
+          "calibration_error": 0.078156,
+          "roc_auc": 0.723982,
+          "pr_auc": 0.740863,
+          "buckets": {
+            "50-59": {
+              "quantity": 23,
+              "green": 11,
+              "red": 12,
+              "actual_rate": 47.83,
+              "mean_score": 55.71
+            },
+            "60-69": {
+              "quantity": 16,
+              "green": 9,
+              "red": 7,
+              "actual_rate": 56.25,
+              "mean_score": 66.76
+            },
+            "70-79": {
+              "quantity": 11,
+              "green": 8,
+              "red": 3,
+              "actual_rate": 72.73,
+              "mean_score": 74.42
+            },
+            "80-89": {
+              "quantity": 16,
+              "green": 15,
+              "red": 1,
+              "actual_rate": 93.75,
+              "mean_score": 85.43
+            },
+            "90-100": {
+              "quantity": 12,
+              "green": 9,
+              "red": 3,
+              "actual_rate": 75.0,
+              "mean_score": 92.1
+            },
+            "<50": {
+              "quantity": 38,
+              "green": 13,
+              "red": 25,
+              "actual_rate": 34.21,
+              "mean_score": 28.94
+            }
+          },
+          "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
+        }
+      },
+      "raw_frequency_100": {
+        "quantity": 21,
+        "by_sample": {
+          "3": {
+            "quantity": 21,
+            "resolved": 21,
+            "green": 18,
+            "red": 3,
+            "hit_rate": 85.71,
+            "conclusion_eligible": false
+          }
+        },
+        "by_strength": {
+          "UNKNOWN": {
+            "quantity": 13,
+            "resolved": 13,
+            "green": 10,
+            "red": 3,
+            "hit_rate": 76.92,
+            "conclusion_eligible": false
+          },
+          "SIMILAR": {
+            "quantity": 8,
+            "resolved": 8,
+            "green": 8,
+            "red": 0,
+            "hit_rate": 100.0,
+            "conclusion_eligible": false
+          }
+        }
+      },
+      "largest_legacy_v2_divergences": [
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards_home",
+          "line": 1.5,
+          "scope": "home",
+          "legacy_score": 16.1,
+          "v2_score": 86.13,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "offsides_home",
+          "line": 0.5,
+          "scope": "home",
+          "legacy_score": 16.1,
+          "v2_score": 86.13,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "fouls_home",
+          "line": 7.5,
+          "scope": "home",
+          "legacy_score": 16.1,
+          "v2_score": 86.13,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards_home",
+          "line": 1.5,
+          "scope": "home",
+          "legacy_score": 39.6,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "offsides_home",
+          "line": 0.5,
+          "scope": "home",
+          "legacy_score": 39.6,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "fouls_home",
+          "line": 7.5,
+          "scope": "home",
+          "legacy_score": 39.6,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "corners",
+          "line": 8.5,
+          "scope": "total",
+          "legacy_score": 40.4,
+          "v2_score": 92.01,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards",
+          "line": 4.5,
+          "scope": "total",
+          "legacy_score": 40.4,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "offsides",
+          "line": 1.5,
+          "scope": "total",
+          "legacy_score": 40.4,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "fouls",
+          "line": 15.5,
+          "scope": "total",
+          "legacy_score": 40.4,
+          "v2_score": 92.01,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "over15",
+          "line": 1.5,
+          "scope": "total",
+          "legacy_score": 42.3,
+          "v2_score": 92.82,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 42.2,
+          "v2_score": 92.4,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards_away",
+          "line": 1.5,
+          "scope": "away",
+          "legacy_score": 42.2,
+          "v2_score": 92.14,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "goal_ht",
+          "line": 0.5,
+          "scope": "total",
+          "legacy_score": 42.3,
+          "v2_score": 92.07,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "12228614",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "offsides_away",
+          "line": 0.5,
+          "scope": "away",
+          "legacy_score": 42.2,
+          "v2_score": 91.71,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "offsides_away",
+          "line": 0.5,
+          "scope": "away",
+          "legacy_score": 42.3,
+          "v2_score": 89.27,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 42.3,
+          "v2_score": 88.64,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards_away",
+          "line": 1.5,
+          "scope": "away",
+          "legacy_score": 42.3,
+          "v2_score": 88.3,
+          "settlement": "GREEN"
+        },
+        {
+          "fixture_external_id": "12099999",
+          "league": "Colombia Primera A",
+          "market_type": "fouls_away",
+          "line": 7.5,
+          "scope": "away",
+          "legacy_score": 37.9,
+          "v2_score": 83.38,
+          "settlement": "RED"
+        },
+        {
+          "fixture_external_id": "13035086",
+          "league": "Brazil Campeonato Gaucho 2",
+          "market_type": "cards",
+          "line": 4.5,
+          "scope": "total",
+          "legacy_score": 42.3,
+          "v2_score": 86.13,
+          "settlement": "GREEN"
+        }
+      ]
+    }
+  }
+}

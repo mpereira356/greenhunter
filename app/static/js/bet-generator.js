@@ -5,17 +5,20 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  const MODEL_VERSION = 'legacy_v1';
+
   const CONFIG = Object.freeze({
     profiles: {
       conservative: {minConfidence: 85, minAdjusted: 82, minDataQuality: 75, secondMinConfidence: 101, secondMaxGap: 0, maxLineDrop: 4, maxSelectionsPerFixture: 1},
-      balanced: {minConfidence: 75, preferredConfidence: 80, minAdjusted: 75, minDataQuality: 55, secondMinConfidence: 75, secondMaxGap: 100, maxLineDrop: 8, maxSelectionsPerFixture: 3},
+      balanced: {minConfidence: 75, preferredConfidence: 80, minAdjusted: 72, minDataQuality: 55, secondMinConfidence: 72, secondMaxGap: 15, maxLineDrop: 8, maxSelectionsPerFixture: 3},
       value: {minConfidence: 75, minAdjusted: 72, minDataQuality: 65, secondMinConfidence: 85, secondMaxGap: 7, maxLineDrop: 10, maxSelectionsPerFixture: 3}
     },
-    weights: {adjustedProbability: .35, consistency: .20, sample: .15, recent: .15, supporting: .15},
+    weights: {adjustedProbability: .30, consistency: .15, sample: .10, recent: .10, supporting: .15, context: .20},
     baseWeights: {
       total: {home: .40, away: .40, h2h: .20},
       home: {home: .85, h2h: .15},
-      away: {away: .85, h2h: .15}
+      away: {away: .85, h2h: .15},
+      h2h: {h2h: 1}
     },
     sampleConfidence: {0: 0, 1: 15, 2: 30, 3: 45, 4: 55, 5: 65, 6: 75, 7: 82, 8: 88, 9: 94, 10: 100},
     h2hCredibility: {0: 0, 1: .15, 2: .30, 3: .50, 4: .70, 5: .85, 6: 1},
@@ -39,7 +42,7 @@
     LOW_DATA_QUALITY: 'LOW_DATA_QUALITY', WEAK_HOME_BASE: 'WEAK_HOME_BASE', WEAK_AWAY_BASE: 'WEAK_AWAY_BASE',
     WEAK_SUPPORTING_METRICS: 'WEAK_SUPPORTING_METRICS', LINE_TOO_AGGRESSIVE: 'LINE_TOO_AGGRESSIVE',
     REDUNDANT_MARKET: 'REDUNDANT_MARKET', HIGH_CORRELATION: 'HIGH_CORRELATION', BETTER_LINE_AVAILABLE: 'BETTER_LINE_AVAILABLE',
-    MANUAL_ONLY: 'MANUAL_ONLY'
+    MANUAL_ONLY: 'MANUAL_ONLY', ADVERSE_MATCHUP: 'ADVERSE_MATCHUP', EXTREME_UNDERDOG: 'EXTREME_UNDERDOG'
   });
 
   const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, Number(value) || 0));
@@ -72,7 +75,8 @@
       weightTotal += weight;
       if (predicate(value)) weightedHits += weight;
     });
-    return {samples: clean.length, hits, raw, recent: weightTotal ? weightedHits / weightTotal * 100 : raw, average: mean(clean), values: clean};
+    const credible = (hits + 2) / (clean.length + 4) * 100;
+    return {samples: clean.length, hits, raw, credible, recent: weightTotal ? weightedHits / weightTotal * 100 : raw, average: mean(clean), values: clean};
   }
 
   function consistencyScore(probabilities) {
@@ -86,7 +90,7 @@
   }
 
   function dataQualityScore(stats, scope, supportingAvailable) {
-    const primaryKeys = scope === 'home' ? ['home'] : scope === 'away' ? ['away'] : ['home', 'away'];
+    const primaryKeys = scope === 'h2h' ? ['h2h'] : scope === 'home' ? ['home'] : scope === 'away' ? ['away'] : ['home', 'away'];
     const presentPrimary = primaryKeys.filter((key) => stats[key] && stats[key].samples >= 3).length;
     const primaryCoverage = primaryKeys.length ? presentPrimary / primaryKeys.length : 0;
     const h2h = stats.h2h;
@@ -129,27 +133,36 @@
 
   function evaluateCandidate(input, profileName = 'balanced') {
     const profile = CONFIG.profiles[profileName] || CONFIG.profiles.balanced;
-    const predicate = input.predicate || ((value) => value > Number(input.line));
+    const direction = input.direction === 'under' ? 'under' : 'over';
+    const predicate = input.predicate || (direction === 'under'
+      ? ((value) => value < Number(input.line))
+      : ((value) => value > Number(input.line)));
     const stats = {
       h2h: seriesStats(input.bases?.h2h, predicate),
       home: seriesStats(input.bases?.home, predicate),
       away: seriesStats(input.bases?.away, predicate)
     };
     const validStats = Object.values(stats).filter(Boolean);
-    const rawProbability = weightedBaseMetric(stats, input.scope || 'total', 'raw');
-    const recentScore = weightedBaseMetric(stats, input.scope || 'total', 'recent');
-    const probabilities = validStats.filter((item) => item.samples >= 3).map((item) => item.raw);
+    const metricScope = input.sourcePriority === 'h2h' ? 'h2h' : (input.scope || 'total');
+    const rawProbability = weightedBaseMetric(stats, metricScope, 'raw');
+    const recentScore = weightedBaseMetric(stats, metricScope, 'recent');
+    const relevantStats = metricScope === 'h2h' ? [stats.h2h].filter(Boolean) : validStats;
+    const probabilities = relevantStats.filter((item) => item.samples >= 3).map((item) => item.raw);
     const consistency = consistencyScore(probabilities);
-    const effectiveSampleScore = weightedBaseMetric(stats, input.scope || 'total', 'samples');
+    const effectiveSampleScore = weightedBaseMetric(stats, metricScope, 'samples');
     const sample = sampleScore(effectiveSampleScore || 0);
-    const adjustedProbability = rawProbability === null || recentScore === null ? null
-      : round1((rawProbability * .68 + recentScore * .32) * (.90 + consistency / 1000));
+    const credibleProbability = weightedBaseMetric(stats, metricScope, 'credible');
+    const adjustedProbability = rawProbability === null || recentScore === null || credibleProbability === null ? null
+      : round1((credibleProbability * .60 + rawProbability * .25 + recentScore * .15) * (.92 + consistency / 1250));
     const supporting = Number.isFinite(Number(input.supportingScore)) ? clamp(input.supportingScore) : null;
-    const dataQuality = dataQualityScore(stats, input.scope || 'total', supporting !== null);
-    const supportingForConfidence = supporting === null ? 45 : supporting;
+    const context = input.contextScore !== null && input.contextScore !== undefined && Number.isFinite(Number(input.contextScore))
+      ? clamp(input.contextScore) : null;
+    const dataQuality = dataQualityScore(stats, metricScope, supporting !== null);
+    const supportingForConfidence = supporting === null ? 55 : supporting;
     const components = [
       [adjustedProbability, CONFIG.weights.adjustedProbability], [consistency, CONFIG.weights.consistency],
-      [sample, CONFIG.weights.sample], [recentScore, CONFIG.weights.recent], [supportingForConfidence, CONFIG.weights.supporting]
+      [sample, CONFIG.weights.sample], [recentScore, CONFIG.weights.recent], [supportingForConfidence, CONFIG.weights.supporting],
+      [context, CONFIG.weights.context]
     ].filter(([value]) => value !== null && Number.isFinite(value));
     const componentWeight = components.reduce((sum, [, weight]) => sum + weight, 0);
     let confidence = componentWeight ? components.reduce((sum, [value, weight]) => sum + value * weight, 0) / componentWeight : 0;
@@ -159,11 +172,11 @@
     const strengths = [];
     const weaknesses = [];
     const scope = input.scope || 'total';
-    const primaryKeys = scope === 'home' ? ['home'] : scope === 'away' ? ['away'] : ['home', 'away'];
+    const primaryKeys = metricScope === 'h2h' ? ['h2h'] : scope === 'home' ? ['home'] : scope === 'away' ? ['away'] : ['home', 'away'];
     const usablePrimary = primaryKeys.filter((key) => stats[key] && stats[key].samples >= 3);
     if (!validStats.length || !usablePrimary.length) rejectionReasons.push(REJECTION.INSUFFICIENT_DATA);
     if (validStats.every((item) => item.samples < 3)) rejectionReasons.push(REJECTION.LOW_SAMPLE);
-    if (scope === 'total' && input.enforcePrimaryFloor !== false) {
+    if (scope === 'total' && metricScope !== 'h2h' && input.enforcePrimaryFloor !== false) {
       if (stats.home?.samples >= 3 && stats.home.raw < 60) rejectionReasons.push(REJECTION.WEAK_HOME_BASE);
       if (stats.away?.samples >= 3 && stats.away.raw < 60) rejectionReasons.push(REJECTION.WEAK_AWAY_BASE);
     }
@@ -172,6 +185,10 @@
     if (adjustedProbability === null || adjustedProbability < profile.minAdjusted) rejectionReasons.push(REJECTION.LOW_ADJUSTED_PROBABILITY);
     if (dataQuality < profile.minDataQuality) rejectionReasons.push(REJECTION.LOW_DATA_QUALITY);
     if (supporting !== null && supporting < 45) rejectionReasons.push(REJECTION.WEAK_SUPPORTING_METRICS);
+    if (context !== null && context < 35) rejectionReasons.push(REJECTION.ADVERSE_MATCHUP);
+    const dominance = Number.isFinite(Number(input.matchupDominance)) ? clamp(input.matchupDominance) : null;
+    const offensiveTeamMarket = scope !== 'total' && /^(team_goals|goals|corners|shots|shots_on_target|offsides)/.test(input.marketGroup || input.marketType || '');
+    if (offensiveTeamMarket && dominance !== null && dominance < 25) rejectionReasons.push(REJECTION.EXTREME_UNDERDOG);
 
     // Penalidades estruturais nunca viram bônus.
     if (rejectionReasons.includes(REJECTION.HIGH_DIVERGENCE)) confidence -= 12;
@@ -183,10 +200,12 @@
     if (consistency >= 85) strengths.push('Boa consistência entre as bases');
     if (sample >= 75) strengths.push('Amostra com boa sustentação');
     if (supporting !== null && supporting >= 75) strengths.push('Indicadores auxiliares favoráveis');
+    if (context !== null && context >= 75) strengths.push('Confronto favorável para o mercado');
+    if (context !== null && context < 50) weaknesses.push('Força do adversário desfavorece o mercado');
     if (stats.h2h && stats.h2h.samples < 4) weaknesses.push(`H2H limitado a ${stats.h2h.samples} jogo(s)`);
     if (consistency < 60) weaknesses.push('Bases históricas divergentes');
     if (dataQuality < 75) weaknesses.push('Cobertura de dados limitada');
-    [['H2H', stats.h2h], ['Casa', stats.home], ['Fora', stats.away]].forEach(([name, stat]) => {
+    (metricScope === 'h2h' ? [['H2H', stats.h2h]] : [['H2H', stats.h2h], ['Casa', stats.home], ['Fora', stats.away]]).forEach(([name, stat]) => {
       if (stat && stat.samples >= 3 && stat.raw >= 75) strengths.push(`${name}: ${stat.hits}/${stat.samples} jogos atingiram a linha`);
       if (stat && stat.samples >= 3 && stat.raw < 60) weaknesses.push(`${name}: somente ${stat.hits}/${stat.samples} jogos atingiram a linha`);
     });
@@ -194,18 +213,20 @@
     const candidate = {
       fixtureId: String(input.fixtureId), competitionId: input.competitionId || null, competitionName: input.competitionName || '',
       homeTeam: input.homeTeam || '', awayTeam: input.awayTeam || '', marketType: input.marketType,
-      marketGroup: input.marketGroup || input.marketType, scope, line: Number(input.line), label: input.label || '',
+      marketGroup: input.marketGroup || input.marketType, scope, direction, line: Number(input.line), label: input.label || '',
       historicalFrequency: round1(rawProbability || 0), rawProbability: round1(rawProbability || 0), adjustedProbability: round1(adjustedProbability || 0),
       h2hProbability: stats.h2h ? round1(stats.h2h.raw) : null, homeProbability: stats.home ? round1(stats.home.raw) : null,
       awayProbability: stats.away ? round1(stats.away.raw) : null, h2hSample: stats.h2h?.samples || 0,
       homeSample: stats.home?.samples || 0, awaySample: stats.away?.samples || 0, recentFormScore: round1(recentScore || 0),
-      consistencyScore: consistency, sampleScore: sample, supportingScore: supporting, dataQualityScore: dataQuality,
+      consistencyScore: consistency, sampleScore: sample, supportingScore: supporting, contextScore: context, dataQualityScore: dataQuality,
+      credibleProbability: round1(credibleProbability || 0),
       dataQualityGrade: qualityGrade(dataQuality), confidenceScore: confidence, classification: classification(confidence),
       strengths, weaknesses, rejectionReasons: [...new Set(rejectionReasons)], dataComplete: dataQuality >= 75,
       status: rejectionReasons.length ? 'REJECTED' : 'APPROVED', bookmakerOdds: input.bookmakerOdds || null,
       impliedProbability: null, expectedValue: null, edge: null, minimumLine: input.minimumLine || 0,
       sourceStats: stats, average: Number.isFinite(Number(input.average)) ? Number(input.average) : null
     };
+    candidate.sourcePriority = input.sourcePriority || '';
     candidate.valueScore = calculateValueScore(candidate);
     candidate.finalRank = candidate.confidenceScore;
     return candidate;
@@ -239,6 +260,14 @@
     if (!a || !b || String(a.fixtureId) !== String(b.fixtureId)) return 0;
     if (a.marketGroup === b.marketGroup) return CONFIG.correlation.sameGroup;
     const pair = new Set([a.marketGroup, b.marketGroup]);
+    // "Ambos marcam — Sim" já garante pelo menos dois gols no jogo. Portanto,
+    // combiná-lo com Mais de 1,5 no mesmo evento apenas repete a mesma condição
+    // e cria uma falsa sensação de diversificação. Mais de 2,5 continua válido,
+    // pois não é consequência automática de ambas as equipes marcarem.
+    const bttsWithOver15 = pair.has('btts') && [a, b].some((candidate) =>
+      candidate.marketGroup === 'goals_ft' && Number(candidate.line) === 1.5
+    );
+    if (bttsWithOver15) return CONFIG.correlation.sameGroup;
     const nestedPeriodMarket = (first, second) => {
       const full = String(first.marketGroup || '').match(/^(corners|cards|goals|shots|shots_on_target)_(total|home|away)$/);
       const period = String(second.marketGroup || '').match(/^(corners|cards|goals|shots|shots_on_target)_(1h|2h)_(total|home|away)$/);
@@ -246,6 +275,8 @@
     };
     if (nestedPeriodMarket(a, b) || nestedPeriodMarket(b, a)) return CONFIG.correlation.sameGroup;
     if (pair.has('goals_ft') && pair.has('goal_ht')) return CONFIG.correlation.goalHtWithGoals;
+    if ([...pair].some((group) => String(group).startsWith('team_goals_'))
+      && (pair.has('goals_ft') || pair.has('goal_ht'))) return CONFIG.correlation.goalsNested;
     if ((pair.has('corners_total') && (pair.has('corners_home') || pair.has('corners_away')))) return CONFIG.correlation.totalWithTeamCorners;
     const families = new Set([a.marketGroup, b.marketGroup].map((group) => String(group).replace(/_(total|home|away)$/, '')));
     if (families.has('shots') && families.has('shots_on_target')) return CONFIG.correlation.attempts;
@@ -254,8 +285,56 @@
 
   function marketCategory(candidate) {
     const group = String(candidate?.marketGroup || candidate?.marketType || 'other');
-    if (group === 'goals_ft' || group === 'goal_ht' || group.startsWith('goals_')) return 'goals';
+    if (group === 'goals_ft' || group === 'goal_ht' || group === 'btts' || group.startsWith('goals_') || group.startsWith('team_goals_')) return 'goals';
+    const periodMarket = group.match(/^(cards|corners|shots|shots_on_target|fouls|offsides)_(?:1h|2h)_(?:total|home|away)$/);
+    if (periodMarket) return periodMarket[1];
     return group.replace(/_(total|home|away)$/, '');
+  }
+
+  function marketCompositionPattern(candidate) {
+    const group = String(candidate?.marketGroup || candidate?.marketType || 'other');
+    const periodMatch = group.match(/_(1h|2h)_/);
+    const period = periodMatch ? periodMatch[1] : 'ft';
+    const scope = candidate?.scope === 'total' ? 'total' : 'team';
+    return `${marketCategory(candidate)}:${period}:${scope}`;
+  }
+
+  function diversifyTicketComposition(selectedCandidates, approvedCandidates, maxSelectionsPerFixture = 3) {
+    const selected = [...selectedCandidates];
+    const approved = rankCandidates((approvedCandidates || []).filter((candidate) => candidate.status === 'APPROVED'));
+    const maximumPerFixture = Math.max(1, Number(maxSelectionsPerFixture) || 1);
+    const patternCounts = () => selected.reduce((counts, candidate) => {
+      const pattern = marketCompositionPattern(candidate);
+      counts.set(pattern, (counts.get(pattern) || 0) + 1);
+      return counts;
+    }, new Map());
+
+    // Quando um mesmo formato se repete, procura no mesmo jogo uma alternativa
+    // aprovada da mesma categoria (ex.: cartões totais em vez de cartões de uma
+    // equipe). A diferença máxima evita trocar uma indicação forte só para
+    // produzir variedade visual.
+    for (let index = selected.length - 1; index >= 0; index -= 1) {
+      const current = selected[index];
+      const counts = patternCounts();
+      const currentPattern = marketCompositionPattern(current);
+      if ((counts.get(currentPattern) || 0) < 2) continue;
+      const fixtureSelections = selected.filter((candidate, selectedIndex) => selectedIndex !== index
+        && String(candidate.fixtureId) === String(current.fixtureId));
+      if (fixtureSelections.length >= maximumPerFixture) continue;
+      const alternatives = approved.filter((candidate) =>
+        String(candidate.fixtureId) === String(current.fixtureId)
+        && marketCategory(candidate) === marketCategory(current)
+        && marketCompositionPattern(candidate) !== currentPattern
+        && Number(current.confidenceScore) - Number(candidate.confidenceScore) <= 10
+        && fixtureSelections.every((existing) => correlationPenalty(existing, candidate) < 60)
+      ).sort((left, right) => {
+        const leftUsage = counts.get(marketCompositionPattern(left)) || 0;
+        const rightUsage = counts.get(marketCompositionPattern(right)) || 0;
+        return leftUsage - rightUsage || Number(right.confidenceScore) - Number(left.confidenceScore);
+      });
+      if (alternatives.length) selected[index] = alternatives[0];
+    }
+    return selected;
   }
 
   function diversifyApprovedPool(candidates, requestedCategories) {
@@ -278,8 +357,8 @@
         const validPrimary = primary.filter((item) => item && item.samples >= 3);
         return validPrimary.length === primary.length
           && validPrimary.every((item) => item.raw >= 50)
-          && candidate.rawProbability >= 67 && candidate.adjustedProbability >= 65
-          && candidate.confidenceScore >= 65 && candidate.dataQualityScore >= 55;
+          && candidate.rawProbability >= 75 && candidate.adjustedProbability >= 72
+          && candidate.confidenceScore >= 72 && candidate.dataQualityScore >= 55;
       }))[0];
       if (!fallback) return;
       fallback.status = 'APPROVED';
@@ -308,10 +387,12 @@
       if (!fixtureCategoryCounts.has(fixtureId)) fixtureCategoryCounts.set(fixtureId, new Set());
       fixtureCategoryCounts.get(fixtureId).add(marketCategory(candidate));
     });
-    const multipleFirst = [...ranked].sort((a, b) =>
-      (fixtureCategoryCounts.get(String(b.fixtureId))?.size || 0) - (fixtureCategoryCounts.get(String(a.fixtureId))?.size || 0)
-      || b.confidenceScore - a.confidenceScore
-    );
+    const multipleFirst = [...ranked].sort((a, b) => {
+      const diversityA = Math.min(10, Math.max(0, (fixtureCategoryCounts.get(String(a.fixtureId))?.size || 1) - 1) * 5);
+      const diversityB = Math.min(10, Math.max(0, (fixtureCategoryCounts.get(String(b.fixtureId))?.size || 1) - 1) * 5);
+      return (b.confidenceScore + diversityB) - (a.confidenceScore + diversityA)
+        || b.confidenceScore - a.confidenceScore;
+    });
     multipleFirst.forEach((candidate) => {
       const category = marketCategory(candidate);
       if (!approvedCategories.has(category)) approvedCategories.set(category, []);
@@ -350,6 +431,16 @@
       const category = marketCategory(candidate);
       primaryCategories.set(category, (primaryCategories.get(category) || 0) + 1);
     });
+    // Diversidade é uma preferência, não um motivo para entregar menos jogos
+    // que o usuário pediu. Depois das passagens balanceadas, completa todas as
+    // vagas restantes com partidas aprovadas, mesmo que repitam categoria.
+    multipleFirst.forEach((candidate) => {
+      if (primary.length >= gameLimit || primaryFixtures.has(candidate.fixtureId)) return;
+      primary.push(candidate);
+      primaryFixtures.add(candidate.fixtureId);
+      const category = marketCategory(candidate);
+      primaryCategories.set(category, (primaryCategories.get(category) || 0) + 1);
+    });
     const selected = [...primary];
     primary.forEach((main) => {
       const fixtureSelections = [main];
@@ -365,7 +456,7 @@
         }
       }
     });
-    return rankCandidates(selected);
+    return rankCandidates(diversifyTicketComposition(selected, ranked, profile.maxSelectionsPerFixture));
   }
 
   function analysisMetadata(eligibleGames, processedGames, failedGames, profile = 'balanced') {
@@ -375,6 +466,16 @@
     return {analysis_complete: processed === eligible && failed === 0, processed_games: processed, eligible_games: eligible, failed_games: failed, profile};
   }
 
-  return {CONFIG, REJECTION, sampleScore, h2hCredibility, seriesStats, consistencyScore, dataQualityScore, qualityGrade,
-    evaluateCandidate, chooseOptimalLine, rankCandidates, correlationPenalty, marketCategory, diversifyApprovedPool, buildTicket, analysisMetadata, classification};
+  function partialAnalysisSufficient(eligibleGames, processedGames, requestedGames) {
+    const eligible = Math.max(0, Number(eligibleGames) || 0);
+    const processed = Math.max(0, Number(processedGames) || 0);
+    const requested = Math.max(1, Number(requestedGames) || 1);
+    const minimumProcessed = Math.max(12, requested * 4);
+    const minimumCoverage = eligible <= 30 ? .5 : .2;
+    return processed >= minimumProcessed && (!eligible || processed / eligible >= minimumCoverage);
+  }
+
+  return {MODEL_VERSION, CONFIG, REJECTION, sampleScore, h2hCredibility, seriesStats, consistencyScore, dataQualityScore, qualityGrade,
+    evaluateCandidate, chooseOptimalLine, rankCandidates, correlationPenalty, marketCategory, marketCompositionPattern,
+    diversifyTicketComposition, diversifyApprovedPool, buildTicket, analysisMetadata, partialAnalysisSufficient, classification};
 });

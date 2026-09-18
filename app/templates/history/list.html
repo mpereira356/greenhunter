@@ -197,6 +197,9 @@
             <td>
               {% if alert.stake_amount is not none %}
                 <span class="history-mono">R$ {{ "%.2f"|format(alert.stake_amount) }}</span>
+                {% if alert.bet_tracking_type == 'G2' %}
+                  <small class="d-block history-date">G2 · {{ {'pending':'Pendente','green':'Green','red':'Red','push':'Devolvida'}.get(alert.bet_status, 'Pendente') }}</small>
+                {% endif %}
               {% else %}
                 <span class="text-muted">-</span>
               {% endif %}

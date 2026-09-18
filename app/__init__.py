@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
 from flask import Flask
@@ -9,8 +9,9 @@ from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.extensions import db, login_manager
-from app.models import AdminBroadcast, AdminBroadcastView, User
+from app.models import AdminBroadcast, AdminBroadcastView, SavedTicket, User
 from app.services.worker import start_worker
+from app.services.migrations import run_schema_migrations
 from app.security import init_security
 from app.utils.db import commit_with_retry
 
@@ -134,13 +135,22 @@ def create_app():
     # Banco de dados
     # =========================
     with app.app_context():
-        db.create_all()
+        # Em bancos existentes, migrations (e seu backup obrigatório) vêm
+        # antes de o metadata novo poder criar estruturas silenciosamente.
+        existing_database = inspect(db.engine).has_table("user")
+        if existing_database:
+            run_schema_migrations(db.engine)
+            db.create_all()
+        else:
+            db.create_all()
+            run_schema_migrations(db.engine)
         _ensure_user_columns()
         _ensure_rule_columns()
         _ensure_rule_condition_columns()
         _ensure_rule_outcome_condition_columns()
         _ensure_alert_columns()
         _ensure_live_game_state_columns()
+        _ensure_saved_ticket_leg_columns()
         _ensure_login_attempt_indexes()
         _ensure_performance_indexes()
 
@@ -181,6 +191,17 @@ def create_app():
         commit_with_retry()
 
         return {"active_broadcast": broadcast}
+
+    @app.context_processor
+    def inject_latest_green_ticket():
+        if not getattr(current_user, "is_authenticated", False):
+            return {"latest_green_ticket": None}
+        ticket = (
+            SavedTicket.query.filter_by(user_id=current_user.id, status="green")
+            .order_by(SavedTicket.resolved_at.desc(), SavedTicket.id.desc())
+            .first()
+        )
+        return {"latest_green_ticket": ticket}
 
     return app
 
@@ -250,10 +271,15 @@ def _ensure_rule_outcome_condition_columns():
 
 def _ensure_user_columns():
     columns = {
+        "telegram_update_offset": "INTEGER",
+        "mercadopago_subscription_id": "VARCHAR(80)",
+        "mercadopago_subscription_status": "VARCHAR(30)",
+        "mercadopago_checkout_url": "TEXT",
         "email": "VARCHAR(120)",
         "is_admin": "BOOLEAN DEFAULT 0",
         "telegram_verified": "BOOLEAN DEFAULT 0",
         "subscription_plan": "VARCHAR(20) DEFAULT 'starter'",
+        "premium_granted_by_admin": "BOOLEAN DEFAULT 0",
         "rule_limit": "INTEGER DEFAULT 2",
         "paid_until": "DATETIME",
         "trial_until": "DATETIME",
@@ -307,6 +333,12 @@ def _ensure_alert_columns():
         "stake_odd": "FLOAT",
         "bet_note": "TEXT",
         "bet_recorded_at": "DATETIME",
+        "bet_tracking_type": "VARCHAR(20)",
+        "bet_initial_goal_total": "INTEGER",
+        "bet_settlement_stage": "VARCHAR(5)",
+        "bet_status": "VARCHAR(20)",
+        "bet_profit": "FLOAT",
+        "bet_settled_at": "DATETIME",
     }
 
     with db.engine.connect() as conn:
@@ -338,6 +370,25 @@ def _ensure_live_game_state_columns():
         conn.commit()
 
 
+def _ensure_saved_ticket_leg_columns():
+    columns = {
+        "predicted_probability": "FLOAT",
+        "confidence_score": "FLOAT",
+        "context_score": "FLOAT",
+        "data_quality_score": "FLOAT",
+        "consistency_score": "FLOAT",
+        "prediction_json": "TEXT",
+        "result_margin": "FLOAT",
+    }
+    with db.engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info('saved_ticket_leg')"))
+        existing = {row[1] for row in result}
+        for col, col_type in columns.items():
+            if col not in existing:
+                conn.execute(text(f"ALTER TABLE saved_ticket_leg ADD COLUMN {col} {col_type}"))
+        conn.commit()
+
+
 def _ensure_login_attempt_indexes():
     with db.engine.connect() as conn:
         conn.execute(text(
@@ -354,6 +405,10 @@ def _ensure_performance_indexes():
         "ON match_alert (user_id, created_at)",
         "CREATE INDEX IF NOT EXISTS ix_match_alert_user_status_created "
         "ON match_alert (user_id, status, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_dashboard_market "
+        "ON match_alert (user_id, status, created_at, market_key)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_dashboard_league "
+        "ON match_alert (user_id, created_at, league)",
         "CREATE INDEX IF NOT EXISTS ix_match_alert_status_ft_completed "
         "ON match_alert (status, ft_completed)",
         "CREATE INDEX IF NOT EXISTS ix_rule_user_active "

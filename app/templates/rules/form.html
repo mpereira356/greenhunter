@@ -5,47 +5,55 @@
 {% set form = form_data if form_data is defined and form_data else None %}
 {% set default_message = 'ALERTA DE ENTRADA\n\nRegra: {rule}\nLiga: {league}\nMinuto: {minute}\'\nJogo: {home_team} vs {away_team}\nPlacar: {score}\n\nLeitura do jogo\nChutes no alvo: {on_target_home} x {on_target_away} (total: {on_target_total})\nAtaques perigosos: {dangerous_attacks_home} x {dangerous_attacks_away} (total: {dangerous_attacks_total})\nEscanteios: {corners_home} x {corners_away} (total: {corners_total})\n\nContexto\nH2H: {history_h2h}\nMandante: {history_home}\nVisitante: {history_away}\nConf. H2H: {history_confidence}\nConf. Regra: {rule_confidence}\nConf. Liga: {league_rule_confidence}\n\nAnalise IA e ML\nIA: {ai_commentary}\nVeredito IA: {ai_verdict} ({ai_score}/100)\nVeredito ML: {ml_verdict} ({ml_score}/100)\nVariaveis ML: {ml_feature_count}\nAmostras ML: {ml_samples}\nUltimo treino ML: {ml_trained_at}\n\nLink: {url}' %}
 
-<div class="builder-shell rule-editor">
-  <div class="page-header mb-4">
-    <div>
-      <h1 class="page-title">🚀 Criar Hipótese de Aposta</h1>
-      <p class="page-subtitle">Configure seus critérios de forma simples e receba alertas no Telegram.</p>
+<div class="builder-shell rule-editor{% if rule %} is-editing{% endif %}">
+  <div class="rule-builder-hero mb-4">
+    <div class="rule-builder-hero-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M12 3v3M4.2 7.5l2.6 1.5M19.8 7.5 17.2 9M4.2 16.5 6.8 15M19.8 16.5 17.2 15"/><circle cx="12" cy="12" r="4"/><path d="m10.5 12 1 1 2-2"/><path d="M9 19h6M10 22h4"/></svg>
+    </div>
+    <div class="rule-builder-hero-copy">
+      <span class="rule-builder-eyebrow">Construtor de estratégias</span>
+      <h1>{{ 'Editar' if rule else 'Criar' }} Hipótese de Aposta</h1>
+      <p>Transforme sua leitura de jogo em uma regra automática, com critérios claros para entrada, GREEN e RED.</p>
+      <div class="rule-builder-tags" aria-label="Recursos da regra">
+        <span>Estatísticas ao vivo</span>
+        <span>Alertas automáticos</span>
+        <span>Telegram</span>
+      </div>
     </div>
   </div>
 
-  <form method="post" id="rule-form" class="rule-form" novalidate>
+  <form method="post" id="rule-form" class="rule-form">
     <input type="hidden" name="allowed_leagues_json" id="allowed-leagues-json" value="">
+    <input type="hidden" name="result_ui_version" value="2">
+    <input type="hidden" name="outcome_green_stage" value="{{ rule.outcome_green_stage if rule and rule.outcome_green_stage else 'HT' }}">
+    <input type="hidden" name="outcome_red_stage" value="{{ rule.outcome_red_stage if rule and rule.outcome_red_stage else 'HT' }}">
     
     <!-- PASSO 1: IDENTIFICAÇÃO -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-3 align-items-center">
-          <div class="col-md-9">
+          <div class="col-lg-7">
             <label class="form-label fw-bold">Nome da sua Estratégia</label>
             <input class="form-control form-control-lg border-2" name="name" id="rule-name" value="{{ form.name if form is not none else (rule.name if rule else '') }}" placeholder="Ex: Funil de Escanteios HT" required>
           </div>
-          <div class="col-md-3">
-            <label class="form-label fw-bold">Status</label>
-            <div class="form-check form-switch mt-2">
-              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" style="width: 3em; height: 1.5em;" {% if form is not none %}{% if form.is_active %}checked{% endif %}{% elif rule is none or rule.is_active %}checked{% endif %}>
+          <div class="col-lg-5">
+            <div class="rule-toggle-grid">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if form is not none %}{% if form.is_active %}checked{% endif %}{% elif rule is none or rule.is_active %}checked{% endif %}>
+              <label class="form-check-label" for="is_active"><b>Regra ativa</b><small>Monitorar jogos</small></label>
             </div>
-            <div class="form-check form-switch mt-3">
+            <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="second_half_only" id="second_half_only" {% if form is not none %}{% if form.second_half_only %}checked{% endif %}{% elif rule and rule.second_half_only %}checked{% endif %}>
-              <label class="form-check-label small text-muted" for="second_half_only">
-                Somente 2º tempo (zerar stats do quando estiver nos 45' HT)
-              </label>
+              <label class="form-check-label" for="second_half_only"><b>Somente 2º tempo</b><small>Zerar estatísticas no intervalo</small></label>
             </div>
-            <div class="form-check form-switch mt-3">
+            <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="notify_telegram" id="notify_telegram" {% if form is not none %}{% if form.notify_telegram %}checked{% endif %}{% elif rule is none or rule.notify_telegram %}checked{% endif %}>
-              <label class="form-check-label small text-muted" for="notify_telegram">
-                Avisar no Telegram
-              </label>
+              <label class="form-check-label" for="notify_telegram"><b>Telegram</b><small>Enviar o alerta</small></label>
             </div>
-            <div class="form-check form-switch mt-3">
+            <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="alert_on_penalty" id="alert_on_penalty" {% if form is not none %}{% if form.alert_on_penalty %}checked{% endif %}{% elif rule and rule.alert_on_penalty %}checked{% endif %}>
-              <label class="form-check-label small text-muted" for="alert_on_penalty">
-                Avisar se houver pênalti (dentro do limite da regra)
-              </label>
+              <label class="form-check-label" for="alert_on_penalty"><b>Alerta de pênalti</b><small>Dentro do limite da regra</small></label>
+            </div>
             </div>
           </div>
         </div>
@@ -60,72 +68,76 @@
       </div>
       <div class="card-body">
         <div id="groups-container"></div>
-        <div class="form-text mt-2 small">
-          <strong>Dica:</strong> Condições dentro de um grupo funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
-        </div>
-        <div class="form-text mt-1 small">
-          Para filtrar placar no grupo, use <strong>⚽ Gols</strong> com lado <strong>Casa</strong> ou <strong>Visitante</strong>.
+        <div class="rule-help-callout mt-3">
+          <span class="rule-help-icon" aria-hidden="true">i</span>
+          <div>
+            <strong>Como os grupos funcionam</strong>
+            <p>Condições do mesmo grupo usam <b>E (AND)</b>; grupos diferentes usam <b>OU (OR)</b>.</p>
+            <p>Para filtrar o placar, escolha <b>Gols</b> e selecione o lado <b>Casa</b> ou <b>Visitante</b>.</p>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- PASSO 4: RESULTADO (GREEN/RED) -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white py-3 border-bottom">
-        <h6 class="mb-0 fw-bold text-primary">✅ Condições do Resultado</h6>
+    <!-- PASSO 4: RESULTADO -->
+    {% set has_custom_red = form.custom_red_enabled if form is not none else (rule and rule.outcome_conditions | selectattr('outcome_type', 'equalto', 'red') | list) %}
+    <div class="card border-0 shadow-sm mb-4 rule-result-card">
+      <div class="card-header bg-white py-3 border-bottom rule-result-heading">
+        <div><h6 class="mb-0 fw-bold text-primary">🏆 Resultado da Regra</h6><small>Defina quando esta entrada será considerada GREEN e o prazo para acontecer. Se o GREEN não ocorrer dentro do prazo, a entrada será marcada como RED.</small></div>
       </div>
       <div class="card-body">
-        <div class="row g-4">
-          <div class="col-md-6">
-            <div class="p-3 border rounded-3 bg-light h-100">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0 fw-bold text-success">GREEN</h6>
-                <button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-group="green">+ Adicionar Grupo (OU)</button>
+        <div class="rule-result-layout">
+          <div class="rule-result-main">
+            <section class="rule-result-green">
+              <div class="rule-result-section-head">
+                <div><h6>🟢 Condições para GREEN</h6><small>Defina o que precisa acontecer para a entrada ser considerada vencedora.</small></div>
+              </div>
+              <div class="rule-result-empty" data-outcome-green-empty>
+                <span aria-hidden="true">◎</span>
+                <div><strong>Nenhuma condição de GREEN definida.</strong><small>Adicione o que precisa acontecer para esta entrada ser considerada vencedora.</small></div>
+                <button type="button" class="btn btn-sm btn-success" data-add-outcome-condition="green">+ Adicionar condição</button>
               </div>
               <div id="outcome-green-container"></div>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="p-3 border rounded-3 bg-light h-100">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0 fw-bold text-danger">RED</h6>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Adicionar Grupo (OU)</button>
-              </div>
-              <div id="outcome-red-container"></div>
-            </div>
-          </div>
-        </div>
-        <div class="form-text mt-2 small">
-          Condições dentro do mesmo grupo de resultado funcionam como <strong>E (AND)</strong>. Grupos diferentes funcionam como <strong>OU (OR)</strong>.
-        </div>
-      </div>
-    </div>
+              <div class="rule-result-green-actions" data-outcome-green-actions hidden><button type="button" class="btn btn-sm btn-outline-success" data-add-outcome-condition="green">+ Condição (E)</button><button type="button" class="btn btn-sm btn-outline-success rule-result-add-alternative" data-add-outcome-group="green">+ Adicionar alternativa (OU)</button></div>
+            </section>
 
-    <!-- PASSO 4.1: LIMITE DE TEMPO -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white py-3 border-bottom">
-        <h6 class="mb-0 fw-bold text-primary">⏱️ Limite de Tempo</h6>
-      </div>
-      <div class="card-body">
-        <div class="row g-3 align-items-end">
-          <div class="col-md-6">
-            <label class="small text-muted">GREEN até o minuto (opcional)</label>
-            <input class="form-control" type="number" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 25">
+            <section class="rule-result-deadline">
+              <div class="rule-result-section-head"><div><h6>⏱ Prazo para GREEN</h6><small>Defina até quando as condições de GREEN precisam acontecer.</small></div></div>
+              <div class="rule-result-deadline-grid">
+                <label class="rule-result-minute-field" for="outcome-green-minute"><span>Minuto limite para GREEN</span><span><input class="form-control" id="outcome-green-minute" type="number" min="0" step="1" inputmode="numeric" name="outcome_green_minute" value="{{ form.outcome_green_minute if form is not none else (rule.outcome_green_minute if rule and rule.outcome_green_minute is not none else '') }}" placeholder="Ex: 35"><b>minutos</b></span></label>
+                <div class="form-check form-switch rule-result-auto-red">
+                  <input class="form-check-input" type="checkbox" role="switch" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
+                  <label class="form-check-label" for="outcome-red-if-no-green"><strong>Se o GREEN não acontecer até esse minuto, marcar como RED</strong><small>Ao atingir o minuto definido sem bater as condições de GREEN, a entrada será automaticamente RED.</small></label>
+                  <small class="rule-result-red-validation" data-auto-red-validation hidden>Defina primeiro o minuto limite para GREEN.</small>
+                </div>
+              </div>
+            </section>
+
+            <details class="rule-result-advanced">
+              <summary><span><b>⚙ RED personalizado (avançado)</b><small>Use apenas se quiser definir condições específicas para RED ou um minuto diferente.</small>{% if has_custom_red %}<mark>RED personalizado configurado</mark>{% endif %}</span><em>Expandir ›</em></summary>
+              <div class="rule-result-advanced-body">
+                <label class="form-check"><input class="form-check-input" type="checkbox" name="custom_red_enabled" value="1" data-custom-red-toggle {% if has_custom_red %}checked{% endif %}><span>Definir condições específicas para RED</span></label>
+                <div data-custom-red-panel {% if not has_custom_red %}hidden{% endif %}>
+                  <div class="rule-result-section-head"><div><h6>🔴 Condições específicas para RED</h6><small>Compatibilidade para estratégias avançadas e regras antigas.</small></div><div class="rule-result-actions"><button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-condition="red">+ Adicionar condição</button><button type="button" class="btn btn-sm btn-outline-danger" data-add-outcome-group="red">+ Adicionar alternativa (OU)</button></div></div>
+                  <div id="outcome-red-container"></div>
+                  <label class="rule-result-red-minute" id="outcome-red-minute-wrap"><span>Minuto específico do RED (opcional)</span><input class="form-control" type="number" min="0" step="1" inputmode="numeric" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex.: 45"></label>
+                </div>
+              </div>
+            </details>
+
+            <div class="rule-result-info"><i aria-hidden="true">i</i><p data-outcome-result-info>Atingiu as condições dentro do prazo → GREEN.<br>O RED automático está desativado.</p></div>
           </div>
-          <div class="col-md-6">
-            <div class="form-check mb-2">
-              <input class="form-check-input" type="checkbox" name="outcome_red_if_no_green" id="outcome-red-if-no-green" {% if form is not none %}{% if form.outcome_red_if_no_green %}checked{% endif %}{% elif rule and rule.outcome_red_if_no_green %}checked{% endif %}>
-              <label class="form-check-label small text-muted" for="outcome-red-if-no-green">
-                Virar RED se o GREEN não bater
-              </label>
-            </div>
-            <div id="outcome-red-minute-wrap">
-              <label class="small text-muted">Minuto do RED</label>
-              <input class="form-control" type="number" name="outcome_red_minute" value="{{ form.outcome_red_minute if form is not none else (rule.outcome_red_minute if rule and rule.outcome_red_minute is not none else '') }}" placeholder="Ex: 45">
-            </div>
-          </div>
+
+          <aside class="rule-result-sidebar" aria-live="polite">
+            <section class="rule-result-summary">
+              <header><span aria-hidden="true">▤</span><div><strong>Resumo do Resultado</strong><small>Veja como esta regra será avaliada.</small></div></header>
+              <div class="is-green"><span>🏆 GREEN</span><div data-outcome-green-summary>Adicione uma condição para definir o GREEN.</div></div>
+              <div class="is-red"><span>❌ RED</span><div data-outcome-red-summary>O RED automático está desativado.</div></div>
+            </section>
+            <section class="rule-result-logic"><strong>ⓘ Lógica de condições</strong><p>• Condições no mesmo grupo funcionam como <b>E (AND)</b>.<br>• Grupos diferentes funcionam como <b>OU (OR)</b>.</p></section>
+            <section class="rule-result-preview"><header><span>👁</span><div><strong>Pré-visualização <em>EXEMPLO</em></strong><small>Exemplo de como o resultado será avaliado no jogo.</small></div></header><div data-outcome-preview></div></section>
+          </aside>
         </div>
-        <div class="form-text mt-2 small">O limite define até quando o GREEN precisa ocorrer.</div>
       </div>
     </div>
 
@@ -136,11 +148,10 @@
       </div>
       <div class="card-body">
         <textarea class="form-control font-monospace" name="message_template" rows="6" placeholder="Sua mensagem personalizada...">{{ form.message_template if form is not none else (rule.message_template if rule and rule.message_template else default_message) }}</textarea>
-        <div class="mt-2 small text-muted">
-          Tags: <code>{rule}</code>, <code>{home_team}</code>, <code>{away_team}</code>, <code>{minute}</code>, <code>{score}</code>, <code>{url}</code>, <code>{league}</code>, <code>{time_limit}</code>, <code>{goals_home}</code>, <code>{goals_away}</code>, <code>{goals_total}</code>, <code>{corners_home}</code>, <code>{corners_away}</code>, <code>{corners_total}</code>, <code>{on_target_home}</code>, <code>{on_target_away}</code>, <code>{on_target_total}</code>, <code>{off_target_home}</code>, <code>{off_target_away}</code>, <code>{off_target_total}</code>, <code>{dangerous_attacks_home}</code>, <code>{dangerous_attacks_away}</code>, <code>{dangerous_attacks_total}</code>, <code>{history_h2h}</code>, <code>{history_home}</code>, <code>{history_away}</code>, <code>{history_confidence}</code>, <code>{rule_confidence}</code>
-        </div>
-        <div class="mt-3 p-3 border rounded-3 bg-light">
-          <div class="fw-semibold mb-2">Guia rapido das tags</div>
+        <details class="rule-tag-guide mt-2">
+          <summary>Ver tags disponíveis para personalizar a mensagem</summary>
+          <div class="rule-tag-guide-body">
+          <div class="fw-semibold mb-2">Guia rápido das tags</div>
           <div class="row g-2 small">
             <div class="col-md-6">
               <div><code>{rule}</code> - nome da regra.</div>
@@ -184,11 +195,12 @@
               <div><code>{ml_feature_count}</code> - quantidade de variaveis aprendidas pelo modelo.</div>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       </div>
     </div>
 
-    <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-3">
+    <div class="rule-form-actions d-grid gap-2 d-md-flex justify-content-md-end mb-3">
       <a href="{{ url_for('rules.list_rules') }}" class="btn btn-light px-4">Cancelar</a>
       <button type="button" class="btn btn-outline-info px-3" id="open-ai-hint" data-bs-toggle="modal" data-bs-target="#aiHintModal">Dica IA</button>
       <button type="button" class="btn btn-outline-secondary px-4" id="test-rule">Testar bot</button>
@@ -199,8 +211,37 @@
   </form>
 </div>
 
+<div class="modal fade" id="secondHalfNoticeModal" tabindex="-1" aria-labelledby="secondHalfNoticeLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered second-half-notice-dialog">
+    <div class="modal-content second-half-notice">
+      <div class="second-half-notice-head">
+        <span class="second-half-notice-icon" aria-hidden="true">45′</span>
+        <div>
+          <small>Atenção à contagem do tempo</small>
+          <h5 id="secondHalfNoticeLabel">Leitura reiniciada no 2º tempo</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>Ao ativar esta opção, as estatísticas são zeradas no intervalo e o segundo tempo passa a ser tratado de <strong>1 a 45 minutos</strong>.</p>
+        <div class="second-half-time-map" aria-label="Equivalência dos minutos">
+          <span><b>1′</b><small>46′ real</small></span>
+          <i aria-hidden="true">→</i>
+          <span><b>15′</b><small>60′ real</small></span>
+          <i aria-hidden="true">→</i>
+          <span><b>45′</b><small>90′ real</small></span>
+        </div>
+        <div class="second-half-notice-tip"><b>Exemplo:</b> para receber um alerta até os 60 minutos reais, configure o limite como <strong>15 minutos</strong>.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi, continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="aiHintModal" tabindex="-1" aria-labelledby="aiHintModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="aiHintModalLabel">Dica IA para montar regra</h5>
@@ -209,11 +250,12 @@
       <div class="modal-body">
         <label for="ai-hint-objective" class="form-label">Qual mercado/objetivo voce quer testar?</label>
         <textarea id="ai-hint-objective" class="form-control" rows="3" placeholder="Ex: quero buscar 1 gol HT com entrada ate 20 minutos"></textarea>
-        <div class="d-flex gap-2 mt-3">
-          <button type="button" class="btn btn-primary" id="ai-hint-generate">Gerar sugestao</button>
-          <button type="button" class="btn btn-outline-success" id="ai-hint-apply" disabled>Aplicar na regra</button>
-        </div>
         <div id="ai-hint-result" class="mt-3 small text-muted"></div>
+      </div>
+      <div class="modal-footer rule-ai-hint-actions">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" class="btn btn-primary" id="ai-hint-generate">Gerar sugestão</button>
+        <button type="button" class="btn btn-outline-success" id="ai-hint-apply" disabled>Aplicar na regra</button>
       </div>
     </div>
   </div>
@@ -299,11 +341,11 @@
 <template id="outcome-group-template">
   <div class="outcome-group mb-3 p-3 border rounded-3 bg-white shadow-sm">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0 fw-bold text-secondary outcome-group-title">Grupo 1 (OU)</h6>
+      <h6 class="mb-0 fw-bold text-secondary outcome-group-title">GRUPO 1 (TODAS devem acontecer)</h6>
       <button type="button" class="btn btn-sm btn-outline-danger remove-outcome-group">Remover Grupo</button>
     </div>
     <div class="outcome-conditions-list"></div>
-    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-outcome-group mt-2">+ Condição</button>
+    <button type="button" class="btn btn-sm btn-outline-primary add-condition-to-outcome-group mt-2">+ Adicionar condição (E)</button>
   </div>
 </template>
 
@@ -344,6 +386,15 @@
 </template>
 
 <script>
+  const secondHalfOnlyToggle = document.getElementById('second_half_only');
+  const secondHalfNoticeElement = document.getElementById('secondHalfNoticeModal');
+  secondHalfOnlyToggle?.addEventListener('change', () => {
+    if (!secondHalfOnlyToggle.checked || !secondHalfNoticeElement) return;
+    if (window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(secondHalfNoticeElement).show();
+    }
+  });
+
   const groupsContainer = document.getElementById('groups-container');
   const groupTemplate = document.getElementById('group-template');
   const conditionTemplate = document.getElementById('condition-template');
@@ -495,6 +546,11 @@
 
     loadOutcomeGroupsForType('green', s.outcome_green || []);
     loadOutcomeGroupsForType('red', s.outcome_red || []);
+    if (customRedToggle && Array.isArray(s.outcome_red) && s.outcome_red.length) {
+      customRedToggle.checked = true;
+      if (typeof syncCustomRedPanel === 'function') syncCustomRedPanel();
+      document.querySelector('.rule-result-advanced')?.setAttribute('open', '');
+    }
 
     setAllowedLeagues(Array.isArray(s.allowed_leagues) ? s.allowed_leagues : []);
     syncAllowedLeaguesFromRows();
@@ -665,11 +721,16 @@
     }
 
     function getFilteredLeagues() {
-      const filter = (leagueSearch ? leagueSearch.value : '').toString().trim().toLowerCase();
+      const fold = value => value.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const filter = fold((leagueSearch ? leagueSearch.value : '').toString().trim());
       const items = (availableLeagues || []).map(normalizeLeagueName).filter(Boolean);
-      return filter
-        ? items.filter(name => name.toLowerCase().includes(filter))
-        : items;
+      if (!filter) return items;
+      const femaleQueries = new Set(['women', 'woman', 'female', 'feminino', 'feminina', 'femenil', 'femenina', 'feminin']);
+      if (femaleQueries.has(filter)) {
+        const femaleMarkers = ['women', 'woman', 'female', 'feminin', 'femenil', 'femenin', 'femminil', 'frauen', 'vrouwen', 'dames', 'reina'];
+        return items.filter(name => femaleMarkers.some(marker => fold(name).includes(marker)));
+      }
+      return items.filter(name => fold(name).includes(filter));
     }
 
     function syncStatMode() {
@@ -774,14 +835,16 @@
     const nextIndex = groupId !== null ? groupId : container.children.length;
 
     group.dataset.groupId = nextIndex;
-    group.querySelector('.outcome-group-title').textContent = `Grupo ${nextIndex + 1} (OU)`;
+    group.querySelector('.outcome-group-title').textContent = `GRUPO ${nextIndex + 1} (TODAS devem acontecer)`;
 
     group.querySelector('.remove-outcome-group').addEventListener('click', () => {
       group.remove();
       refreshOutcomeGroupIndices(type);
+      queueMicrotask(syncOutcomeUiState);
     });
     group.querySelector('.add-condition-to-outcome-group').addEventListener('click', () => {
       addOutcomeCondition(type, group);
+      queueMicrotask(syncOutcomeUiState);
     });
 
     container.appendChild(group);
@@ -796,6 +859,14 @@
     const sideWrap = cond.querySelector('.outcome-side-wrap');
     const sideSelect = cond.querySelector('.outcome-stat-side');
     const opSelect = cond.querySelector('.outcome-stat-operator');
+    const valueInput = cond.querySelector('.outcome-stat-value');
+    [statSelect, sideSelect, opSelect, valueInput].forEach((control) => {
+      if (control) control.required = true;
+    });
+    if (valueInput) {
+      valueInput.min = '0';
+      valueInput.step = '1';
+    }
 
     // Keep outcome condition options in sync with the main "Regras de Estatisticas".
     if (statSelect) {
@@ -844,7 +915,9 @@
 
     cond.querySelector('.remove-outcome-condition').addEventListener('click', () => {
       cond.remove();
-      refreshNames();
+      if (!list.children.length) group.remove();
+      refreshOutcomeGroupIndices(type);
+      queueMicrotask(syncOutcomeUiState);
     });
     list.appendChild(cond);
     refreshNames();
@@ -864,7 +937,7 @@
     const container = outcomeContainerByType(type);
     Array.from(container.children).forEach((group, i) => {
       group.dataset.groupId = i;
-      group.querySelector('.outcome-group-title').textContent = `Grupo ${i + 1} (OU)`;
+      group.querySelector('.outcome-group-title').textContent = `GRUPO ${i + 1} · TODAS as condições`;
     });
     refreshNames();
   }
@@ -942,6 +1015,15 @@
       const group = addOutcomeGroup(type);
       addOutcomeCondition(type, group);
       refreshOutcomeGroupIndices(type);
+      queueMicrotask(syncOutcomeUiState);
+    });
+  });
+  document.querySelectorAll('[data-add-outcome-condition]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.addOutcomeCondition;
+      addOutcome(type);
+      refreshOutcomeGroupIndices(type);
+      queueMicrotask(syncOutcomeUiState);
     });
   });
 
@@ -989,22 +1071,163 @@
   document.getElementById('rule-form').addEventListener('submit', () => {
     syncAllowedLeaguesFromRows();
     refreshNames();
+    syncRedMinute();
   });
 
   const redToggle = document.getElementById('outcome-red-if-no-green');
   const redMinuteWrap = document.getElementById('outcome-red-minute-wrap');
+  const greenMinuteInput = document.getElementById('outcome-green-minute');
+  const redMinuteInput = document.querySelector('input[name="outcome_red_minute"]');
+  const customRedToggle = document.querySelector('[data-custom-red-toggle]');
+  const customRedPanel = document.querySelector('[data-custom-red-panel]');
+  const greenEmptyState = document.querySelector('[data-outcome-green-empty]');
+  const greenActions = document.querySelector('[data-outcome-green-actions]');
+  const autoRedValidation = document.querySelector('[data-auto-red-validation]');
+  const resultInfo = document.querySelector('[data-outcome-result-info]');
+  let autoRedValidationRequested = false;
+
+  function hasGreenOutcomeCondition() {
+    return Boolean(outcomeGreenContainer.querySelector('.outcome-condition-block'));
+  }
+
+  function syncOutcomeUiState() {
+    const hasGreen = hasGreenOutcomeCondition();
+    const minute = greenMinuteInput?.value ?? '';
+    const validMinute = minute !== '' && Number.isFinite(Number(minute)) && Number(minute) >= 0;
+    if (greenEmptyState) greenEmptyState.hidden = hasGreen;
+    if (greenActions) greenActions.hidden = !hasGreen;
+    if (greenMinuteInput) {
+      greenMinuteInput.disabled = !hasGreen;
+      greenMinuteInput.closest('.rule-result-minute-field')?.classList.toggle('is-disabled', !hasGreen);
+    }
+    if (redToggle) {
+      if ((!hasGreen || !validMinute) && redToggle.checked) redToggle.checked = false;
+      redToggle.disabled = !hasGreen || !validMinute;
+      redToggle.closest('.rule-result-auto-red')?.classList.toggle('is-active', redToggle.checked);
+      redToggle.closest('.rule-result-auto-red')?.classList.toggle('is-disabled', redToggle.disabled);
+    }
+    if (autoRedValidation) {
+      autoRedValidation.hidden = !(autoRedValidationRequested && hasGreen && !validMinute);
+    }
+    updateOutcomeSummary();
+  }
+  function syncCustomRedPanel() {
+    const enabled = Boolean(customRedToggle?.checked);
+    if (customRedPanel) {
+      customRedPanel.hidden = !enabled;
+      customRedPanel.querySelectorAll('input, select, button').forEach((control) => { control.disabled = !enabled; });
+    }
+  }
   function syncRedMinute() {
-    const show = redToggle && redToggle.checked;
-    if (redMinuteWrap) redMinuteWrap.style.display = show ? '' : 'none';
+    const automatic = Boolean(redToggle?.checked);
+    if (greenMinuteInput) greenMinuteInput.required = automatic;
+    // No modo simples, o backend legado liquida pelo minuto de RED. Espelhar
+    // o prazo visível mantém um único conceito sem mudar o modelo persistido.
+    if (automatic && redMinuteInput && !customRedToggle?.checked) {
+      redMinuteInput.value = greenMinuteInput?.value || '';
+    }
+    updateOutcomeSummary();
   }
   if (redToggle) {
-    redToggle.addEventListener('change', syncRedMinute);
-    syncRedMinute();
+    redToggle.addEventListener('change', () => {
+      autoRedValidationRequested = false;
+      syncRedMinute();
+      syncOutcomeUiState();
+    });
   }
+  document.querySelector('.rule-result-auto-red')?.addEventListener('click', () => {
+    if (redToggle?.disabled && hasGreenOutcomeCondition() && !greenMinuteInput?.value) {
+      autoRedValidationRequested = true;
+      syncOutcomeUiState();
+    }
+  });
+  greenMinuteInput?.addEventListener('input', () => {
+    autoRedValidationRequested = false;
+    syncRedMinute();
+    syncOutcomeUiState();
+  });
+  customRedToggle?.addEventListener('change', () => {
+    syncCustomRedPanel();
+    if (customRedToggle.checked) document.querySelector('.rule-result-advanced')?.setAttribute('open', '');
+    syncRedMinute();
+  });
   function formatOperator(op) {
     if (op === '==') return '=';
     return op || '';
   }
+
+  const outcomeStatLabels = {corners:'Escanteios','dangerous-attacks':'Ataques perigosos','on-target':'Chutes no alvo',attacks:'Ataques','off-target':'Chutes para fora',possession:'Posse de bola',goals:'Gols',penalties:'Pênaltis','yellow-cards':'Cartões amarelos','red-cards':'Cartões vermelhos',Minute:'Minutos'};
+  const outcomeSideLabels = {total:'Total',home:'Casa',away:'Visitante'};
+  const outcomeOperatorLabels = {'>=':'≥','<=':'≤','==':'=','>':'>','<':'<'};
+  function outcomeRowDescription(row) {
+    const stat = row.querySelector('.outcome-stat-select')?.value || '';
+    const side = row.querySelector('.outcome-stat-side')?.value || 'total';
+    const operator = row.querySelector('.outcome-stat-operator')?.value || '';
+    const rawValue = row.querySelector('.outcome-stat-value')?.value;
+    const value = Number(rawValue);
+    if (!stat || !operator || rawValue === '' || !Number.isFinite(value)) return '';
+    const sideLabel = stat === 'Minute' ? '' : ` (${outcomeSideLabels[side] || side})`;
+    return `${outcomeStatLabels[stat] || stat}${sideLabel} ${outcomeOperatorLabels[operator] || operator} ${value}`;
+  }
+  function outcomeDescriptionGroups(type) {
+    const container = outcomeContainerByType(type);
+    return Array.from(container.children).map((group) => {
+      return Array.from(group.querySelectorAll('.outcome-condition-block')).map(outcomeRowDescription).filter(Boolean);
+    }).filter((group) => group.length);
+  }
+  function outcomeGroupsHtml(groups) {
+    return groups.map((group, index) => `${index ? '<span class="rule-result-or">OU</span>' : ''}<div class="rule-result-summary-group">${group.map((line) => `<p><i>●</i>${escapeHtml(line)}</p>`).join('')}</div>`).join('');
+  }
+  function updateOutcomeSummary() {
+    const greenGroups = outcomeDescriptionGroups('green');
+    const redGroups = outcomeDescriptionGroups('red');
+    const minute = greenMinuteInput?.value;
+    const validMinute = minute !== '' && Number(minute) >= 0;
+    const greenSummary = document.querySelector('[data-outcome-green-summary]');
+    const redSummary = document.querySelector('[data-outcome-red-summary]');
+    if (greenSummary) greenSummary.innerHTML = greenGroups.length
+      ? `${outcomeGroupsHtml(greenGroups)}${validMinute ? `<p class="rule-result-summary-deadline">⏱ Até o minuto ${Number(minute)}'</p>` : ''}`
+      : '<p>Adicione uma condição para definir o GREEN.</p>';
+    if (redSummary) {
+      if (redToggle?.checked && validMinute) redSummary.innerHTML = `<p><i>●</i>Se não atingir as condições de GREEN até o minuto ${Number(minute)}'</p>${customRedToggle?.checked && redGroups.length ? `<span class="rule-result-or">OU</span>${outcomeGroupsHtml(redGroups)}` : ''}`;
+      else if (customRedToggle?.checked && redGroups.length) redSummary.innerHTML = outcomeGroupsHtml(redGroups);
+      else if (!greenGroups.length) redSummary.innerHTML = '<p>Configure o prazo para ativar o RED automático.</p>';
+      else redSummary.innerHTML = '<p>O RED automático está desativado.</p>';
+    }
+    const preview = document.querySelector('[data-outcome-preview]');
+    if (preview) {
+      const firstCondition = greenGroups[0]?.[0];
+      if (!firstCondition || !validMinute) {
+        preview.classList.add('is-incomplete');
+        preview.innerHTML = '<p class="rule-result-preview-empty">Configure uma condição e um minuto para visualizar o exemplo.</p>';
+      } else {
+        preview.classList.remove('is-incomplete');
+        const limit = Number(minute);
+        const waitingAt = Math.max(1, Math.min(12, limit - 3));
+        const closeAt = Math.max(waitingAt + 1, limit - 2);
+        preview.innerHTML = `<div><b>${waitingAt}'</b><span>Ainda aguardando...<small>A condição ainda não foi atingida.</small></span></div><div><b>${closeAt}'</b><span>${escapeHtml(firstCondition)}<small>Exemplo: entrada marcada como GREEN.</small></span></div><div class="is-deadline"><b>${limit}'</b><span>Prazo final<small>Se não tivesse atingido, seria RED${redToggle?.checked ? '.' : ' caso o RED automático estivesse ligado.'}</small></span></div>`;
+      }
+    }
+    if (resultInfo) {
+      resultInfo.innerHTML = redToggle?.checked && validMinute
+        ? `Atingiu as condições até ${Number(minute)}' → GREEN.<br>Não atingiu até ${Number(minute)}' → RED.`
+        : 'Atingiu as condições dentro do prazo → GREEN.<br>O RED automático está desativado.';
+    }
+  }
+  document.getElementById('rule-form').addEventListener('input', (event) => {
+    if (event.target.closest('#outcome-green-container, #outcome-red-container, .rule-result-deadline')) updateOutcomeSummary();
+  });
+  document.getElementById('rule-form').addEventListener('change', (event) => {
+    if (event.target.closest('#outcome-green-container, #outcome-red-container, .rule-result-deadline')) updateOutcomeSummary();
+  });
+  new MutationObserver(syncOutcomeUiState).observe(outcomeGreenContainer, {childList: true, subtree: true});
+  new MutationObserver(updateOutcomeSummary).observe(outcomeRedContainer, {childList: true, subtree: true});
+  syncCustomRedPanel();
+  syncRedMinute();
+  syncOutcomeUiState();
+  document.getElementById('rule-form').addEventListener('submit', () => {
+    if (greenMinuteInput) greenMinuteInput.disabled = false;
+  });
 
   function buildConditionsSummary() {
     const groups = [];

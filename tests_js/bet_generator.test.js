@@ -2,6 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const engine = require('../app/static/js/bet-generator.js');
 
+test('baseline permanece formalmente identificado como legacy_v1', () => {
+  assert.equal(engine.MODEL_VERSION, 'legacy_v1');
+});
+
 const series = (hits, total, hitValue = 2, missValue = 0) => [
   ...Array(hits).fill(hitValue), ...Array(Math.max(0, total - hits)).fill(missValue)
 ];
@@ -17,6 +21,26 @@ test('bases 100/83/83 geram confiança alta', () => {
   assert.ok(candidate.confidenceScore >= 80);
 });
 
+test('mercado menos usa valores abaixo da linha e preserva a direção', () => {
+  const candidate = engine.evaluateCandidate({
+    fixtureId: 'under', marketType: 'under25', marketGroup: 'goals_ft', direction: 'under', scope: 'total', line: 2.5,
+    bases: {h2h: [0, 1, 2, 1, 2, 0], home: [1, 2, 0, 1, 2, 1], away: [0, 1, 2, 2, 1, 0]}, supportingScore: 90
+  }, 'balanced');
+  assert.equal(candidate.direction, 'under');
+  assert.equal(candidate.rawProbability, 100);
+  assert.equal(candidate.status, 'APPROVED');
+});
+
+test('prioridade H2H ignora a forma geral no cálculo de gols', () => {
+  const candidate = engine.evaluateCandidate({
+    fixtureId: 'h2h-first', marketType: 'over15', marketGroup: 'goals_ft', scope: 'total', sourcePriority: 'h2h', line: 1.5,
+    bases: {h2h: [2, 3, 4, 2, 3, 2], home: [0, 0, 0, 0, 0, 0], away: [0, 0, 0, 0, 0, 0]}, supportingScore: 90
+  }, 'balanced');
+  assert.equal(candidate.rawProbability, 100);
+  assert.equal(candidate.sourcePriority, 'h2h');
+  assert.equal(candidate.status, 'APPROVED');
+});
+
 test('base 100/100/33 sofre penalização forte', () => {
   const candidate = goal('b', series(6, 6), series(6, 6), series(2, 6));
   assert.equal(candidate.status, 'REJECTED');
@@ -29,6 +53,15 @@ test('9/10 possui sustentação superior a 3/3', () => {
   const long = engine.evaluateCandidate({fixtureId: 'l', marketType: 'corners_home', marketGroup: 'corners_home', scope: 'home', line: 2.5, bases: {home: series(9, 10, 4)}}, 'balanced');
   assert.ok(long.sampleScore > short.sampleScore);
   assert.ok(long.confidenceScore >= short.confidenceScore);
+});
+
+test('100% em amostra curta é calibrado e não tratado como certeza', () => {
+  const short = engine.evaluateCandidate({fixtureId: 'short-perfect', marketType: 'corners_home', marketGroup: 'corners_home', scope: 'home', line: 2.5,
+    bases: {home: series(3, 3, 4)}, supportingScore: 80, contextScore: 80}, 'balanced');
+  const long = engine.evaluateCandidate({fixtureId: 'long-perfect', marketType: 'corners_home', marketGroup: 'corners_home', scope: 'home', line: 2.5,
+    bases: {home: series(10, 10, 4)}, supportingScore: 80, contextScore: 80}, 'balanced');
+  assert.ok(short.adjustedProbability < 90);
+  assert.ok(long.adjustedProbability > short.adjustedProbability);
 });
 
 test('linha equilibrada não escolhe automaticamente a maior linha de 67%', () => {
@@ -54,16 +87,40 @@ test('ordem de carregamento não altera ranking global', () => {
   assert.equal(engine.buildTicket([a, b], 1)[0].fixtureId, 'b');
 });
 
+test('completa a quantidade pedida mesmo quando os jogos restantes repetem categoria', () => {
+  const candidates = Array.from({length: 8}, (_, index) => ({
+    fixtureId: `early-${index}`, status: 'APPROVED', marketGroup: index === 0 ? 'cards_total' : 'goals_ft',
+    marketType: index === 0 ? 'cards_total' : 'over15', confidenceScore: 90 - index,
+    adjustedProbability: 88, dataQualityScore: 90, consistencyScore: 90, valueScore: 50
+  }));
+  const ticket = engine.buildTicket(candidates, 6, 'balanced', 1);
+  assert.equal(new Set(ticket.map((item) => item.fixtureId)).size, 6);
+});
+
 test('processamento parcial nunca é completo', () => {
   assert.deepEqual(engine.analysisMetadata(100, 60, 0).analysis_complete, false);
   assert.deepEqual(engine.analysisMetadata(100, 100, 0).analysis_complete, true);
   assert.deepEqual(engine.analysisMetadata(100, 99, 1).analysis_complete, false);
 });
 
+test('cobertura parcial ampla permite gerar apenas com jogos completos', () => {
+  assert.equal(engine.partialAnalysisSufficient(525, 158, 3), true);
+  assert.equal(engine.partialAnalysisSufficient(525, 40, 3), false);
+  assert.equal(engine.partialAnalysisSufficient(20, 12, 3), true);
+  assert.equal(engine.partialAnalysisSufficient(20, 9, 2), false);
+});
+
 test('linhas aninhadas são altamente correlacionadas', () => {
   const a = {fixtureId: 'x', marketGroup: 'goals_ft'};
   const b = {fixtureId: 'x', marketGroup: 'goals_ft'};
   assert.equal(engine.correlationPenalty(a, b), 100);
+});
+
+test('gol de uma equipe pertence a gols e não duplica total de gols no mesmo jogo', () => {
+  const teamGoal = {fixtureId: 'tg', marketGroup: 'team_goals_home'};
+  const totalGoal = {fixtureId: 'tg', marketGroup: 'goals_ft'};
+  assert.equal(engine.marketCategory(teamGoal), 'goals');
+  assert.equal(engine.correlationPenalty(teamGoal, totalGoal), 100);
 });
 
 test('H2H de um jogo recebe credibilidade pequena', () => {
@@ -180,9 +237,10 @@ test('prioriza uma partida com múltiplos mercados fortes sobre uma opção isol
   assert.equal(ticket.length, 3);
 });
 
-test('mercados do primeiro tempo formam categorias próprias no bilhete', () => {
-  assert.equal(engine.marketCategory({marketGroup: 'corners_1h_home'}), 'corners_1h');
-  assert.equal(engine.marketCategory({marketGroup: 'cards_1h_total'}), 'cards_1h');
+test('mercados por tempo pertencem à categoria principal do esporte', () => {
+  assert.equal(engine.marketCategory({marketGroup: 'corners_1h_home'}), 'corners');
+  assert.equal(engine.marketCategory({marketGroup: 'cards_1h_total'}), 'cards');
+  assert.equal(engine.marketCategory({marketGroup: 'cards_2h_total'}), 'cards');
 });
 
 test('linha do primeiro tempo não duplica a mesma linha do jogo completo para a equipe', () => {

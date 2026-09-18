@@ -1,6 +1,7 @@
 import json
 import glob
 import os
+import re
 import threading
 import time
 from hashlib import sha1
@@ -23,10 +24,10 @@ from app.utils.time import now_sp
 
 
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
-MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", "900"))
+MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
 MATCHDAY_CACHE_VERSION = 7
 MATCHDAY_TREND_INDEX_VERSION = 1
-MATCHDAY_SUMMARY_CACHE_VERSION = 1
+MATCHDAY_SUMMARY_CACHE_VERSION = 5
 MATCHDAY_SUMMARY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_SUMMARY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
 
 
@@ -49,6 +50,13 @@ def load_matchday_summary_cache(day: str, game_id: str, sample_limit: int) -> di
 
 
 def save_matchday_summary_cache(day: str, game_id: str, sample_limit: int, payload: dict) -> None:
+    # Um retorno vazio também acontece quando a origem está temporariamente
+    # bloqueada/indisponível. Não o retenha por 24 horas como se fosse a
+    # conclusão definitiva de que o confronto não possui histórico.
+    if not isinstance(payload, dict) or payload.get("status") == "empty":
+        return
+    payload = dict(payload)
+    payload["cache_schema_version"] = 2
     path = _summary_cache_path(day, game_id, sample_limit)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -84,9 +92,9 @@ def _is_excluded_youth_match(*values: str) -> bool:
 
     text = " ".join(str(value or "") for value in values).casefold()
     patterns = (
-        r"\bsub[\s._-]?(?:17|18|19|20)\b",
-        r"\bu[\s._-]?(?:17|18|19|20)\b",
-        r"\bunder[\s._-]?(?:17|18|19|20)\b",
+        r"\bsub[\s._-]?(?:17|18|19|20|21|22)\b",
+        r"\bu[\s._-]?(?:17|18|19|20|21|22)\b",
+        r"\bunder[\s._-]?(?:17|18|19|20|21|22)\b",
     )
     return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
 
@@ -115,10 +123,10 @@ def _cache_path(day: str) -> str:
     return os.path.join(MATCHDAY_CACHE_DIR, f"fixtures-{day}.json")
 
 
-def _load_cache(day: str):
+def _load_cache(day: str, allow_stale: bool = False):
     path = _cache_path(day)
     try:
-        if time.time() - os.stat(path).st_mtime > MATCHDAY_CACHE_TTL_SECONDS:
+        if not allow_stale and time.time() - os.stat(path).st_mtime > MATCHDAY_CACHE_TTL_SECONDS:
             return None
         with open(path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -126,7 +134,18 @@ def _load_cache(day: str):
         return None
     if not isinstance(payload, dict) or payload.get("cache_version") != MATCHDAY_CACHE_VERSION:
         return None
-    return payload if isinstance(payload.get("matches"), list) else None
+    if not isinstance(payload.get("matches"), list):
+        return None
+    payload = dict(payload)
+    payload["matches"] = [
+        match for match in payload["matches"]
+        if not _is_excluded_match(
+            (match or {}).get("league"),
+            (match or {}).get("home_team"),
+            (match or {}).get("away_team"),
+        )
+    ]
+    return payload
 
 
 def _save_cache(day: str, payload: dict) -> None:
@@ -233,6 +252,7 @@ def trend_groups_for_match(index_payload: dict, game_id: str, limit: int) -> dic
         groups[key] = {
             "count": count,
             "samples": 0,
+            "over05": round(sum(1 for item in items if int(item.get("total") or 0) > 0) / count * 100) if count else None,
             "over15": round(sum(1 for item in items if int(item.get("total") or 0) > 1) / count * 100) if count else None,
             "over25": round(sum(1 for item in items if int(item.get("total") or 0) > 2) / count * 100) if count else None,
         }
@@ -379,6 +399,11 @@ def _fetch_from_api(day: str, token: str) -> list[dict]:
 def _fetch_from_public(day: str) -> list[dict]:
     session = make_session()
     maximum = max(1, int(os.environ.get("MATCHDAY_MAX_PAGES", "20")))
+    # On the current day the public listing includes the large block of games
+    # already played before the upcoming fixtures. Twenty pages can therefore
+    # end before reaching the afternoon/evening schedule.
+    if day == now_sp().strftime("%Y-%m-%d"):
+        maximum = max(maximum, int(os.environ.get("MATCHDAY_TODAY_MAX_PAGES", "40")))
     found = {}
     seen_pages = set()
     for page in range(1, maximum + 1):
@@ -388,13 +413,17 @@ def _fetch_from_public(day: str) -> list[dict]:
             response = get_with_fallback(session, f"{base}{path}")
             if response.status_code == 200:
                 page_matches = parse_matchday_html(response.text, base, reference_day=day)
-            if page_matches:
+                # Uma resposta HTTP válida pode ficar vazia depois dos filtros;
+                # consultar o domínio espelho repetiria a mesma página.
                 break
+        # Algumas páginas são compostas apenas por eSoccer ou categorias
+        # bloqueadas. Isso produz uma página filtrada vazia, mas não significa
+        # que a paginação acabou: jogos válidos podem reaparecer adiante.
         if not page_matches:
-            break
+            continue
         fingerprint = tuple(sorted(item["game_id"] for item in page_matches))
         if fingerprint in seen_pages:
-            break
+            continue
         seen_pages.add(fingerprint)
         for item in page_matches:
             if item.get("day") == day:
@@ -403,6 +432,7 @@ def _fetch_from_public(day: str) -> list[dict]:
 
 
 def get_matchday(day: str, force_refresh: bool = False) -> dict:
+    stale_cache = _load_cache(day, allow_stale=True)
     if not force_refresh:
         cached = _load_cache(day)
         if cached:
@@ -413,14 +443,48 @@ def get_matchday(day: str, force_refresh: bool = False) -> dict:
     source = "BetsAPI público"
     error = ""
     token = os.environ.get("BETSAPI_TOKEN", "").strip()
-    try:
-        if token:
-            matches = _fetch_from_api(day, token)
-            source = "BetsAPI oficial"
-        else:
-            matches = _fetch_from_public(day)
-    except Exception as exc:
-        error = f"A agenda não respondeu neste momento ({type(exc).__name__})."
+    attempts = max(1, int(os.environ.get("MATCHDAY_FETCH_ATTEMPTS", "2")))
+    for attempt in range(attempts):
+        try:
+            if token:
+                matches = _fetch_from_api(day, token)
+                source = "BetsAPI oficial"
+            else:
+                matches = _fetch_from_public(day)
+            if len(matches) >= 5 or attempt + 1 >= attempts:
+                error = ""
+                break
+            error = "A agenda respondeu sem jogos neste momento."
+        except Exception as exc:
+            error = f"A agenda não respondeu neste momento ({type(exc).__name__})."
+        if attempt + 1 < attempts:
+            time.sleep(0.5)
+
+    stale_matches = list((stale_cache or {}).get("matches") or [])
+
+    def has_future_today(items) -> bool:
+        if day != now_sp().strftime("%Y-%m-%d"):
+            return True
+        current_clock = now_sp().strftime("%H:%M")
+        return any(
+            isinstance(item, dict)
+            and isinstance(item.get("time"), str)
+            and re.fullmatch(r"\d{1,2}:\d{2}", item["time"])
+            and item["time"].zfill(5) >= current_clock
+            for item in items
+        )
+
+    collection_is_incomplete = (
+        len(stale_matches) >= 10
+        and len(matches) < max(5, len(stale_matches) // 2)
+    ) or (has_future_today(stale_matches) and not has_future_today(matches))
+    if (not matches or collection_is_incomplete) and stale_matches:
+        fallback = dict(stale_cache)
+        fallback["cached"] = True
+        fallback["stale"] = True
+        fallback["refresh_error"] = error
+        fallback["error"] = ""
+        return fallback
 
     matches.sort(key=lambda item: (item.get("time") == "-", item.get("time") or "", item.get("league") or ""))
     payload = {
@@ -444,7 +508,7 @@ def analyze_upcoming_match(
     match: dict,
     force_refresh: bool = False,
     detail_limit: int | None = None,
-    cache_variant: str = "detail-v18-exact-sample",
+    cache_variant: str = "detail-v19-temporal-history",
 ) -> dict:
     placeholder = SimpleNamespace(
         id=f"upcoming-{cache_variant}-{match['game_id']}",

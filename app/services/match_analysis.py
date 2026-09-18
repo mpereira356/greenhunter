@@ -31,6 +31,7 @@ ANALYSIS_CACHE_DIR = os.environ.get("ANALYSIS_CACHE_DIR", os.path.join("data", "
 ANALYSIS_CACHE_TTL_SECONDS = int(os.environ.get("ANALYSIS_CACHE_TTL_SECONDS", str(7 * 24 * 60 * 60)))
 ANALYSIS_PENDING_CACHE_TTL_SECONDS = int(os.environ.get("ANALYSIS_PENDING_CACHE_TTL_SECONDS", "600"))
 ANALYSIS_HISTORY_TIMEOUT_SECONDS = int(os.environ.get("ANALYSIS_HISTORY_TIMEOUT_SECONDS", "4"))
+ANALYSIS_CACHE_VERSION = 7
 
 
 def _safe_json(raw):
@@ -68,6 +69,8 @@ def _load_cached_analysis(alert):
         return None
     if not isinstance(cached, dict):
         return None
+    if cached.get("cache_version") != ANALYSIS_CACHE_VERSION:
+        return None
     groups = cached.get("groups") or []
     if not any(isinstance(group, dict) and int(group.get("count") or 0) > 0 for group in groups):
         return None
@@ -85,6 +88,7 @@ def _save_cached_analysis(alert, analysis: dict) -> None:
         os.makedirs(ANALYSIS_CACHE_DIR, exist_ok=True)
         payload = {k: v for k, v in analysis.items() if k != "alert"}
         payload["cached"] = False
+        payload["cache_version"] = ANALYSIS_CACHE_VERSION
         with open(_cache_path(alert), "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=True)
     except Exception:
@@ -136,7 +140,104 @@ def _same_team(left, right) -> bool:
     return min(len(left_key), len(right_key)) >= 6 and (left_key in right_key or right_key in left_key)
 
 
+def _history_row_meta(item: dict) -> dict:
+    return {
+        "external_id": item.get("external_id"), "kickoff_at": item.get("kickoff_at"),
+        "kickoff_original": item.get("kickoff_original"),
+        "kickoff_timezone": item.get("kickoff_timezone"),
+        "historical_date_available": bool(item.get("historical_date_available")),
+        "league": item.get("league"), "source": item.get("source") or "betsapi",
+        "home_external_id": item.get("history_home_external_id"),
+        "away_external_id": item.get("history_away_external_id"),
+    }
+
+
+def _h2h_team_goal_rows(items: list[dict], target_team: str | None) -> list[dict]:
+    """Return the target team's FT goals in every identifiable H2H match."""
+    rows = []
+    for item in items or []:
+        home_name = str(item.get("history_home_team") or "")
+        away_name = str(item.get("history_away_team") or "")
+        if _same_team(home_name, target_team):
+            value = item.get("home")
+        elif _same_team(away_name, target_team):
+            value = item.get("away")
+        else:
+            continue
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            continue
+        rows.append({"match": f"{home_name or 'Time da casa'} x {away_name or 'Time visitante'}",
+                     "value": value, **_history_row_meta(item)})
+    return rows
+
+
+def _h2h_team_corner_rows(items: list[dict], target_team: str | None) -> list[dict]:
+    """Return the target team's FT corners in every identifiable H2H match."""
+    rows = []
+    for item in items or []:
+        home_name = str(item.get("history_home_team") or "")
+        away_name = str(item.get("history_away_team") or "")
+        if _same_team(home_name, target_team):
+            value = item.get("corners_home")
+        elif _same_team(away_name, target_team):
+            value = item.get("corners_away")
+        else:
+            continue
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            continue
+        rows.append({"match": f"{home_name or 'Time da casa'} x {away_name or 'Time visitante'}",
+                     "value": value, **_history_row_meta(item)})
+    return rows
+
+
+def _h2h_total_goal_rows(items: list[dict]) -> list[dict]:
+    rows = []
+    for item in items or []:
+        try:
+            home, away = int(item.get("home")), int(item.get("away"))
+        except (TypeError, ValueError):
+            continue
+        home_name = str(item.get("history_home_team") or "Time da casa")
+        away_name = str(item.get("history_away_team") or "Time visitante")
+        rows.append({
+            "match": f"{home_name} x {away_name}", "value": home + away,
+            "home_name": home_name, "away_name": away_name,
+            "home_value": home, "away_value": away,
+            **_history_row_meta(item),
+        })
+    return rows
+
+
 def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
+    # Os placares finais vêm na listagem histórica do BetsAPI e não dependem
+    # de a página detalhada disponibilizar estatísticas por período.
+    full_time_goal_rows = []
+    btts_rows = []
+    for item in items:
+        try:
+            home, away = int(item.get("home")), int(item.get("away"))
+        except (TypeError, ValueError):
+            continue
+        home_name = str(item.get("history_home_team") or "Time da casa")
+        away_name = str(item.get("history_away_team") or "Time visitante")
+        base = {
+            "match": f"{home_name} x {away_name}",
+            "home_name": home_name, "away_name": away_name,
+            "home_value": home, "away_value": away,
+            "external_id": item.get("external_id"), "kickoff_at": item.get("kickoff_at"),
+            "kickoff_original": item.get("kickoff_original"),
+            "kickoff_timezone": item.get("kickoff_timezone"),
+            "historical_date_available": bool(item.get("historical_date_available")),
+            "league": item.get("league"), "source": item.get("source") or "betsapi",
+            "home_external_id": item.get("history_home_external_id"),
+            "away_external_id": item.get("history_away_external_id"),
+        }
+        full_time_goal_rows.append({**base, "value": home + away})
+        btts_rows.append({**base, "value": int(home > 0 and away > 0)})
     detailed = [item for item in items if item.get("goals_ht") is not None]
     total = len(detailed)
     if not total:
@@ -176,7 +277,11 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
             "avg_shots_on_target": None,
             "fouls_samples": 0,
             "avg_fouls": None,
-            "history_values": {},
+            "history_values": {
+                "over15": full_time_goal_rows,
+                "over25": full_time_goal_rows,
+                "btts": btts_rows,
+            },
         }
     goal_1h = sum(1 for item in detailed if int(item.get("goals_ht") or 0) > 0)
     goal_2h = sum(1 for item in detailed if int(item.get("goals_2h") or 0) > 0)
@@ -210,6 +315,15 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
     def team_values(home_field, away_field):
         return [int(value) for item in detailed if (value := team_side_value(item, home_field, away_field)) is not None]
 
+    def opponent_side_value(item, home_field, away_field):
+        if not target_key:
+            return None
+        if _same_team(item.get("history_home_team"), target_team):
+            return item.get(away_field)
+        if _same_team(item.get("history_away_team"), target_team):
+            return item.get(home_field)
+        return None
+
     team_goals = team_values("home", "away")
     team_goals_ht = team_values("goals_ht_home", "goals_ht_away")
     team_goals_2h = team_values("goals_2h_home", "goals_2h_away")
@@ -224,6 +338,13 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
     team_shots_on_target_1h = team_values("on_target_ht_home", "on_target_ht_away")
     team_shots_on_target_2h = team_values("on_target_2h_home", "on_target_2h_away")
     team_fouls = team_values("fouls_home", "fouls_away")
+    opponent_goals = [int(value) for item in detailed if (value := opponent_side_value(item, "home", "away")) is not None]
+    opponent_corners = [int(value) for item in detailed if (value := opponent_side_value(item, "corners_home", "corners_away")) is not None]
+    opponent_cards = [int(value) for item in detailed if (value := opponent_side_value(item, "cards_home", "cards_away")) is not None]
+    opponent_offsides = [int(value) for item in detailed if (value := opponent_side_value(item, "offsides_home", "offsides_away")) is not None]
+    opponent_shots = [int(value) for item in detailed if (value := opponent_side_value(item, "shots_home", "shots_away")) is not None]
+    opponent_shots_on_target = [int(value) for item in detailed if (value := opponent_side_value(item, "shots_on_target_home", "shots_on_target_away")) is not None]
+    opponent_fouls = [int(value) for item in detailed if (value := opponent_side_value(item, "fouls_home", "fouls_away")) is not None]
     team_corner_values = []
     team_corners_1h = team_values("corners_ht_home", "corners_ht_away")
     team_corners_2h = team_values("corners_2h_home", "corners_2h_away")
@@ -251,7 +372,16 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
                 continue
             home_name = str(item.get("history_home_team") or "Time da casa")
             away_name = str(item.get("history_away_team") or "Time visitante")
-            row = {"match": f"{home_name} x {away_name}", "value": int(value)}
+            row = {
+                "match": f"{home_name} x {away_name}", "value": int(value),
+                "external_id": item.get("external_id"), "kickoff_at": item.get("kickoff_at"),
+                "kickoff_original": item.get("kickoff_original"),
+                "kickoff_timezone": item.get("kickoff_timezone"),
+                "historical_date_available": bool(item.get("historical_date_available")),
+                "league": item.get("league"), "source": item.get("source") or "betsapi",
+                "home_external_id": item.get("history_home_external_id"),
+                "away_external_id": item.get("history_away_external_id"),
+            }
             sides = sides_getter(item) if sides_getter else None
             if sides and sides[0] is not None and sides[1] is not None:
                 row["home_name"], row["away_name"] = home_name, away_name
@@ -352,18 +482,19 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
         "fouls_samples": len(fouls),
         "avg_fouls": round(mean(fouls), 2) if fouls else None,
         "history_values": {
-            "goal_ht": history_rows(lambda item: item.get("goals_ht")),
-            "goals_2h": history_rows(lambda item: item.get("goals_2h")),
-            "corners_1h": history_rows(lambda item: item.get("corners_ht")),
-            "corners_2h": history_rows(lambda item: item.get("corners_2h")),
-            "cards_1h": history_rows(lambda item: None if item.get("yellow_cards_ht") is None else int(item.get("yellow_cards_ht") or 0) + int(item.get("red_cards_ht") or 0)),
-            "cards_2h": history_rows(lambda item: None if item.get("yellow_cards_2h") is None else int(item.get("yellow_cards_2h") or 0) + int(item.get("red_cards_2h") or 0)),
-            "shots_1h": history_rows(lambda item: int(item.get("on_target_events_ht") or 0) + int(item.get("off_target_events_ht") or 0) if item.get("on_target_events_ht") is not None else None),
-            "shots_2h": history_rows(lambda item: int(item.get("on_target_events_2h") or 0) + int(item.get("off_target_events_2h") or 0) if item.get("on_target_events_2h") is not None else None),
-            "on_target_1h": history_rows(lambda item: item.get("on_target_events_ht")),
-            "on_target_2h": history_rows(lambda item: item.get("on_target_events_2h")),
-            "over15": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
-            "over25": history_rows(lambda item: item.get("total"), lambda item: (item.get("home"), item.get("away"))),
+            "goal_ht": history_rows(lambda item: item.get("goals_ht"), lambda item: (item.get("goals_ht_home"), item.get("goals_ht_away"))),
+            "goals_2h": history_rows(lambda item: item.get("goals_2h"), lambda item: (item.get("goals_2h_home"), item.get("goals_2h_away"))),
+            "corners_1h": history_rows(lambda item: item.get("corners_ht"), lambda item: (item.get("corners_ht_home"), item.get("corners_ht_away"))),
+            "corners_2h": history_rows(lambda item: item.get("corners_2h"), lambda item: (item.get("corners_2h_home"), item.get("corners_2h_away"))),
+            "cards_1h": history_rows(lambda item: None if item.get("yellow_cards_ht") is None else int(item.get("yellow_cards_ht") or 0) + int(item.get("red_cards_ht") or 0), lambda item: (item.get("cards_ht_home"), item.get("cards_ht_away"))),
+            "cards_2h": history_rows(lambda item: None if item.get("yellow_cards_2h") is None else int(item.get("yellow_cards_2h") or 0) + int(item.get("red_cards_2h") or 0), lambda item: (item.get("cards_2h_home"), item.get("cards_2h_away"))),
+            "shots_1h": history_rows(lambda item: int(item.get("on_target_events_ht") or 0) + int(item.get("off_target_events_ht") or 0) if item.get("on_target_events_ht") is not None else None, lambda item: (item.get("shots_ht_home"), item.get("shots_ht_away"))),
+            "shots_2h": history_rows(lambda item: int(item.get("on_target_events_2h") or 0) + int(item.get("off_target_events_2h") or 0) if item.get("on_target_events_2h") is not None else None, lambda item: (item.get("shots_2h_home"), item.get("shots_2h_away"))),
+            "on_target_1h": history_rows(lambda item: item.get("on_target_events_ht"), lambda item: (item.get("on_target_ht_home"), item.get("on_target_ht_away"))),
+            "on_target_2h": history_rows(lambda item: item.get("on_target_events_2h"), lambda item: (item.get("on_target_2h_home"), item.get("on_target_2h_away"))),
+            "over15": full_time_goal_rows,
+            "over25": full_time_goal_rows,
+            "btts": btts_rows,
             "corners_avg": history_rows(lambda item: None if item.get("corners_ht") is None else int(item.get("corners_ht") or 0) + int(item.get("corners_2h") or 0), lambda item: (item.get("corners_home"), item.get("corners_away"))),
             "corners_10_over1": history_rows(lambda item: item.get("corners_10")),
             "team_corners_avg": history_rows(team_corner_value),
@@ -388,6 +519,13 @@ def _phase_metrics(items: list[dict], target_team: str | None = None) -> dict:
             "team_shots": history_rows(lambda item: team_side_value(item, "shots_home", "shots_away")),
             "team_shots_on_target": history_rows(lambda item: team_side_value(item, "shots_on_target_home", "shots_on_target_away")),
             "team_fouls": history_rows(lambda item: team_side_value(item, "fouls_home", "fouls_away")),
+            "opponent_goals": opponent_goals,
+            "opponent_corners": opponent_corners,
+            "opponent_cards": opponent_cards,
+            "opponent_offsides": opponent_offsides,
+            "opponent_shots": opponent_shots,
+            "opponent_shots_on_target": opponent_shots_on_target,
+            "opponent_fouls": opponent_fouls,
         },
     }
 
@@ -478,8 +616,24 @@ def build_alert_analysis(
     selected_detail_limits = detail_limits or DETAIL_LIMITS
     if include_details and any((limit or 0) > 0 for limit in selected_detail_limits.values()):
         history_data = enrich_history_with_ht_goals(session, history_data, selected_detail_limits)
+    try:
+        from app.services.historical_data import persist_historical_data
+        persist_historical_data(history_data)
+    except Exception:
+        # Persistência histórica é infraestrutura auxiliar. A análise Legacy
+        # nunca pode falhar por indisponibilidade do banco de histórico.
+        pass
+    h2h_items = history_data.get("h2h", [])
+    h2h_group = _group_analysis("H2H", h2h_items)
+    total_goal_rows = _h2h_total_goal_rows(h2h_items)
+    h2h_group.setdefault("history_values", {})["over15"] = total_goal_rows
+    h2h_group.setdefault("history_values", {})["over25"] = total_goal_rows
+    h2h_group.setdefault("history_values", {})["team_goals_home"] = _h2h_team_goal_rows(h2h_items, getattr(alert, "home_team", None))
+    h2h_group.setdefault("history_values", {})["team_goals_away"] = _h2h_team_goal_rows(h2h_items, getattr(alert, "away_team", None))
+    h2h_group.setdefault("history_values", {})["team_corners_home"] = _h2h_team_corner_rows(h2h_items, getattr(alert, "home_team", None))
+    h2h_group.setdefault("history_values", {})["team_corners_away"] = _h2h_team_corner_rows(h2h_items, getattr(alert, "away_team", None))
     groups = [
-        _group_analysis("H2H", history_data.get("h2h", [])),
+        h2h_group,
         _group_analysis("Mandante", history_data.get("home", []), getattr(alert, "home_team", None)),
         _group_analysis("Visitante", history_data.get("away", []), getattr(alert, "away_team", None)),
     ]

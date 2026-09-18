@@ -1,0 +1,162 @@
+{
+  "fixtures": 40,
+  "candidates": 880,
+  "green": 0,
+  "red": 0,
+  "pending": 880,
+  "void": 0,
+  "unresolved": 0,
+  "legacy": {
+    "quantity": 0
+  },
+  "v2_raw": {
+    "quantity": 0
+  },
+  "v2_calibrated": {
+    "quantity": 0
+  },
+  "conservative": {
+    "selected": 38,
+    "green": 0,
+    "red": 0,
+    "pending": 38,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "balanced": {
+    "selected": 448,
+    "green": 0,
+    "red": 0,
+    "pending": 448,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "strength_coverage_percent": 20.0,
+  "matchup_coverage_percent": 0.0,
+  "by_family": {
+    "corners": {
+      "quantity": 160,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "cards": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "fouls": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "offsides": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "shots": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "shots_on_target": {
+      "quantity": 120,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "goals": {
+      "quantity": 80,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    },
+    "goals_first_half": {
+      "quantity": 40,
+      "resolved": 0,
+      "green": 0,
+      "red": 0,
+      "hit_rate": null,
+      "conclusion_eligible": false
+    }
+  },
+  "by_league": {},
+  "start_date": "2026-08-20",
+  "end_date": "2026-09-18",
+  "window_days": 30,
+  "drift": {
+    "status": "POSSIBLE_DRIFT",
+    "signals": [
+      "strength"
+    ],
+    "comparisons": {
+      "score": {
+        "development": 62.15554675923361,
+        "prospective": 62.96559777604536,
+        "delta": 0.8100510168117481
+      },
+      "uncertainty": {
+        "development": 50.39748598317982,
+        "prospective": 40.96880681818182,
+        "delta": -9.428679164998002
+      },
+      "quality": {
+        "development": 46.69071585903084,
+        "prospective": 56.31932954545455,
+        "delta": 9.628613686423712
+      },
+      "target": {
+        "development": 0.6444444444444445,
+        "prospective": null,
+        "delta": null
+      },
+      "strength": {
+        "development": 0.5506607929515418,
+        "prospective": 0.2,
+        "delta": -0.3506607929515418
+      },
+      "matchup": {
+        "development": 0.026031237484981977,
+        "prospective": 0.0,
+        "delta": -0.026031237484981977
+      }
+    },
+    "note": "Monitoramento descritivo; nunca altera o modelo automaticamente."
+  },
+  "checkpoint": {
+    "ready": false,
+    "complete_days": 0,
+    "resolved_fixtures": 0,
+    "resolved_candidates": 0,
+    "conditions": {
+      "days_14": false,
+      "fixtures_500": false,
+      "candidates_8000": false
+    }
+  },
+  "odds": {
+    "captured": 0,
+    "bookmakers": {}
+  }
+}
