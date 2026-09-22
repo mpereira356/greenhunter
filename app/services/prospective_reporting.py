@@ -35,8 +35,11 @@ def _prediction_rows(start_date=None, end_date=None):
         except (TypeError, ValueError): features = {}
         rows.append({
             "fixture_external_id": prediction.fixture_id, "target_date": prediction.target_date,
+            "kickoff_at": prediction.kickoff_at,
             "league": prediction.competition, "market_family": _family(prediction),
             "settlement": prediction.settlement_status, "target": target,
+            "settlement_failure_reason": prediction.settlement_failure_reason,
+            "settlement_source": prediction.settlement_source,
             "legacy_score": linked.confidence_score if linked else None,
             "legacy_status": linked.status if linked else None,
             "v2_score": prediction.v2_statistical_score,
@@ -75,10 +78,34 @@ def _coverage(rows, field):
 
 def _metrics(rows):
     counts = Counter(row["settlement"] for row in rows)
+    eligible = [row for row in rows if row["settlement"] in {"GREEN", "RED", "UNRESOLVED"}]
+    resolved = [row for row in eligible if row["settlement"] in {"GREEN", "RED"}]
+    unresolved = [row for row in rows if row["settlement"] == "UNRESOLVED"]
+    reasons = Counter(row.get("settlement_failure_reason") or "OTHER" for row in unresolved)
+    families = {}
+    for family in sorted({row["market_family"] for row in rows}):
+        family_rows = [row for row in rows if row["market_family"] == family]
+        family_eligible = [row for row in family_rows if row["settlement"] in {"GREEN", "RED", "UNRESOLVED"}]
+        family_resolved = [row for row in family_eligible if row["settlement"] in {"GREEN", "RED"}]
+        family_unresolved = [row for row in family_rows if row["settlement"] == "UNRESOLVED"]
+        family_reasons = Counter(row.get("settlement_failure_reason") or "OTHER" for row in family_unresolved)
+        families[family] = {
+            "eligible_finished_candidates": len(family_eligible), "resolved": len(family_resolved),
+            "unresolved": len(family_unresolved),
+            "settlement_coverage": round(len(family_resolved) / len(family_eligible) * 100, 2) if family_eligible else None,
+            "failure_reasons": dict(sorted(family_reasons.items())),
+        }
     return {
         "fixtures": len({row["fixture_external_id"] for row in rows}), "candidates": len(rows),
         "green": counts["GREEN"], "red": counts["RED"], "pending": counts["PENDING"],
         "void": counts["VOID"], "unresolved": counts["UNRESOLVED"],
+        "eligible_finished_candidates": len(eligible), "resolved": len(resolved),
+        "settlement_coverage": round(len(resolved) / len(eligible) * 100, 2) if eligible else None,
+        "settlement_failure_reasons": {
+            reason: {"count": count, "percent_of_unresolved": round(count / len(unresolved) * 100, 2)}
+            for reason, count in sorted(reasons.items())
+        },
+        "settlement_coverage_by_family": families,
         "legacy": binary_metrics(rows, "legacy_score"),
         "v2_raw": binary_metrics(rows, "v2_score"),
         "v2_calibrated": binary_metrics(rows, "v2_calibrated_probability"),
@@ -126,6 +153,21 @@ def report_for_period(days=None, end_date=None, include_bootstrap_if_checkpoint=
     report = _metrics(rows)
     report.update({"start_date": start, "end_date": end, "window_days": days or "ALL",
                    "drift": _drift(rows)})
+    run_query = PredictionRun.query.filter_by(algorithm="daily_shadow_observer", run_type="PROSPECTIVE_SHADOW")
+    if start: run_query = run_query.filter(PredictionRun.target_date >= start)
+    if end: run_query = run_query.filter(PredictionRun.target_date <= end)
+    latest_runs = {}
+    for run in run_query.order_by(PredictionRun.target_date, PredictionRun.id).all():
+        latest_runs[run.target_date] = run
+    report["collection_health"] = [
+        {"date": day, "status": run.status, "alert_status": run.alert_status,
+         "fixtures": run.fixture_count, "candidates": run.candidate_count,
+         "started_at": run.started_at, "finished_at": run.finished_at}
+        for day, run in sorted(latest_runs.items())
+    ]
+    report["missed_collection_days"] = [
+        day for day, run in sorted(latest_runs.items()) if run.alert_status == "MISSED_COLLECTION"
+    ]
     complete_dates = 0
     for day in {row["target_date"] for row in rows}:
         day_rows = [row for row in rows if row["target_date"] == day]

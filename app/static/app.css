@@ -3857,6 +3857,28 @@ code {
   color: #031016;
 }
 
+.rule-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.rule-copy-btn span {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.rule-actions-trigger{display:grid!important;width:38px;height:36px;padding:8px 9px!important;gap:3px;place-content:center;border:1px solid var(--border-color)!important;border-radius:10px!important;background:var(--bg-card)!important}.rule-actions-trigger span{display:block;width:17px;height:2px;border-radius:2px;background:var(--text-main)}.rule-actions-menu{width:min(270px,calc(100vw - 28px));padding:.45rem;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-card);box-shadow:0 18px 45px rgba(0,0,0,.22)}.rule-actions-menu .dropdown-item{padding:.58rem .65rem;border-radius:8px;color:var(--text-main);font-size:.78rem;font-weight:700}.rule-actions-menu .dropdown-item:hover{background:rgba(31,166,98,.1);color:var(--primary)}.rule-share-form{padding:.35rem}.rule-share-form label,.ticket-user-share-menu label{display:block;margin-bottom:.35rem;color:var(--text-main);font-size:.7rem;font-weight:800}.rule-share-form>div{display:grid;grid-template-columns:1fr auto;gap:.35rem}.rule-share-form input,.ticket-user-share-menu input{min-width:0;width:100%;height:36px;padding:0 .65rem;border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);background:var(--bg-input);font-size:16px}.rule-share-form button,.ticket-user-share-menu>button{padding:0 .7rem;border:0;border-radius:8px;color:#04120d;background:var(--primary);font-size:.7rem;font-weight:900}.shared-invitations{display:grid;gap:.55rem;margin-bottom:1rem}.shared-invitation-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;padding:.75rem .85rem;align-items:center;gap:.7rem;border:1px solid rgba(31,166,98,.3);border-radius:14px;background:color-mix(in srgb,var(--bg-card) 92%,var(--primary) 8%);box-shadow:0 10px 30px rgba(0,0,0,.08)}.shared-invitation-icon{display:grid;width:36px;height:36px;place-items:center;border-radius:10px;color:var(--primary);background:rgba(31,166,98,.12);font-size:1.1rem}.shared-invitation-card>div:nth-child(2){display:grid;gap:.1rem}.shared-invitation-card strong{font-size:.78rem}.shared-invitation-card span{color:var(--text-muted);font-size:.68rem}.shared-invitation-actions{display:flex;gap:.4rem}.shared-invitation-actions form{margin:0}.ticket-user-share{position:relative}.ticket-user-share>button{display:grid;width:30px;height:30px;padding:0;place-items:center;border:1px solid var(--border-color);border-radius:8px;color:var(--primary);background:var(--bg-card)}.ticket-user-share>button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9}.ticket-user-share-menu{width:min(270px,calc(100vw - 24px));padding:.75rem;border:1px solid var(--border-color);border-radius:13px;background:var(--bg-card);box-shadow:0 18px 45px rgba(0,0,0,.25)}.ticket-user-share-menu small{display:block;margin:-.2rem 0 .55rem;color:var(--text-muted);font-size:.62rem}.ticket-user-share-menu>button{width:100%;height:36px;margin-top:.5rem}
+
+@media(max-width:600px){.shared-invitation-card{grid-template-columns:auto minmax(0,1fr)}.shared-invitation-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}.shared-invitation-actions button{width:100%}.rule-card-actions{display:flex!important;justify-content:flex-end}.rule-actions-menu{position:fixed!important;inset:auto 12px 12px 12px!important;width:auto!important;transform:none!important;max-height:75vh;overflow:auto}.ticket-user-share-menu{position:fixed!important;inset:auto 12px 12px 12px!important;width:auto!important;transform:none!important}}
+
+.rule-actions-trigger{padding:0!important;color:var(--text-main)!important}
+.rule-actions-trigger .rule-actions-icon{display:block;width:auto;height:auto;color:inherit;background:none;font-size:1.25rem;font-weight:800;line-height:1}
+
+.rule-actions-menu .dropdown-item{display:flex;align-items:center;gap:.62rem}.rule-actions-menu .dropdown-item svg,.rule-share-form label svg{width:17px;height:17px;flex:0 0 17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.rule-actions-menu .dropdown-item span{min-width:0}.rule-share-form label{display:flex;align-items:center;gap:.48rem}.rule-share-form label svg{color:var(--primary)}.rule-actions-menu .rule-delete-action{color:#dc5666!important}.rule-actions-menu .rule-delete-action:hover{color:#fff!important;background:rgba(220,53,69,.82)!important}.rule-actions-menu .dropdown-divider{border-color:var(--border-color);opacity:.8}
+
 .system-status-card {
   background: color-mix(in srgb, var(--bg-card) 88%, #10b981 12%);
   border: 1px solid color-mix(in srgb, var(--border-color) 70%, #10b981 30%);

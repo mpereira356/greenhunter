@@ -12,7 +12,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, Rule, RuleCondition, RuleOutcomeCondition
+from ..models import LiveGameState, MatchAlert, Rule, RuleCondition, RuleOutcomeCondition, SharedInvitation
+from ..services.sharing import encode_snapshot, find_recipient, rule_snapshot
 from ..services.evaluator import evaluate_rule, history_confidence
 from ..services.scraper import (
     fetch_live_games,
@@ -49,6 +50,50 @@ def _rule_slots_remaining(user) -> int:
     if getattr(user, "is_admin_user", False):
         return 10**9
     return max(0, user.effective_rule_limit - _visible_rule_count(user.id))
+
+
+def _copy_name(rule: Rule) -> str:
+    """Return a readable, unique name without exceeding the model limit."""
+    base = str(rule.name or "Regra").strip()
+    suffix = " (cópia)"
+    candidate = f"{base[:120 - len(suffix)]}{suffix}"
+    sequence = 2
+    while Rule.query.filter_by(user_id=rule.user_id, name=candidate).first() is not None:
+        suffix = f" (cópia {sequence})"
+        candidate = f"{base[:120 - len(suffix)]}{suffix}"
+        sequence += 1
+    return candidate
+
+
+def _duplicate_rule(rule: Rule) -> Rule:
+    """Clone configuration only; alerts and runtime state never follow the copy."""
+    duplicate = Rule(
+        user_id=rule.user_id, name=_copy_name(rule), time_limit_min=rule.time_limit_min,
+        message_template=rule.message_template, is_active=False,
+        second_half_only=rule.second_half_only, follow_ht=rule.follow_ht,
+        follow_ft=rule.follow_ft, outcome_green_stage=rule.outcome_green_stage,
+        outcome_red_stage=rule.outcome_red_stage,
+        outcome_green_minute=rule.outcome_green_minute,
+        outcome_red_minute=rule.outcome_red_minute,
+        outcome_red_if_no_green=rule.outcome_red_if_no_green,
+        notify_telegram=rule.notify_telegram, alert_on_penalty=rule.alert_on_penalty,
+        score_home=rule.score_home, score_away=rule.score_away,
+        allowed_leagues_json=rule.allowed_leagues_json,
+    )
+    db.session.add(duplicate)
+    db.session.flush()
+    for condition in rule.conditions:
+        db.session.add(RuleCondition(
+            rule_id=duplicate.id, stat_key=condition.stat_key, side=condition.side,
+            operator=condition.operator, value=condition.value, group_id=condition.group_id,
+        ))
+    for condition in rule.outcome_conditions:
+        db.session.add(RuleOutcomeCondition(
+            rule_id=duplicate.id, outcome_type=condition.outcome_type,
+            stat_key=condition.stat_key, side=condition.side,
+            operator=condition.operator, value=condition.value, group_id=condition.group_id,
+        ))
+    return duplicate
 
 
 def _normalize_hint_text(raw: str) -> str:
@@ -1709,6 +1754,51 @@ def delete_rule(rule_id):
         Markup(f"Regra removida. <a class='alert-link' href='{escape(undo_url)}'>Desfazer</a>"),
         "success",
     )
+    return redirect(url_for("rules.list_rules"))
+
+
+@rules_bp.route("/<int:rule_id>/copy", methods=["POST"])
+@login_required
+def copy_rule(rule_id):
+    rule = Rule.query.options(
+        selectinload(Rule.conditions), selectinload(Rule.outcome_conditions)
+    ).filter_by(id=rule_id, user_id=current_user.id).first_or_404()
+    if _rule_limit_reached(current_user):
+        flash(
+            f"Limite do plano {current_user.plan_label} atingido: "
+            f"{current_user.effective_rule_limit} regra(s).",
+            "warning",
+        )
+        return redirect(url_for("rules.list_rules"))
+    duplicate = _duplicate_rule(rule)
+    db.session.commit()
+    flash("Regra copiada. Revise o nome e os ajustes antes de ativar.", "success")
+    return redirect(url_for("rules.edit_rule", rule_id=duplicate.id))
+
+
+@rules_bp.post("/<int:rule_id>/share")
+@login_required
+def share_rule(rule_id):
+    rule = Rule.query.options(
+        selectinload(Rule.conditions), selectinload(Rule.outcome_conditions)
+    ).filter_by(id=rule_id, user_id=current_user.id).first_or_404()
+    recipient = find_recipient(request.form.get("recipient"), current_user.id)
+    if recipient is None:
+        flash("Usuário não encontrado. Confira o ID ou nome informado.", "warning")
+        return redirect(url_for("rules.list_rules"))
+    existing = SharedInvitation.query.filter_by(
+        sender_id=current_user.id, recipient_id=recipient.id, item_type="rule",
+        source_id=rule.id, status="pending",
+    ).first()
+    if existing:
+        flash(f"{recipient.username} já possui um convite pendente para esta regra.", "info")
+        return redirect(url_for("rules.list_rules"))
+    db.session.add(SharedInvitation(
+        sender_id=current_user.id, recipient_id=recipient.id, item_type="rule",
+        source_id=rule.id, item_name=rule.name, payload_json=encode_snapshot(rule_snapshot(rule)),
+    ))
+    db.session.commit()
+    flash(f"Convite da regra enviado para {recipient.username}.", "success")
     return redirect(url_for("rules.list_rules"))
 
 

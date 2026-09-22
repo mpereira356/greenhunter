@@ -6,13 +6,16 @@ import unicodedata
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
-from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, MercadoPagoWebhookEvent, PredictionRun, Rule, SavedTicket, SavedTicketLeg, User, UserMatchdayPreference
+from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, MercadoPagoWebhookEvent, PredictionRun, Rule, SavedTicket, SavedTicketLeg, SharedInvitation, User, UserMatchdayPreference
+from ..services.sharing import (accept_rule_snapshot, accept_ticket_snapshot, encode_snapshot,
+                                find_recipient, ticket_is_shareable, ticket_snapshot,
+                                ticket_snapshot_is_pregame)
 from ..services.mercadopago import cancel_subscription, create_subscription, get_authorized_payment, get_payment, get_subscription, user_id_from_reference, valid_webhook_signature
 from ..services.worker import get_api_status
 from ..services.undo import apply_undo
@@ -843,7 +846,77 @@ def saved_tickets():
         SavedTicket.query.filter_by(user_id=current_user.id)
         .order_by(SavedTicket.created_at.desc()).limit(current_user.saved_ticket_limit).all()
     )
-    return render_template("tickets/list.html", tickets=tickets)
+    shareable_ticket_ids = {ticket.id for ticket in tickets if ticket_is_shareable(ticket)}
+    return render_template("tickets/list.html", tickets=tickets, shareable_ticket_ids=shareable_ticket_ids)
+
+
+@main_bp.post("/bilhetes/<int:ticket_id>/compartilhar")
+@login_required
+def share_saved_ticket(ticket_id):
+    ticket = SavedTicket.query.filter_by(id=ticket_id, user_id=current_user.id).first_or_404()
+    if not ticket_is_shareable(ticket):
+        flash("Este bilhete não pode mais ser compartilhado: alguma seleção iniciou ou deixou de estar pendente.", "warning")
+        return redirect(url_for("main.saved_tickets"))
+    recipient = find_recipient(request.form.get("recipient"), current_user.id)
+    if recipient is None:
+        flash("Usuário não encontrado. Confira o ID ou nome informado.", "warning")
+        return redirect(url_for("main.saved_tickets"))
+    existing = SharedInvitation.query.filter_by(
+        sender_id=current_user.id, recipient_id=recipient.id, item_type="ticket",
+        source_id=ticket.id, status="pending",
+    ).first()
+    if existing:
+        flash(f"{recipient.username} já possui um convite pendente para este bilhete.", "info")
+        return redirect(url_for("main.saved_tickets"))
+    db.session.add(SharedInvitation(
+        sender_id=current_user.id, recipient_id=recipient.id, item_type="ticket",
+        source_id=ticket.id, item_name=ticket.name, payload_json=encode_snapshot(ticket_snapshot(ticket)),
+    ))
+    db.session.commit()
+    flash(f"Convite do bilhete enviado para {recipient.username}.", "success")
+    return redirect(url_for("main.saved_tickets"))
+
+
+@main_bp.post("/compartilhamentos/<int:invitation_id>/<decision>")
+@login_required
+def respond_shared_invitation(invitation_id, decision):
+    invitation = SharedInvitation.query.filter_by(
+        id=invitation_id, recipient_id=current_user.id, status="pending"
+    ).first_or_404()
+    if decision not in {"accept", "reject"}:
+        abort(404)
+    if decision == "reject":
+        invitation.status = "rejected"; invitation.responded_at = now_sp(); db.session.commit()
+        flash("Convite recusado.", "info")
+        return redirect(request.referrer or url_for("main.dashboard"))
+    try:
+        payload = json.loads(invitation.payload_json)
+        if invitation.item_type == "rule":
+            visible_rules = Rule.query.filter_by(user_id=current_user.id).count()
+            if not current_user.is_admin_user and visible_rules >= current_user.effective_rule_limit:
+                flash("Seu limite de regras foi atingido. Exclua uma regra antes de aceitar.", "warning")
+                return redirect(url_for("rules.list_rules"))
+            created = accept_rule_snapshot(payload, current_user.id)
+            destination = url_for("rules.edit_rule", rule_id=created.id)
+        elif invitation.item_type == "ticket":
+            if not ticket_snapshot_is_pregame(payload):
+                invitation.status = "expired"; invitation.responded_at = now_sp(); db.session.commit()
+                flash("O convite expirou porque um dos jogos já começou.", "warning")
+                return redirect(url_for("main.saved_tickets"))
+            if SavedTicket.query.filter_by(user_id=current_user.id).count() >= current_user.saved_ticket_limit:
+                flash("Seu limite de bilhetes foi atingido.", "warning")
+                return redirect(url_for("main.saved_tickets"))
+            created = accept_ticket_snapshot(payload, current_user.id)
+            destination = url_for("main.saved_tickets")
+        else:
+            abort(400)
+        invitation.status = "accepted"; invitation.responded_at = now_sp(); db.session.commit()
+        flash(f"{invitation.item_name} foi adicionado à sua conta.", "success")
+        return redirect(destination)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        db.session.rollback()
+        flash("Não foi possível aceitar este compartilhamento.", "danger")
+        return redirect(request.referrer or url_for("main.dashboard"))
 
 
 @main_bp.route("/bilhetes/<int:ticket_id>/editar", methods=["GET", "POST"])

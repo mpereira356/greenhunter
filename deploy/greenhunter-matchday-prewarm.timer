@@ -4,6 +4,7 @@ Description=Agenda o pré-processamento diário do GreenHunter
 [Timer]
 OnCalendar=*-*-* 03:00:00 America/Sao_Paulo
 AccuracySec=1min
+Persistent=true
 Unit=greenhunter-matchday-prewarm.service
 
 [Install]

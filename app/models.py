@@ -352,6 +352,28 @@ class SavedTicketLeg(db.Model):
     checked_at = db.Column(db.DateTime)
 
 
+class SharedInvitation(db.Model):
+    __tablename__ = "shared_invitation"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    item_type = db.Column(db.String(20), nullable=False, index=True)
+    source_id = db.Column(db.Integer, nullable=False)
+    item_name = db.Column(db.String(160), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
+    responded_at = db.Column(db.DateTime)
+
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    recipient = db.relationship("User", foreign_keys=[recipient_id])
+
+    __table_args__ = (
+        db.Index("ix_shared_invitation_recipient_status", "recipient_id", "status"),
+    )
+
+
 class ModelVersion(db.Model):
     __tablename__ = "model_version"
 
@@ -459,6 +481,11 @@ class MarketPrediction(db.Model):
     official_pre_match_snapshot = db.Column(db.Boolean, nullable=False, default=False, index=True)
     prospective_validity = db.Column(db.String(40), nullable=False, default="VALID", index=True)
     settlement_attempts = db.Column(db.Integer, nullable=False, default=0)
+    settlement_first_attempt_at = db.Column(db.DateTime)
+    settlement_last_attempt_at = db.Column(db.DateTime)
+    settlement_failure_reason = db.Column(db.String(60), index=True)
+    settlement_source = db.Column(db.String(80))
+    settlement_audit_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=now_sp, nullable=False)
 
     __table_args__ = (

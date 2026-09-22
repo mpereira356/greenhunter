@@ -1,109 +1,394 @@
 {
   "fixtures": 40,
   "candidates": 880,
-  "green": 0,
-  "red": 0,
-  "pending": 880,
+  "green": 518,
+  "red": 278,
+  "pending": 0,
   "void": 0,
-  "unresolved": 0,
+  "unresolved": 84,
+  "eligible_finished_candidates": 880,
+  "resolved": 796,
+  "settlement_coverage": 90.45,
+  "settlement_failure_reasons": {
+    "FOULS_MISSING": {
+      "count": 42,
+      "percent_of_unresolved": 50.0
+    },
+    "OFFSIDES_MISSING": {
+      "count": 42,
+      "percent_of_unresolved": 50.0
+    }
+  },
+  "settlement_coverage_by_family": {
+    "cards": {
+      "eligible_finished_candidates": 120,
+      "resolved": 120,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    },
+    "corners": {
+      "eligible_finished_candidates": 160,
+      "resolved": 160,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    },
+    "fouls": {
+      "eligible_finished_candidates": 120,
+      "resolved": 78,
+      "unresolved": 42,
+      "settlement_coverage": 65.0,
+      "failure_reasons": {
+        "FOULS_MISSING": 42
+      }
+    },
+    "goals": {
+      "eligible_finished_candidates": 80,
+      "resolved": 80,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    },
+    "goals_first_half": {
+      "eligible_finished_candidates": 40,
+      "resolved": 40,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    },
+    "offsides": {
+      "eligible_finished_candidates": 120,
+      "resolved": 78,
+      "unresolved": 42,
+      "settlement_coverage": 65.0,
+      "failure_reasons": {
+        "OFFSIDES_MISSING": 42
+      }
+    },
+    "shots": {
+      "eligible_finished_candidates": 120,
+      "resolved": 120,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    },
+    "shots_on_target": {
+      "eligible_finished_candidates": 120,
+      "resolved": 120,
+      "unresolved": 0,
+      "settlement_coverage": 100.0,
+      "failure_reasons": {}
+    }
+  },
   "legacy": {
-    "quantity": 0
+    "quantity": 796,
+    "green": 518,
+    "red": 278,
+    "hit_rate": 65.075,
+    "brier": 0.245518,
+    "log_loss": 0.691506,
+    "calibration_error": 0.101545,
+    "roc_auc": 0.595202,
+    "pr_auc": 0.732851,
+    "buckets": {
+      "50-59": {
+        "quantity": 135,
+        "green": 84,
+        "red": 51,
+        "actual_rate": 62.22,
+        "mean_score": 55.03
+      },
+      "60-69": {
+        "quantity": 175,
+        "green": 123,
+        "red": 52,
+        "actual_rate": 70.29,
+        "mean_score": 65.27
+      },
+      "70-79": {
+        "quantity": 177,
+        "green": 132,
+        "red": 45,
+        "actual_rate": 74.58,
+        "mean_score": 74.14
+      },
+      "80-89": {
+        "quantity": 20,
+        "green": 16,
+        "red": 4,
+        "actual_rate": 80.0,
+        "mean_score": 81.37
+      },
+      "<50": {
+        "quantity": 289,
+        "green": 163,
+        "red": 126,
+        "actual_rate": 56.4,
+        "mean_score": 35.19
+      }
+    },
+    "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
   },
   "v2_raw": {
-    "quantity": 0
+    "quantity": 778,
+    "green": 504,
+    "red": 274,
+    "hit_rate": 64.781,
+    "brier": 0.224468,
+    "log_loss": 0.648687,
+    "calibration_error": 0.091151,
+    "roc_auc": 0.633451,
+    "pr_auc": 0.738631,
+    "buckets": {
+      "50-59": {
+        "quantity": 100,
+        "green": 67,
+        "red": 33,
+        "actual_rate": 67.0,
+        "mean_score": 54.39
+      },
+      "60-69": {
+        "quantity": 157,
+        "green": 110,
+        "red": 47,
+        "actual_rate": 70.06,
+        "mean_score": 64.31
+      },
+      "70-79": {
+        "quantity": 170,
+        "green": 121,
+        "red": 49,
+        "actual_rate": 71.18,
+        "mean_score": 75.49
+      },
+      "80-89": {
+        "quantity": 100,
+        "green": 75,
+        "red": 25,
+        "actual_rate": 75.0,
+        "mean_score": 85.6
+      },
+      "90-100": {
+        "quantity": 38,
+        "green": 30,
+        "red": 8,
+        "actual_rate": 78.95,
+        "mean_score": 92.14
+      },
+      "<50": {
+        "quantity": 213,
+        "green": 101,
+        "red": 112,
+        "actual_rate": 47.42,
+        "mean_score": 35.06
+      }
+    },
+    "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
   },
   "v2_calibrated": {
-    "quantity": 0
+    "quantity": 778,
+    "green": 504,
+    "red": 274,
+    "hit_rate": 64.781,
+    "brier": 0.217745,
+    "log_loss": 0.627749,
+    "calibration_error": 0.061391,
+    "roc_auc": 0.629667,
+    "pr_auc": 0.740393,
+    "buckets": {
+      "50-59": {
+        "quantity": 122,
+        "green": 77,
+        "red": 45,
+        "actual_rate": 63.11,
+        "mean_score": 55.31
+      },
+      "60-69": {
+        "quantity": 205,
+        "green": 146,
+        "red": 59,
+        "actual_rate": 71.22,
+        "mean_score": 65.9
+      },
+      "70-79": {
+        "quantity": 234,
+        "green": 165,
+        "red": 69,
+        "actual_rate": 70.51,
+        "mean_score": 74.29
+      },
+      "80-89": {
+        "quantity": 61,
+        "green": 47,
+        "red": 14,
+        "actual_rate": 77.05,
+        "mean_score": 86.42
+      },
+      "<50": {
+        "quantity": 156,
+        "green": 69,
+        "red": 87,
+        "actual_rate": 44.23,
+        "mean_score": 36.05
+      }
+    },
+    "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
   },
   "conservative": {
     "selected": 38,
-    "green": 0,
-    "red": 0,
-    "pending": 38,
+    "green": 28,
+    "red": 9,
+    "pending": 0,
     "void": 0,
-    "unresolved": 0,
-    "hit_rate": null
+    "unresolved": 1,
+    "hit_rate": 75.68
   },
   "balanced": {
     "selected": 448,
-    "green": 0,
-    "red": 0,
-    "pending": 448,
+    "green": 312,
+    "red": 117,
+    "pending": 0,
     "void": 0,
-    "unresolved": 0,
-    "hit_rate": null
+    "unresolved": 19,
+    "hit_rate": 72.73
   },
   "strength_coverage_percent": 20.0,
   "matchup_coverage_percent": 0.0,
   "by_family": {
     "corners": {
       "quantity": 160,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 160,
+      "green": 117,
+      "red": 43,
+      "hit_rate": 73.12,
+      "conclusion_eligible": true
     },
     "cards": {
       "quantity": 120,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 120,
+      "green": 73,
+      "red": 47,
+      "hit_rate": 60.83,
+      "conclusion_eligible": true
     },
     "fouls": {
       "quantity": 120,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 78,
+      "green": 56,
+      "red": 22,
+      "hit_rate": 71.79,
+      "conclusion_eligible": true
     },
     "offsides": {
       "quantity": 120,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 78,
+      "green": 50,
+      "red": 28,
+      "hit_rate": 64.1,
+      "conclusion_eligible": true
     },
     "shots": {
       "quantity": 120,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 120,
+      "green": 55,
+      "red": 65,
+      "hit_rate": 45.83,
+      "conclusion_eligible": true
     },
     "shots_on_target": {
       "quantity": 120,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 120,
+      "green": 78,
+      "red": 42,
+      "hit_rate": 65.0,
+      "conclusion_eligible": true
     },
     "goals": {
       "quantity": 80,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 80,
+      "green": 58,
+      "red": 22,
+      "hit_rate": 72.5,
+      "conclusion_eligible": true
     },
     "goals_first_half": {
       "quantity": 40,
-      "resolved": 0,
-      "green": 0,
-      "red": 0,
-      "hit_rate": null,
-      "conclusion_eligible": false
+      "resolved": 40,
+      "green": 31,
+      "red": 9,
+      "hit_rate": 77.5,
+      "conclusion_eligible": true
     }
   },
-  "by_league": {},
-  "start_date": "2026-09-05",
-  "end_date": "2026-09-18",
+  "by_league": {
+    "Switzerland Challenge League": {
+      "quantity": 88,
+      "resolved": 64,
+      "green": 49,
+      "red": 15,
+      "hit_rate": 76.56,
+      "conclusion_eligible": true
+    },
+    "Brazil Serie B": {
+      "quantity": 66,
+      "resolved": 66,
+      "green": 46,
+      "red": 20,
+      "hit_rate": 69.7,
+      "conclusion_eligible": true
+    },
+    "Argentina Liga Profesional": {
+      "quantity": 44,
+      "resolved": 38,
+      "green": 24,
+      "red": 14,
+      "hit_rate": 63.16,
+      "conclusion_eligible": true
+    },
+    "Germany Bundesliga II": {
+      "quantity": 44,
+      "resolved": 44,
+      "green": 29,
+      "red": 15,
+      "hit_rate": 65.91,
+      "conclusion_eligible": true
+    },
+    "Paraguay Division Profesional": {
+      "quantity": 44,
+      "resolved": 32,
+      "green": 21,
+      "red": 11,
+      "hit_rate": 65.62,
+      "conclusion_eligible": true
+    },
+    "Peru Liga 1": {
+      "quantity": 44,
+      "resolved": 44,
+      "green": 24,
+      "red": 20,
+      "hit_rate": 54.55,
+      "conclusion_eligible": true
+    },
+    "Poland Ekstraklasa": {
+      "quantity": 44,
+      "resolved": 44,
+      "green": 36,
+      "red": 8,
+      "hit_rate": 81.82,
+      "conclusion_eligible": true
+    },
+    "Romania Liga I": {
+      "quantity": 44,
+      "resolved": 44,
+      "green": 26,
+      "red": 18,
+      "hit_rate": 59.09,
+      "conclusion_eligible": true
+    }
+  },
+  "start_date": "2026-09-08",
+  "end_date": "2026-09-21",
   "window_days": 14,
   "drift": {
     "status": "POSSIBLE_DRIFT",
@@ -128,8 +413,8 @@
       },
       "target": {
         "development": 0.6444444444444445,
-        "prospective": null,
-        "delta": null
+        "prospective": 0.6507537688442211,
+        "delta": 0.006309324399776606
       },
       "strength": {
         "development": 0.5506607929515418,
@@ -146,9 +431,9 @@
   },
   "checkpoint": {
     "ready": false,
-    "complete_days": 0,
-    "resolved_fixtures": 0,
-    "resolved_candidates": 0,
+    "complete_days": 1,
+    "resolved_fixtures": 40,
+    "resolved_candidates": 796,
     "conditions": {
       "days_14": false,
       "fixtures_500": false,

@@ -9,7 +9,7 @@ from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.extensions import db, login_manager
-from app.models import AdminBroadcast, AdminBroadcastView, SavedTicket, User
+from app.models import AdminBroadcast, AdminBroadcastView, SavedTicket, SharedInvitation, User
 from app.services.worker import start_worker
 from app.services.migrations import run_schema_migrations
 from app.security import init_security
@@ -202,6 +202,16 @@ def create_app():
             .first()
         )
         return {"latest_green_ticket": ticket}
+
+    @app.context_processor
+    def inject_shared_invitations():
+        if not getattr(current_user, "is_authenticated", False):
+            return {"shared_invitations": []}
+        invitations = (
+            SharedInvitation.query.filter_by(recipient_id=current_user.id, status="pending")
+            .order_by(SharedInvitation.created_at.desc()).limit(8).all()
+        )
+        return {"shared_invitations": invitations}
 
     return app
 

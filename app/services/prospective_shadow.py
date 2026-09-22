@@ -79,7 +79,9 @@ def collect_cached_prospective_shadow(day, sample_limit=6):
     existing = PredictionRun.query.filter_by(
         algorithm="daily_shadow_observer", run_type="PROSPECTIVE_SHADOW", target_date=day,
     ).order_by(PredictionRun.id.desc()).first()
-    if existing and existing.status == "completed":
+    # A zero-candidate run is a failed operational attempt, not an official
+    # snapshot and must never block a later pre-match retry for the same day.
+    if existing and existing.status == "completed" and int(existing.candidate_count or 0) > 0:
         return existing
     agenda = get_matchday(day, force_refresh=False)
     matches = list(agenda.get("matches") or [])
@@ -172,6 +174,12 @@ def collect_cached_prospective_shadow(day, sample_limit=6):
     metrics = json.loads(run.operational_metrics_json)
     metrics["candidates_without_v2"] = shadow_missing
     run.operational_metrics_json = json.dumps(metrics, ensure_ascii=False, separators=(",", ":"))
-    run.alert_status = "ZERO_FIXTURES" if not eligible else "PARTIAL" if len(eligible) < len(matches) else "OK"
+    if not eligible:
+        run.status = "failed"
+        run.alert_status = "NO_ELIGIBLE_FIXTURES"
+        run.errors_json = json.dumps([{"code": "NO_ELIGIBLE_FIXTURES",
+            "message": "Nenhum fixture futuro possuía summary completo no momento da coleta."}], ensure_ascii=False)
+    else:
+        run.alert_status = "PARTIAL" if len(eligible) < len(matches) else "OK"
     db.session.commit()
     return run

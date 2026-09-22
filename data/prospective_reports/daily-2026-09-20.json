@@ -1,0 +1,55 @@
+{
+  "date": "2026-09-20",
+  "fixtures": 0,
+  "candidates": 0,
+  "green": 0,
+  "red": 0,
+  "pending": 0,
+  "void": 0,
+  "unresolved": 0,
+  "legacy": {
+    "quantity": 0
+  },
+  "v2_raw": {
+    "quantity": 0
+  },
+  "v2_calibrated": {
+    "quantity": 0
+  },
+  "conservative": {
+    "selected": 0,
+    "green": 0,
+    "red": 0,
+    "pending": 0,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "balanced": {
+    "selected": 0,
+    "green": 0,
+    "red": 0,
+    "pending": 0,
+    "void": 0,
+    "unresolved": 0,
+    "hit_rate": null
+  },
+  "strength_coverage_percent": null,
+  "matchup_coverage_percent": null,
+  "by_family": {},
+  "by_league": {},
+  "operations": {
+    "fixtures_found": 1179,
+    "fixtures_analyzed": 0,
+    "candidates_created": 0,
+    "candidates_without_v2": 0,
+    "source_errors": 0,
+    "odds_fixture_matches": 307,
+    "odds_supported_candidates": 0,
+    "odds_mapped": 0,
+    "odds_rejected": 0,
+    "duration_ms": 8970,
+    "official_snapshot_policy": "FIRST_COMPLETE_DAILY_CACHE_AFTER_03H_PREWARM_BEFORE_KICKOFF"
+  },
+  "collection_alert": "ZERO_FIXTURES"
+}

@@ -70,7 +70,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260917-ticket-approval-v23') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260918-rule-icons-v25') }}">
   </head>
   <body data-page="{{ request.endpoint or '' }}"{% if current_user.is_authenticated and current_user.is_premium_user %} class="is-premium-user"{% endif %}>
     <script>
@@ -243,6 +243,21 @@
         <div class="alert alert-info shadow-sm border-0">
           <strong>Aviso:</strong> {{ active_broadcast.message }}
         </div>
+      {% endif %}
+
+      {% if shared_invitations %}
+        <section class="shared-invitations" aria-label="Convites recebidos">
+          {% for invitation in shared_invitations %}
+          <article class="shared-invitation-card">
+            <div class="shared-invitation-icon">{{ '☷' if invitation.item_type == 'rule' else '◫' }}</div>
+            <div><strong>{{ invitation.sender.username }} compartilhou {{ 'uma regra' if invitation.item_type == 'rule' else 'um bilhete' }} com você</strong><span>{{ invitation.item_name }}</span></div>
+            <div class="shared-invitation-actions">
+              <form method="post" action="{{ url_for('main.respond_shared_invitation', invitation_id=invitation.id, decision='reject') }}"><button type="submit" class="btn btn-sm btn-outline-secondary">Recusar</button></form>
+              <form method="post" action="{{ url_for('main.respond_shared_invitation', invitation_id=invitation.id, decision='accept') }}"><button type="submit" class="btn btn-sm btn-primary">Aceitar</button></form>
+            </div>
+          </article>
+          {% endfor %}
+        </section>
       {% endif %}
 
       {% if current_user.is_authenticated and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified) %}

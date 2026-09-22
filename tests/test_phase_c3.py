@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from app.models import (CalibrationArtifact, MarketOddsSnapshot, MarketPredictio
 from app.services.frozen_shadow import FROZEN_VERSION, ensure_frozen_version
 from app.services.predictions import append_prediction_candidates, start_prediction_run
 from app.services.prospective_reporting import daily_report, report_for_period
+from app.services.prospective_shadow import collect_cached_prospective_shadow
 
 
 class PhaseC3Test(unittest.TestCase):
@@ -91,6 +93,19 @@ class PhaseC3Test(unittest.TestCase):
         accumulated = report_for_period(None, end_date="2026-09-18", include_bootstrap_if_checkpoint=False)
         self.assertFalse(accumulated["checkpoint"]["ready"])
         self.assertIn("drift", accumulated)
+
+    def test_zero_candidate_completed_run_does_not_block_retry(self):
+        ensure_frozen_version()
+        run = PredictionRun(algorithm="daily_shadow_observer", model_version="legacy_v1", mode="shadow",
+                            run_type="PROSPECTIVE_SHADOW", target_date="2030-01-01", status="completed",
+                            fixture_count=0, candidate_count=0, alert_status="ZERO_FIXTURES")
+        db.session.add(run); db.session.commit()
+        with patch("app.services.prospective_shadow.get_matchday", return_value={"matches": []}), \
+             patch("app.services.prospective_shadow.attach_qualplacar_odds", return_value=0):
+            retried = collect_cached_prospective_shadow("2030-01-01")
+        self.assertEqual(retried.id, run.id)
+        self.assertEqual(retried.status, "failed")
+        self.assertEqual(retried.alert_status, "NO_ELIGIBLE_FIXTURES")
 
 
 if __name__ == "__main__":

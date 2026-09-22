@@ -297,12 +297,18 @@ def run_telegram_replies_worker(app):
             time.sleep(TELEGRAM_REPLY_POLL_SECONDS)
 
 def get_api_status() -> dict:
-    return {
+    result = {
         "ok": API_STATUS.get("ok"),
         "code": API_STATUS.get("code"),
         "checked_at": API_STATUS.get("checked_at"),
         "last_cycle": API_STATUS.get("last_cycle"),
     }
+    try:
+        from app.services.prospective_operations import prospective_health
+        result["prospective_scheduler"] = prospective_health()
+    except Exception as exc:
+        result["prospective_scheduler"] = {"status": "HEALTH_UNAVAILABLE", "last_error": str(exc)[:180]}
+    return result
 
 def update_api_status(ok: bool, code: int | None):
     if ok:

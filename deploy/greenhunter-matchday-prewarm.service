@@ -1,5 +1,5 @@
 [Unit]
-Description=GreenHunter - pré-processamento dos Jogos do Dia
+Description=GreenHunter - coleta prospectiva oficial e prewarm diário
 After=network-online.target greenhunter.service
 
 [Service]
@@ -8,7 +8,7 @@ User=viny
 WorkingDirectory=/home/viny/greenhunter
 EnvironmentFile=/home/viny/greenhunter/.env
 Environment=DISABLE_WORKER=1
-ExecStart=/home/viny/greenhunter/venv/bin/python /home/viny/greenhunter/prewarm_matchday.py --days 2
+ExecStart=/home/viny/greenhunter/venv/bin/python /home/viny/greenhunter/prospective_daily.py
+TimeoutStartSec=infinity
 Nice=10
 IOSchedulingClass=idle
-

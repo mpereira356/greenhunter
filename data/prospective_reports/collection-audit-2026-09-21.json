@@ -1,0 +1,62 @@
+{
+  "audited_at": "2026-09-21T21:10:44.865853",
+  "timezone": "America/Sao_Paulo",
+  "retrospective_collection_performed": false,
+  "days": [
+    {
+      "date": "2026-09-18",
+      "execution_at": "2026-09-18 07:08:10.054498",
+      "fixtures_found": 545,
+      "fixtures_analyzed": 40,
+      "candidates_created": 880,
+      "official_snapshot": 880,
+      "status": "PARTIAL",
+      "error": []
+    },
+    {
+      "date": "2026-09-19",
+      "execution_at": "2026-09-18 14:10:34.825206",
+      "fixtures_found": 1704,
+      "fixtures_analyzed": 0,
+      "candidates_created": 0,
+      "official_snapshot": 0,
+      "status": "MISSED_COLLECTION",
+      "error": [
+        {
+          "code": "MISSED_COLLECTION",
+          "message": "Prewarm executado, mas nenhum summary oficial foi persistido antes dos jogos. Reconstrução retrospectiva proibida."
+        }
+      ]
+    },
+    {
+      "date": "2026-09-20",
+      "execution_at": "2026-09-19 04:58:29.578111",
+      "fixtures_found": 1179,
+      "fixtures_analyzed": 0,
+      "candidates_created": 0,
+      "official_snapshot": 0,
+      "status": "MISSED_COLLECTION",
+      "error": [
+        {
+          "code": "MISSED_COLLECTION",
+          "message": "Prewarm executado, mas nenhum summary oficial foi persistido antes dos jogos. Reconstrução retrospectiva proibida."
+        }
+      ]
+    },
+    {
+      "date": "2026-09-21",
+      "execution_at": "2026-09-20 04:44:23.501536",
+      "fixtures_found": 136,
+      "fixtures_analyzed": 0,
+      "candidates_created": 0,
+      "official_snapshot": 0,
+      "status": "MISSED_COLLECTION",
+      "error": [
+        {
+          "code": "MISSED_COLLECTION",
+          "message": "Prewarm executado, mas nenhum summary oficial foi persistido antes dos jogos. Reconstrução retrospectiva proibida."
+        }
+      ]
+    }
+  ]
+}

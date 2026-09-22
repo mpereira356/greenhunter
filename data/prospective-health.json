@@ -1,0 +1,15 @@
+{
+  "status": "MISSED_COLLECTION",
+  "next_collection_at": "2026-09-22T03:00:00",
+  "timezone": "America/Sao_Paulo",
+  "last_success_at": "2026-09-18T07:09:33.765926",
+  "last_official_date": "2026-09-18",
+  "last_attempt_at": "2026-09-21T04:44:23.517637",
+  "last_error": "MISSED_COLLECTION: summaries completos não foram persistidos para o coletor oficial.",
+  "fixtures_found": 136,
+  "fixtures_analyzed": 0,
+  "candidates_created": 0,
+  "scheduler": "ACTIVE_SYSTEMD_TIMER",
+  "updated_at": "2026-09-21T21:17:10.930160",
+  "scheduler_status": "waiting"
+}

@@ -13,6 +13,16 @@
       <div class="saved-ticket-actions">
         {% if ticket.status == 'pending' or current_user.is_admin_user %}<a href="{{ url_for('main.edit_saved_ticket', ticket_id=ticket.id) }}" aria-label="Editar {{ ticket.name }}" title="Editar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/></svg></a>{% endif %}
         <button type="button" class="saved-ticket-share" data-ticket-share aria-label="Compartilhar {{ ticket.name }}" title="Compartilhar bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg></button>
+        {% if ticket.id in shareable_ticket_ids %}
+        <div class="dropdown ticket-user-share" data-bs-auto-close="outside">
+          <button type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Enviar {{ ticket.name }} para outro usuário" title="Enviar para usuário"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 8h5M19.5 5.5v5"/></svg></button>
+          <form class="dropdown-menu dropdown-menu-end ticket-user-share-menu" method="post" action="{{ url_for('main.share_saved_ticket', ticket_id=ticket.id) }}">
+            <label for="ticketRecipient{{ ticket.id }}">Enviar convite</label><small>Informe o ID ou usuário do amigo.</small>
+            <input id="ticketRecipient{{ ticket.id }}" name="recipient" placeholder="ID ou usuário" required autocomplete="off">
+            <button type="submit">Compartilhar bilhete</button>
+          </form>
+        </div>
+        {% endif %}
         <span class="status-badge status-{{ ticket.status }}">{{ 'INDISPONÍVEL' if ticket.status == 'unavailable' else ticket.status|upper }}</span>
         <button type="button" class="saved-ticket-toggle" data-ticket-toggle aria-expanded="{{ 'true' if ticket.status in ['green', 'pending'] else 'false' }}" aria-label="{{ 'Minimizar' if ticket.status in ['green', 'pending'] else 'Maximizar' }} {{ ticket.name }}" title="{{ 'Minimizar' if ticket.status in ['green', 'pending'] else 'Maximizar' }} bilhete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
