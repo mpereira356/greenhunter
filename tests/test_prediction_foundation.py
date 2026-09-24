@@ -57,24 +57,32 @@ class PredictionFoundationTest(unittest.TestCase):
                 "adjustedProbability": 60, "confidenceScore": 61,
                 "sourceStats": {"h2h": {"samples": 2}, "home": None, "away": None},
             },
+            {
+                "fixtureId": "100", "competitionName": "Liga", "homeTeam": "A", "awayTeam": "B",
+                "marketType": "btts", "marketGroup": "btts", "scope": "total", "line": .5,
+                "status": "ALTERNATIVE", "rejectionReasons": ["LOW_CONFIDENCE"], "rawProbability": 67,
+                "adjustedProbability": 65, "confidenceScore": 66,
+                "sourceStats": {"h2h": {"samples": 6}, "home": {"samples": 6}, "away": {"samples": 6}},
+            },
         ]
         self.assertEqual(append_prediction_candidates(run, {
             "candidates": candidates, "fixture_snapshots": {"100": fixture_snapshot},
-        }), 2)
+        }), 3)
         fixture_snapshot["groups"]["H2H"]["history_values"]["over15"][0]["value"] = 0
         finish_prediction_run(run)
 
         stored = MarketPrediction.query.order_by(MarketPrediction.id).all()
         legacy = [row for row in stored if row.model_version == "legacy_v1"]
         shadow = [row for row in stored if row.model_version == "greenhunter_v2_shadow"]
-        self.assertEqual([row.status for row in legacy], ["APPROVED", "REJECTED_LOW_SAMPLE"])
+        self.assertEqual([row.status for row in legacy], ["APPROVED", "REJECTED_LOW_SAMPLE", "ALTERNATIVE"])
         self.assertEqual(legacy[1].rejection_reason, "LOW_SAMPLE")
+        self.assertEqual(legacy[2].rejection_reason, "LOW_CONFIDENCE")
         self.assertEqual([row.legacy_prediction_id for row in shadow], [row.id for row in legacy])
         self.assertTrue(all(row.feature_snapshot_json for row in shadow))
         snapshot = PredictionFixtureSnapshot.query.one()
         self.assertEqual(json.loads(snapshot.snapshot_json)["groups"]["H2H"]["history_values"]["over15"][0]["value"], 3)
-        self.assertEqual(run.candidate_count, 2)
-        self.assertEqual((run.approved_count, run.rejected_count), (1, 1))
+        self.assertEqual(run.candidate_count, 3)
+        self.assertEqual((run.approved_count, run.rejected_count), (1, 2))
         self.assertEqual(run.status, "completed")
         self.assertIsNotNone(ModelVersion.query.filter_by(version="greenhunter_v2_shadow").first())
 

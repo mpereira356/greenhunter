@@ -3423,6 +3423,25 @@ code {
     min-width: 100%;
   }
 }
+.admin-rule-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .38rem; }
+.admin-rule-actions form { margin: 0; }
+.admin-rule-actions .btn { min-width: 76px; }
+.theme-dark .admin-user-edit-page :is(.form-label,.form-check-label,.form-text) { color: var(--gh-muted) !important; }
+.theme-dark .admin-user-edit-page .form-check-label { color: var(--gh-text) !important; }
+.theme-dark .admin-user-edit-page :is(.form-control,.form-select) {
+  border-color: var(--gh-border) !important;
+  color: var(--gh-text) !important;
+  background-color: var(--gh-surface-2) !important;
+}
+.theme-dark .admin-user-edit-page :is(.form-control,.form-select)::placeholder { color: var(--gh-muted-soft) !important; opacity: 1; }
+.theme-dark .admin-user-edit-page .form-select option { color: var(--gh-text); background: var(--gh-surface-2); }
+@media (max-width: 768px) {
+  .admin-rule-actions { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-rule-actions form, .admin-rule-actions .btn { width: 100%; min-width: 0; }
+}
+@media (max-width: 390px) {
+  .admin-rule-actions { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 480px) {
   .content {
@@ -9671,6 +9690,83 @@ button, .btn, .nav-link, [role="button"] { transition: transform .16s ease, box-
 @media(max-width:768px){.admin-dashboard-page,.admin-users-page,.admin-user-detail-page,.admin-user-edit-page{width:100%}.admin-users-table,.admin-dashboard-users-table{display:block;width:100%;min-width:0!important}.admin-users-table thead,.admin-dashboard-users-table thead{display:none}.admin-users-table tbody,.admin-dashboard-users-table tbody{display:grid!important;width:100%;grid-template-columns:1fr!important}.admin-users-table tbody tr,.admin-dashboard-users-table tbody tr{display:flex!important;width:100%;min-width:0;flex-direction:column}.admin-users-table .admin-user-email{width:auto;max-width:100%}.admin-user-detail-page .page-header,.admin-user-edit-page .page-header{align-items:flex-start}.admin-user-detail-page .page-header>div:first-child,.admin-user-edit-page .page-header>div:first-child{width:100%}.admin-user-detail-page .page-actions{display:grid;width:100%;grid-template-columns:1fr 1fr}.admin-user-detail-page .page-actions .btn,.admin-user-detail-page .page-actions form,.admin-user-detail-page .page-actions form .btn,.admin-user-edit-page .page-actions,.admin-user-edit-page .page-actions .btn{width:100%}.admin-user-detail-page .page-actions form{grid-column:1/-1}.admin-user-detail-page .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}.admin-user-detail-page .stat-card{min-width:0;min-height:76px;padding:.7rem}.admin-user-detail-page .stat-value{font-size:1.05rem}.admin-user-detail-page .admin-user-email-stat{grid-column:1/-1}.admin-user-detail-page .admin-detail-table thead{display:none}.admin-user-detail-page .admin-detail-table tbody{display:grid;gap:.6rem}.admin-user-detail-page .admin-detail-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:.55rem;border:1px solid var(--border-color);border-radius:12px;background:color-mix(in srgb,var(--bg-card) 94%,var(--primary) 6%)}.admin-user-detail-page .admin-detail-table tbody td{display:flex;min-width:0;max-width:none;justify-content:space-between;gap:.45rem;padding:.4rem;border-bottom:1px solid color-mix(in srgb,var(--border-color) 65%,transparent);font-size:.72rem;text-align:right!important;overflow-wrap:anywhere}.admin-user-detail-page .admin-detail-table tbody td[data-label]::before{content:attr(data-label);flex:0 0 auto;color:var(--text-muted);font-size:.58rem;font-weight:800;text-transform:uppercase}.admin-user-detail-page .admin-detail-table tbody td:first-child,.admin-user-detail-page .admin-detail-table tbody .admin-detail-action{grid-column:1/-1}.admin-user-detail-page .admin-detail-table tbody .admin-detail-action{border-bottom:0}.admin-user-detail-page .admin-detail-table tbody .admin-detail-action form,.admin-user-detail-page .admin-detail-table tbody .admin-detail-action .btn{width:100%}.admin-user-edit-page .card-body{padding:.9rem}.admin-user-edit-page .row.g-3{--bs-gutter-x:.75rem;--bs-gutter-y:.75rem}}
 @media(max-width:390px){.admin-user-detail-page .stat-grid{grid-template-columns:1fr 1fr}.admin-user-detail-page .page-actions{grid-template-columns:1fr}.admin-user-detail-page .page-actions form{grid-column:auto}.admin-user-detail-page .admin-detail-table tbody tr{grid-template-columns:1fr}.admin-user-detail-page .admin-detail-table tbody td,.admin-user-detail-page .admin-detail-table tbody td:first-child,.admin-user-detail-page .admin-detail-table tbody .admin-detail-action{grid-column:1}.admin-user-action-buttons{grid-template-columns:1fr 1fr}}
 
+/* Admin: tipografia unificada com a navegacao e contenção de textos longos. */
+.admin-dashboard-page,
+.admin-users-page,
+.admin-user-detail-page,
+.admin-user-edit-page,
+.admin-user-delete-dialog,
+.admin-user-undo {
+  font-family: 'Inter', 'Manrope', system-ui, -apple-system, sans-serif;
+}
+.admin-dashboard-page :is(button, input, select, textarea),
+.admin-users-page :is(button, input, select, textarea),
+.admin-user-detail-page :is(button, input, select, textarea),
+.admin-user-edit-page :is(button, input, select, textarea) { font-family: inherit; }
+.admin-dashboard-page :is(.card, .card-body, .stat-card, .admin-health-card, .admin-plan-list div),
+.admin-users-page :is(.card, .card-body),
+.admin-user-detail-page :is(.card, .card-body, .stat-card),
+.admin-user-edit-page :is(.card, .card-body) { min-width: 0; max-width: 100%; }
+.admin-dashboard-page .stat-card,
+.admin-user-detail-page .stat-card,
+.admin-dashboard-page .admin-health-card { overflow: hidden; }
+.admin-dashboard-page .stat-label,
+.admin-dashboard-page .stat-value,
+.admin-user-detail-page .stat-label,
+.admin-user-detail-page .stat-value,
+.admin-dashboard-page .admin-health-card > *,
+.admin-dashboard-page .admin-plan-list :is(span, strong) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  font-family: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.admin-user-detail-page .stat-value {
+  margin-top: .28rem;
+  font-size: clamp(.82rem, 1.6vw, 1.2rem);
+  line-height: 1.25;
+}
+.admin-dashboard-page .table td,
+.admin-users-page .table td,
+.admin-user-detail-page .table td,
+.admin-dashboard-page .table th,
+.admin-users-page .table th,
+.admin-user-detail-page .table th {
+  min-width: 0;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}
+.admin-users-page .admin-user-email,
+.admin-user-detail-page .admin-user-email-stat .stat-value { word-break: break-all; }
+.admin-dashboard-page .btn,
+.admin-users-page .btn,
+.admin-user-detail-page .btn,
+.admin-user-edit-page .btn {
+  height: auto;
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 768px) {
+  .admin-user-detail-page .stat-grid { align-items: stretch; }
+  .admin-user-detail-page .stat-card { height: auto; min-height: 82px; }
+  .admin-user-detail-page .stat-label { font-size: .6rem; line-height: 1.2; letter-spacing: .075em; }
+  .admin-user-detail-page .stat-value { font-size: clamp(.76rem, 3.6vw, 1rem); line-height: 1.28; }
+  .admin-user-detail-page .admin-user-email-stat .stat-value { font-size: .76rem; }
+  .admin-dashboard-page .admin-plan-list div { min-width: 0; gap: .45rem; }
+  .admin-dashboard-page .admin-plan-list span { flex: 1 1 auto; }
+  .admin-dashboard-page .admin-plan-list strong { flex: 0 1 auto; }
+  .admin-users-table tbody td,
+  .admin-dashboard-users-table tbody td { max-width: 100%; overflow: hidden; }
+}
+@media (max-width: 390px) {
+  .admin-user-detail-page .stat-card { padding: .58rem; }
+  .admin-user-detail-page .stat-value { font-size: .78rem; }
+}
+
 /* Admin user deletion and short undo window */
 .admin-user-action-buttons{display:flex;justify-content:flex-end;gap:.4rem}.admin-user-delete{border:1px solid rgba(220,53,69,.32);color:#c5303f;background:rgba(220,53,69,.06)}.admin-user-delete:hover{color:#fff;background:#c5303f}.admin-user-delete-backdrop{position:fixed;z-index:1100;inset:0;display:grid;padding:1rem;place-items:center;background:rgba(2,10,23,.7);opacity:0;backdrop-filter:blur(5px);transition:opacity .16s ease}.admin-user-delete-backdrop[hidden]{display:none}.admin-user-delete-backdrop.is-visible{opacity:1}.admin-user-delete-dialog{position:relative;width:min(460px,100%);padding:1.5rem;border:1px solid rgba(220,53,69,.25);border-radius:21px;color:var(--text-main);background:var(--bg-card);box-shadow:0 30px 90px rgba(0,0,0,.4);transform:translateY(12px) scale(.97);transition:transform .16s ease}.admin-user-delete-backdrop.is-visible .admin-user-delete-dialog{transform:none}.admin-user-delete-close{position:absolute;top:.8rem;right:.8rem;display:grid;width:32px;height:32px;padding:0;place-items:center;border:1px solid var(--border-color);border-radius:9px;color:var(--text-muted);background:transparent;font-size:1.1rem}.admin-user-delete-icon{display:grid;width:48px;height:48px;margin-bottom:.75rem;place-items:center;border-radius:14px;color:#fff;background:linear-gradient(135deg,#b42332,#e34856);font-size:1.2rem;font-weight:900;box-shadow:0 10px 24px rgba(220,53,69,.24)}.admin-user-delete-dialog>span{color:#d23947;font-size:.61rem;font-weight:900;letter-spacing:.12em}.admin-user-delete-dialog h2{margin:.28rem 2rem .55rem 0;font-size:1.3rem}.admin-user-delete-dialog p{margin:0;color:var(--text-muted);font-size:.82rem;line-height:1.65}.admin-user-delete-dialog p strong{color:var(--text-main)}.admin-user-delete-actions{display:grid;grid-template-columns:1fr 1.5fr;gap:.6rem;margin-top:1.2rem}.admin-user-undo{position:fixed;z-index:1110;right:1rem;bottom:1rem;display:flex;align-items:center;gap:.7rem;min-width:min(390px,calc(100vw - 2rem));padding:.78rem .9rem;border:1px solid rgba(31,166,98,.28);border-radius:14px;color:var(--text-main);background:var(--bg-card);box-shadow:0 18px 50px rgba(0,0,0,.28);opacity:0;transform:translateY(14px);transition:opacity .18s ease,transform .18s ease}.admin-user-undo[hidden]{display:none}.admin-user-undo.is-visible{opacity:1;transform:none}.admin-user-undo.is-fading{opacity:0;transform:translateY(8px)}.admin-user-undo>i{display:grid;width:30px;height:30px;flex:0 0 30px;place-items:center;border-radius:50%;color:#fff;background:#1fa662;font-style:normal}.admin-user-undo>span{display:grid;flex:1}.admin-user-undo b{font-size:.76rem}.admin-user-undo small{color:var(--text-muted);font-size:.65rem}.admin-user-undo button{border:0;color:#15805a;background:transparent;font-size:.72rem;font-weight:900;cursor:pointer}.theme-dark .admin-user-delete-dialog,.theme-dark .admin-user-undo{background:#101d2c}@media(max-width:576px){.admin-user-action-buttons{display:grid;grid-template-columns:1fr 1fr}.admin-user-delete-dialog{padding:1.25rem}.admin-user-delete-actions{grid-template-columns:1fr}.admin-user-delete-actions .btn-danger{grid-row:1}.admin-user-undo{right:.7rem;bottom:.7rem;min-width:calc(100vw - 1.4rem)}}
 
@@ -9687,6 +9783,73 @@ button, .btn, .nav-link, [role="button"] { transition: transform .16s ease, box-
 @media(max-width:980px){.rule-result-layout{grid-template-columns:1fr}.rule-result-sidebar{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}.rule-result-summary{grid-row:span 2}}
 @media(max-width:767.98px){.rule-result-deadline-grid{grid-template-columns:1fr}.rule-result-sidebar{grid-template-columns:1fr}.rule-result-summary{grid-row:auto}.rule-result-green-actions{display:grid;grid-template-columns:1fr 1fr}.rule-result-advanced>summary{align-items:flex-start}.rule-result-heading small{line-height:1.45}}
 @media(max-width:430px){.rule-result-green-actions{grid-template-columns:1fr}.rule-result-minute-field>span:last-child{align-items:center}.rule-result-minute-field input{flex:1;width:auto}}
+
+/* Correção final do Admin: mesma tipografia do menu e conteúdo sempre contido. */
+:is(.admin-dashboard-page,.admin-users-page,.admin-user-detail-page,.admin-user-edit-page),
+:is(.admin-dashboard-page,.admin-users-page,.admin-user-detail-page,.admin-user-edit-page) * {
+  font-family: "Hanken Grotesk", "DM Sans", system-ui, -apple-system, sans-serif !important;
+}
+:is(.admin-dashboard-page,.admin-users-page,.admin-user-detail-page,.admin-user-edit-page)
+  :is(.stat-grid,.stat-card,.card,.card-body,.row,[class*="col-"],.admin-health-grid,.admin-health-card,.admin-plan-list,.admin-plan-list>div) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+:is(.admin-dashboard-page,.admin-user-detail-page) .stat-card {
+  contain: layout paint;
+  overflow: hidden !important;
+}
+:is(.admin-dashboard-page,.admin-user-detail-page) :is(.stat-label,.stat-value),
+.admin-dashboard-page .admin-health-card > *,
+.admin-dashboard-page .admin-plan-list :is(span,strong) {
+  width: 100%;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  text-overflow: clip !important;
+}
+.admin-user-detail-page .stat-value {
+  font-size: clamp(.78rem, 1.35vw, 1.05rem) !important;
+  line-height: 1.3 !important;
+}
+.admin-user-detail-page .admin-user-email-stat .stat-value {
+  word-break: break-all !important;
+}
+:is(.admin-dashboard-page,.admin-users-page,.admin-user-detail-page,.admin-user-edit-page) :is(td,th,.btn,.badge-status) {
+  max-width: 100%;
+}
+@media (max-width: 768px) {
+  .admin-user-detail-page .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .admin-user-detail-page .stat-card {
+    display: grid;
+    align-content: start;
+    height: auto !important;
+    min-height: 88px;
+    padding: .62rem !important;
+  }
+  .admin-user-detail-page .stat-label {
+    margin: 0 0 .3rem !important;
+    font-size: .58rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: .055em !important;
+  }
+  .admin-user-detail-page .stat-value {
+    margin: 0 !important;
+    font-size: clamp(.7rem, 3.25vw, .9rem) !important;
+  }
+  .admin-user-detail-page .admin-user-email-stat {
+    grid-column: 1 / -1 !important;
+  }
+  :is(.admin-users-table,.admin-dashboard-users-table) tbody td {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+}
 
 /* Refinamento progressivo do resultado da regra */
 .rule-result-card>.card-header{padding:1.05rem 1.2rem!important}.rule-result-card>.card-body{padding:1.2rem}.rule-result-heading>div{gap:.32rem}.rule-result-heading h6{font-size:.9rem!important}.rule-result-heading small{max-width:820px;line-height:1.5}.rule-result-green{padding:1.05rem}.rule-result-green>.rule-result-section-head{margin-bottom:.9rem}

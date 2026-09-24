@@ -136,6 +136,8 @@ def _rejection_status(candidate: dict) -> tuple[str, str | None, list[str]]:
     ]
     if raw_status == "APPROVED":
         return "APPROVED", None, reasons
+    if raw_status == "ALTERNATIVE":
+        return "ALTERNATIVE", (reasons[0] if reasons else None), reasons
     reason = reasons[0] if reasons else "OTHER"
     aliases = {
         "LOW_CONFIDENCE": "LOW_CONFIDENCE", "LOW_SAMPLE": "LOW_SAMPLE",

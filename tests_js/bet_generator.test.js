@@ -216,6 +216,30 @@ test('recupera uma opção forte de categoria ausente sem aceitar dados frágeis
   assert.equal(diversified[1].status, 'REJECTED');
 });
 
+test('complementos independentes consistentes entram mesmo abaixo do corte do mercado principal', () => {
+  const primary = {fixtureId: 'multi-complementar', marketType: 'over15', marketGroup: 'goals_ft', scope: 'total',
+    status: 'APPROVED', confidenceScore: 96, rawProbability: 100, adjustedProbability: 94,
+    dataQualityScore: 90, consistencyScore: 90, valueScore: 50, sourceStats: {home: {samples: 6, raw: 100}, away: {samples: 6, raw: 100}}};
+  const complement = {fixtureId: 'multi-complementar', marketType: 'cards_total', marketGroup: 'cards_total', scope: 'total',
+    status: 'REJECTED', rejectionReasons: [engine.REJECTION.LOW_CONFIDENCE], strengths: [],
+    confidenceScore: 67, rawProbability: 75, adjustedProbability: 68, dataQualityScore: 60,
+    consistencyScore: 75, valueScore: 40, sourceStats: {home: {samples: 6, raw: 67}, away: {samples: 6, raw: 83}}};
+  engine.diversifyApprovedPool([primary, complement], ['goals', 'cards']);
+  const ticket = engine.buildTicket([primary, complement], 1, 'balanced', 6);
+  assert.equal(complement.status, 'APPROVED');
+  assert.equal(complement.diversityFallback, true);
+  assert.deepEqual(new Set(ticket.map(engine.marketCategory)), new Set(['goals', 'cards']));
+});
+
+test('complemento continua bloqueado quando alguma base primária possui menos de três jogos', () => {
+  const weak = {fixtureId: 'weak-complement', marketType: 'cards_total', marketGroup: 'cards_total', scope: 'total',
+    status: 'REJECTED', rejectionReasons: [engine.REJECTION.LOW_CONFIDENCE], strengths: [],
+    confidenceScore: 70, rawProbability: 80, adjustedProbability: 70, dataQualityScore: 60,
+    sourceStats: {home: {samples: 2, raw: 100}, away: {samples: 6, raw: 83}}};
+  engine.diversifyApprovedPool([weak], ['cards']);
+  assert.equal(weak.status, 'REJECTED');
+});
+
 test('não duplica dois lados de escanteios e preserva mercado de outra categoria no jogo', () => {
   const pick = (marketGroup, confidenceScore) => ({fixtureId: 'mix', marketGroup, confidenceScore, status: 'APPROVED',
     adjustedProbability: confidenceScore, dataQualityScore: 90, consistencyScore: 85, valueScore: 50});
@@ -264,4 +288,54 @@ test('linha liberada somente para edição nunca volta para a geração automát
     adjustedProbability: 97, dataQualityScore: 90, sourceStats: {home: {samples: 6, raw: 100}}};
   engine.diversifyApprovedPool([manual], ['corners']);
   assert.equal(manual.status, 'REJECTED');
+});
+
+test('candidato razoável abaixo do corte principal permanece como alternativa', () => {
+  const candidate = engine.evaluateCandidate({
+    fixtureId: 'alternative', marketType: 'cards_total', marketGroup: 'cards_total', scope: 'total', line: 4.5,
+    bases: {home: series(4, 6, 6), away: series(4, 6, 6)}, supportingScore: 65
+  }, 'balanced');
+  assert.equal(candidate.status, 'ALTERNATIVE');
+  assert.ok(candidate.rejectionReasons.length > 0);
+});
+
+test('ausência de H2H não elimina mercado sustentado por casa e fora', () => {
+  const candidate = engine.evaluateCandidate({
+    fixtureId: 'no-h2h', marketType: 'over15', marketGroup: 'goals_ft', scope: 'total', line: 1.5,
+    bases: {h2h: [], home: series(6, 6, 3), away: series(6, 6, 3)}, supportingScore: 90, contextScore: 85
+  }, 'balanced');
+  assert.equal(candidate.status, 'APPROVED');
+  assert.equal(candidate.h2hSample, 0);
+});
+
+test('um jogo pode retornar até seis mercados independentes aprovados', () => {
+  const pick = (marketGroup, confidenceScore) => ({fixtureId: 'six', marketGroup, confidenceScore, status: 'APPROVED',
+    adjustedProbability: confidenceScore, dataQualityScore: 90, consistencyScore: 90, valueScore: 50});
+  const candidates = [
+    pick('goals_ft', 94), pick('corners_total', 92), pick('cards_total', 90),
+    pick('fouls_total', 88), pick('offsides_total', 86), pick('shots_on_target_total', 84), pick('shots_total', 82)
+  ];
+  const ticket = engine.buildTicket(candidates, 1, 'balanced', 6);
+  assert.equal(ticket.length, 6);
+  assert.equal(new Set(ticket.map((candidate) => candidate.marketGroup)).size, 6);
+});
+
+test('funil de auditoria contabiliza aprovados alternativos rejeitados e deduplicados', () => {
+  const candidates = [
+    {fixtureId: 'audit', status: 'APPROVED', rejectionReasons: [], adjustedProbability: 80},
+    {fixtureId: 'audit', status: 'ALTERNATIVE', rejectionReasons: [engine.REJECTION.LOW_CONFIDENCE], adjustedProbability: 70},
+    {fixtureId: 'audit', status: 'REJECTED', rejectionReasons: [engine.REJECTION.LOW_SAMPLE], adjustedProbability: 90}
+  ];
+  const funnel = engine.auditCandidateFunnel(candidates, candidates.slice(0, 2));
+  assert.deepEqual(funnel, {raw_candidates: 3, after_data_filters: 2, after_thresholds: 1,
+    after_calibration: 1, after_deduplication: 2, approved: 1, alternatives: 1, rejected: 1});
+});
+
+test('debug de candidato mantém os metadados necessários para auditoria', () => {
+  const candidate = goal('debug', series(6, 6), series(6, 6), series(5, 6));
+  const debug = engine.candidateDebugRecord(candidate);
+  for (const key of ['market', 'line', 'side', 'sample_size', 'historical_rate', 'probability',
+    'calibrated_probability', 'confidence', 'strength', 'matchup', 'odds', 'final_score', 'classification', 'reasons']) {
+    assert.ok(Object.hasOwn(debug, key), key);
+  }
 });

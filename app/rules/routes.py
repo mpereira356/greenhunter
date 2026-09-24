@@ -1600,7 +1600,11 @@ def create_rule():
 @rules_bp.route("/<int:rule_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_rule(rule_id):
-    rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
+    rule = Rule.query.get_or_404(rule_id)
+    editing_another_user = rule.user_id != current_user.id
+    if editing_another_user and not current_user.is_admin_user:
+        abort(404)
+    rule_owner = rule.user
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         time_limit_raw = request.form.get("time_limit_min", "").strip()
@@ -1637,8 +1641,10 @@ def edit_rule(rule_id):
                 available_leagues=_available_leagues(),
                 **_build_form_context(request.form),
             )
-        if notify_telegram and (not current_user.telegram_token or not current_user.telegram_chat_id or not current_user.telegram_verified):
-            flash("Configure e teste o Telegram antes de ativar avisos.", "warning")
+        if notify_telegram and (not rule_owner.telegram_token or not rule_owner.telegram_chat_id or not rule_owner.telegram_verified):
+            flash("O usuário precisa configurar e testar o Telegram antes de ativar avisos.", "warning")
+            if editing_another_user:
+                return redirect(url_for("admin.user_detail", user_id=rule_owner.id))
             return redirect(url_for("settings.settings"))
 
         time_limit_min = int(time_limit_raw) if time_limit_raw.isdigit() else rule.time_limit_min
@@ -1722,6 +1728,8 @@ def edit_rule(rule_id):
             db.session.add(cond)
         db.session.commit()
         flash("Regra atualizada.", "success")
+        if editing_another_user:
+            return redirect(url_for("admin.user_detail", user_id=rule_owner.id))
         return redirect(url_for("rules.list_rules"))
     return render_template(
         "rules/form.html",
@@ -1734,7 +1742,11 @@ def edit_rule(rule_id):
 @rules_bp.route("/<int:rule_id>/delete", methods=["POST"])
 @login_required
 def delete_rule(rule_id):
-    rule = Rule.query.filter_by(id=rule_id, user_id=current_user.id).first_or_404()
+    rule = Rule.query.get_or_404(rule_id)
+    deleting_another_user = rule.user_id != current_user.id
+    if deleting_another_user and not current_user.is_admin_user:
+        abort(404)
+    rule_owner_id = rule.user_id
     alert_count = MatchAlert.query.filter_by(rule_id=rule.id).count()
     if alert_count > 20 and not current_user.is_admin_user:
         password = request.form.get("confirm_password", "").strip()
@@ -1749,12 +1761,13 @@ def delete_rule(rule_id):
     )
     db.session.delete(rule)
     db.session.commit()
-    undo_url = url_for("main.undo_action", token=undo_token, next=url_for("rules.list_rules"))
+    next_url = url_for("admin.user_detail", user_id=rule_owner_id) if deleting_another_user else url_for("rules.list_rules")
+    undo_url = url_for("main.undo_action", token=undo_token, next=next_url)
     flash(
         Markup(f"Regra removida. <a class='alert-link' href='{escape(undo_url)}'>Desfazer</a>"),
         "success",
     )
-    return redirect(url_for("rules.list_rules"))
+    return redirect(next_url)
 
 
 @rules_bp.route("/<int:rule_id>/copy", methods=["POST"])

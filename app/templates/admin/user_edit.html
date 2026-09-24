@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Editar Usuario | GreenHunter{% endblock %}
-{% block meta_description %}Edite dados administrativos de usuario, permissoes e configuracoes de conta no GreenHunter.{% endblock %}
+{% block title %}Editar Usuário | GreenHunter{% endblock %}
+{% block meta_description %}Edite dados administrativos de usuário, permissões e configurações de conta no GreenHunter.{% endblock %}
 {% block content %}
 <div class="admin-user-edit-page">
 <div class="page-header">
   <div>
-    <div class="page-title">Editar usuario</div>
-    <div class="page-subtitle">Atualize dados, permissao e plano.</div>
+    <div class="page-title">Editar usuário</div>
+    <div class="page-subtitle">Atualize dados, permissão e plano.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-outline-secondary" href="{{ url_for('admin.user_detail', user_id=user.id) }}">Voltar</a>
@@ -17,7 +17,7 @@
   <div class="card-body">
     <form method="post">
       <div class="mb-3">
-        <label class="form-label">Usuario</label>
+        <label class="form-label">Usuário</label>
         <input class="form-control" name="username" value="{{ user.username }}" required>
       </div>
       <div class="mb-3">
@@ -55,7 +55,7 @@
           <div class="form-text">
             Use junto com Plano Pro/Custom. Atual:
             {% if user.paid_active %}
-              ate {{ user.paid_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.paid_days_left }} dia(s))
+              até {{ user.paid_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.paid_days_left }} dia(s))
             {% elif user.paid_until %}
               expirado em {{ user.paid_until.strftime('%d/%m/%Y %H:%M') }}
             {% else %}
@@ -75,9 +75,9 @@
           <label class="form-label">Teste pago por dias</label>
           <input class="form-control" type="number" min="0" name="trial_days" placeholder="Ex: 7">
           <div class="form-text">
-            Ativa acesso Pro temporario sem mudar o plano. Atual:
+            Ativa acesso Pro temporário sem mudar o plano. Atual:
             {% if user.trial_active %}
-              ate {{ user.trial_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.trial_days_left }} dia(s))
+              até {{ user.trial_until.strftime('%d/%m/%Y %H:%M') }} ({{ user.trial_days_left }} dia(s))
             {% elif user.trial_until %}
               expirado em {{ user.trial_until.strftime('%d/%m/%Y %H:%M') }}
             {% else %}

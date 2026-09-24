@@ -339,7 +339,7 @@
   </div>
   <div class="matchday-history-popover" data-history-popover hidden></div>
 </section>
-<script src="{{ url_for('static', filename='js/bet-generator.js', v='20260918-legacy-shadow-v21') }}"></script>
+<script src="{{ url_for('static', filename='js/bet-generator.js', v='20260923-diversity-funnel-v24') }}"></script>
 <script>
 (function () {
   const leaguePicker = document.querySelector('[data-filter-picker="league"]');
@@ -1178,6 +1178,13 @@
     return 'Total/H2H';
   }
 
+  function ticketLineStatus(option) {
+    if (option.recommended && option.status === 'APPROVED') return {key: 'recommended', label: 'Recomendada'};
+    const reasons = option.rejectionReasons || [];
+    if (!reasons.length || reasons.every((reason) => reason === 'BETTER_LINE_AVAILABLE')) return {key: 'alternative', label: 'Alternativa'};
+    return {key: 'rejected', label: 'Não aprovada'};
+  }
+
   function renderTicket(openWhenPopulated) {
     const itemsBox = ticket.querySelector('[data-ticket-items]');
     ensureStableTicketGameOrder();
@@ -1222,7 +1229,7 @@
               <b class="matchday-ticket-percentage">${escapeHtml(item.value)}${escapeHtml(item.unit === undefined ? '%' : item.unit)}</b>
             </div>
             ${ticketSupportsDirection(item) ? `<label class="matchday-ticket-line"><span>Tipo</span><select data-ticket-direction="${escapeHtml(item.id)}" aria-label="Escolher mais ou menos para ${escapeHtml(item.market)}"><option value="over" ${item.direction !== 'under' ? 'selected' : ''}>Mais de</option><option value="under" ${item.direction === 'under' ? 'selected' : ''}>Menos de</option></select></label>` : ''}
-            ${Array.isArray(item.lineOptions) && item.lineOptions.length > 1 ? `<label class="matchday-ticket-line"><span>Ajustar linha</span><select data-ticket-line="${escapeHtml(item.id)}" aria-label="Alterar linha de ${escapeHtml(item.market)}">${item.lineOptions.map((option) => `<option value="${escapeHtml(option.line)}" ${Number(option.line) === Number(item.selectedLine) ? 'selected' : ''}>${item.direction === 'under' ? 'Menos' : 'Mais'} de ${escapeHtml(option.line)}</option>`).join('')}</select></label>` : ''}
+            ${Array.isArray(item.lineOptions) && item.lineOptions.length > 1 ? `<label class="matchday-ticket-line"><span>Ajustar linha</span><select data-ticket-line="${escapeHtml(item.id)}" aria-label="Alterar linha de ${escapeHtml(item.market)}">${item.lineOptions.map((option) => { const status = ticketLineStatus(option); return `<option value="${escapeHtml(option.line)}" ${Number(option.line) === Number(item.selectedLine) ? 'selected' : ''}>${item.direction === 'under' ? 'Menos' : 'Mais'} de ${escapeHtml(option.line)} · ${status.label}</option>`; }).join('')}</select></label>` : ''}
             ${item.secondaryMarket && item.secondaryValue !== null && item.secondaryValue !== undefined && !(item.secondaryMarket === 'Mais de 2,5 gols' && Number(item.selectedLine) === 2.5) ? `<small class="matchday-ticket-secondary"><span>${escapeHtml(item.secondaryMarket)}</span><b>${escapeHtml(item.secondaryValue)}%</b></small>` : ''}
             <small>${escapeHtml(ticketGroupLabel(item))}${item.generated ? ' · análise estatística' : ''} · ${escapeHtml(item.samples)} jogos</small>
             <button type="button" data-ticket-remove-index="${ticketItems.indexOf(item)}" aria-label="Remover somente ${escapeHtml(item.market)}" title="Remover somente esta seleção">×</button>
@@ -1320,6 +1327,10 @@
       if (option.supportingScore !== undefined) item.supportingScore = option.supportingScore;
       if (option.strengths !== undefined) item.strengths = option.strengths;
       if (option.weaknesses !== undefined) item.weaknesses = option.weaknesses;
+      if (option.samples !== undefined) item.samples = option.samples;
+      if (option.status !== undefined) item.lineStatus = option.status;
+      if (option.rejectionReasons !== undefined) item.lineRejectionReasons = option.rejectionReasons;
+      if (option.baseLabel !== undefined) item.lineBaseLabel = option.baseLabel;
       applyTicketDirection(item, item.direction);
       removeRedundantTicketCorners(item.gameId);
       saveTicket();
@@ -2181,18 +2192,21 @@
       return result;
     };
 
-    const prioritizedGoalInput = (historyKey) => {
-      const h2hValues = historyNumbers(h2h, historyKey);
-      if (h2hValues.length >= requiredSamples) return {bases: {h2h: h2hValues, home: [], away: []}, sourcePriority: 'h2h'};
-      return {bases: {h2h: [], home: historyNumbers(home, historyKey), away: historyNumbers(away, historyKey)}, sourcePriority: 'form'};
-    };
+    const prioritizedGoalInput = (historyKey) => ({
+      bases: {
+        h2h: historyNumbers(h2h, historyKey),
+        home: historyNumbers(home, historyKey),
+        away: historyNumbers(away, historyKey)
+      },
+      sourcePriority: 'combined'
+    });
     const prioritizedGoalSupport = (historyKey, predicate, line) => {
       const h2hValues = historyNumbers(h2h, historyKey);
-      if (h2hValues.length < requiredSamples) return goalSupportingScore(groups, historyKey, predicate, line);
-      return combinedSupport([
+      const h2hSupport = h2hValues.length ? combinedSupport([
         Math.round(h2hValues.filter(predicate).length / h2hValues.length * 100),
         marginSupportingScore(h2hValues, line, 18)
-      ]);
+      ]) : null;
+      return combinedSupport([goalSupportingScore(groups, historyKey, predicate, line), h2hSupport]);
     };
 
     if (enabled.has('goal_ht') && userMarketSettings.goals?.goal_ht !== false) add({marketType: 'goal_ht', marketGroup: 'goal_ht', scope: 'total', line: .5,
@@ -2234,6 +2248,7 @@
           supportingScore, contextScore: matchupContextScore(scope, groupBase, line), matchupDominance: matchupDominance(scope)});
         if (line < minimum) {
           evaluation.status = 'REJECTED';
+          evaluation.initialStatus = 'REJECTED';
           evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
         }
       }
@@ -2260,15 +2275,13 @@
       const addPrioritizedTeamGoals = (scope, teamGroup, opponentGroup, minimum) => {
         const h2hValues = historyNumbers(h2h, scope === 'home' ? 'team_goals_home' : 'team_goals_away');
         const formValues = historyNumbers(teamGroup, 'team_goals');
-        const useH2H = h2hValues.length > 0;
-        const primaryValues = useH2H ? h2hValues : formValues;
-        const bases = useH2H ? {h2h: h2hValues, home: [], away: []} : scope === 'home'
-          ? {h2h: [], home: primaryValues, away: []}
-          : {h2h: [], home: [], away: primaryValues};
+        const bases = scope === 'home'
+          ? {h2h: h2hValues, home: formValues, away: []}
+          : {h2h: h2hValues, home: [], away: formValues};
         addLineFamily({enabledKey: 'team_goals', marketBase: 'team_goals', groupBase: 'team_goals', noun: 'gols', scope,
           historyKey: 'team_goals', minimum: Number(minimum), maximum: 2.5, basesOverride: bases,
-          sourcePriority: useH2H ? 'h2h' : 'form',
-          supportingScoreForLine: (line) => useH2H ? marginSupportingScore(h2hValues, line, 24) : teamGoalSupport(teamGroup, opponentGroup, line),
+          sourcePriority: 'combined',
+          supportingScoreForLine: (line) => combinedSupport([marginSupportingScore(h2hValues, line, 24), teamGoalSupport(teamGroup, opponentGroup, line)]),
           enforcePrimaryFloor: false});
       };
       if (preferences.home_enabled !== false) addPrioritizedTeamGoals('home', home, away, preferences.home);
@@ -2289,14 +2302,12 @@
       const addPrioritizedTeamCorners = (scope, formGroup, minimum) => {
         const h2hValues = historyNumbers(h2h, scope === 'home' ? 'team_corners_home' : 'team_corners_away');
         const formValues = historyNumbers(formGroup, 'team_corners_avg');
-        const useH2H = h2hValues.length >= requiredSamples;
-        const primaryValues = useH2H ? h2hValues : formValues;
-        const bases = useH2H ? {h2h: h2hValues, home: [], away: []} : scope === 'home'
-          ? {h2h: [], home: primaryValues, away: []}
-          : {h2h: [], home: [], away: primaryValues};
+        const bases = scope === 'home'
+          ? {h2h: h2hValues, home: formValues, away: []}
+          : {h2h: h2hValues, home: [], away: formValues};
         addLineFamily({enabledKey: 'corners_avg', marketBase: 'corners', groupBase: 'corners', noun: 'escanteios', scope,
           historyKey: 'team_corners_avg', minimum: Number(minimum), manualMinimum: .5, maximum: 49.5,
-          basesOverride: bases, sourcePriority: useH2H ? 'h2h' : 'form', supportingScale: useH2H ? 18 : 14});
+          basesOverride: bases, sourcePriority: 'combined', supportingScale: 14});
       };
       if (cornerPreferences.home_enabled !== false) addPrioritizedTeamCorners('home', home, cornerPreferences.home);
       if (cornerPreferences.away_enabled !== false) addPrioritizedTeamCorners('away', away, cornerPreferences.away);
@@ -2307,9 +2318,9 @@
         const foulValues = [...historyNumbers(h2h, 'fouls_avg'), ...historyNumbers(home, 'fouls_avg'), ...historyNumbers(away, 'fouls_avg')];
         return combinedSupport([marginSupportingScore(cardValues, line, 15), normalizedRange(averageNumbers(foulValues), 18, 32)]);
       };
-      if (cardPreferences.total_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'total', historyKey: 'cards_avg', minimum: Number(personalMarket('cards').total), maximum: 49.5, supportingScoreForLine: cardSupport});
-      if (cardPreferences.home_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'home', historyKey: 'team_cards', minimum: Number(personalMarket('cards').home), maximum: 49.5, supportingScoreForLine: cardSupport});
-      if (cardPreferences.away_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'away', historyKey: 'team_cards', minimum: Number(personalMarket('cards').away), maximum: 49.5, supportingScoreForLine: cardSupport});
+      if (cardPreferences.total_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'total', historyKey: 'cards_avg', minimum: Number(personalMarket('cards').total), manualMinimum: .5, maximum: 49.5, supportingScoreForLine: cardSupport});
+      if (cardPreferences.home_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'home', historyKey: 'team_cards', minimum: Number(personalMarket('cards').home), manualMinimum: .5, maximum: 49.5, supportingScoreForLine: cardSupport});
+      if (cardPreferences.away_enabled !== false) addLineFamily({enabledKey: 'cards_avg', marketBase: 'cards', groupBase: 'cards', noun: 'cartões', scope: 'away', historyKey: 'team_cards', minimum: Number(personalMarket('cards').away), manualMinimum: .5, maximum: 49.5, supportingScoreForLine: cardSupport});
     }
 
     if (enabled.has('first_half')) {
@@ -2330,6 +2341,7 @@
             bases, minimumLine: minimum, supportingScore: null, contextScore: matchupContextScore(scope, marketBase, line), matchupDominance: matchupDominance(scope)});
           if (line < minimum) {
             evaluation.status = 'REJECTED';
+            evaluation.initialStatus = 'REJECTED';
             evaluation.rejectionReasons = [...new Set([...evaluation.rejectionReasons, engine.REJECTION.MANUAL_ONLY])];
           }
         }
@@ -2427,6 +2439,8 @@
       dataQualityScore: candidate.dataQualityScore, contextScore: candidate.contextScore,
       confidenceScore: candidate.confidenceScore, sampleScore: candidate.sampleScore,
       supportingScore: candidate.supportingScore, classification: candidate.classification,
+      initialStatus: candidate.initialStatus, strengthScore: candidate.strengthScore,
+      matchupScore: candidate.matchupScore, promotionReason: candidate.promotionReason || null,
       strengths: candidate.strengths || [], weaknesses: candidate.weaknesses || [], sourceStats
     };
   }
@@ -2504,7 +2518,7 @@
       const chosen = engine.chooseOptimalLine(family, profile);
       family.forEach((candidate) => {
         if (candidate !== chosen && candidate.status === 'APPROVED') {
-          candidate.status = 'REJECTED';
+          candidate.status = 'ALTERNATIVE';
           candidate.rejectionReasons.push(engine.REJECTION.BETTER_LINE_AVAILABLE);
         }
       });
@@ -2540,12 +2554,13 @@
         confidenceScore: item.confidenceScore, confidenceClass: item.classification,
         dataQualityScore: item.dataQualityScore, dataQualityGrade: item.dataQualityGrade,
         consistencyScore: item.consistencyScore, sampleScore: item.sampleScore,
-        supportingScore: item.supportingScore, strengths: item.strengths, weaknesses: item.weaknesses
+        supportingScore: item.supportingScore, strengths: item.strengths, weaknesses: item.weaknesses,
+        samples: Math.max(Number(item.h2hSample || 0), Number(item.homeSample || 0), Number(item.awaySample || 0)),
+        baseLabel: [['H2H', item.h2hSample], ['Casa', item.homeSample], ['Fora', item.awaySample]]
+          .filter(([, samples]) => Number(samples || 0) > 0).map(([label]) => label).join(' + ') || 'Não informada',
+        status: item.status, rejectionReasons: [...new Set(item.rejectionReasons || [])], recommended: item === evaluation
       })).sort((a, b) => a.line - b.line);
       const card = successfulCards.find((item) => String(item.dataset.gameId) === String(evaluation.fixtureId));
-      if (card && (evaluation.marketGroup === 'goals_ft' || String(evaluation.marketGroup).startsWith('team_goals_'))) {
-        lineOptions = generatedGoalLineChoices(card, evaluation);
-      }
       if (card) uiByEvaluation.set(evaluation, uiCandidateFromEvaluation(card, evaluation, lineOptions));
     });
 
@@ -2657,7 +2672,18 @@
       : engine.rankCandidates(approved))
       .filter((candidate, index, array) => array.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
       .map((evaluation) => uiByEvaluation.get(evaluation)).filter(Boolean);
-    window.greenHunterBetGeneratorDebug = {metadata, enabledMarkets: [...enabled], config: engine.CONFIG, candidates: allEvaluated.map((candidate) => ({...candidate, uiCandidate: undefined, sourceStats: candidate.sourceStats}))};
+    const funnel = engine.auditCandidateFunnel(allEvaluated, optimal);
+    const fixtureFunnel = {};
+    new Set(allEvaluated.map((candidate) => String(candidate.fixtureId))).forEach((fixtureId) => {
+      fixtureFunnel[fixtureId] = engine.auditCandidateFunnel(
+        allEvaluated.filter((candidate) => String(candidate.fixtureId) === fixtureId),
+        optimal.filter((candidate) => String(candidate.fixtureId) === fixtureId)
+      );
+    });
+    window.greenHunterBetGeneratorDebug = {
+      metadata, enabledMarkets: [...enabled], config: engine.CONFIG, funnel, fixtureFunnel,
+      candidates: allEvaluated.map((candidate) => engine.candidateDebugRecord(candidate))
+    };
     void persistLegacyPredictionRun(allEvaluated, metadata, {
       generator_count: wanted, generator_samples: Number(params.get('generator_samples')) || null,
       enabled_markets: [...enabled], max_markets_per_game: maxMarketsPerGame,

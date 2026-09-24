@@ -364,8 +364,13 @@ def _ensure_alert_columns():
 
 def _ensure_live_game_state_columns():
     columns = {
+        "first_half_provisional_json": "TEXT",
+        "first_half_provisional_minute": "INTEGER",
+        "first_half_provisional_time_text": "VARCHAR(40)",
         "first_half_snapshot_json": "TEXT",
         "first_half_snapshot_minute": "INTEGER",
+        "first_half_snapshot_status": "VARCHAR(24)",
+        "first_half_snapshot_confirmed_at": "DATETIME",
         "events_json": "TEXT",
     }
 

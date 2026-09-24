@@ -387,8 +387,8 @@
       "conclusion_eligible": true
     }
   },
-  "start_date": "2026-09-08",
-  "end_date": "2026-09-21",
+  "start_date": "2026-09-10",
+  "end_date": "2026-09-23",
   "window_days": 14,
   "drift": {
     "status": "POSSIBLE_DRIFT",
@@ -429,6 +429,67 @@
     },
     "note": "Monitoramento descritivo; nunca altera o modelo automaticamente."
   },
+  "collection_health": [
+    {
+      "date": "2026-09-18",
+      "status": "completed",
+      "alert_status": "PARTIAL",
+      "fixtures": 40,
+      "candidates": 880,
+      "started_at": "2026-09-18 07:08:10.054498",
+      "finished_at": "2026-09-18 07:09:33.765926"
+    },
+    {
+      "date": "2026-09-19",
+      "status": "missed_collection",
+      "alert_status": "MISSED_COLLECTION",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-18 14:10:34.825206",
+      "finished_at": "2026-09-18 14:10:34.835906"
+    },
+    {
+      "date": "2026-09-20",
+      "status": "missed_collection",
+      "alert_status": "MISSED_COLLECTION",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-19 04:58:29.578111",
+      "finished_at": "2026-09-19 04:58:29.594166"
+    },
+    {
+      "date": "2026-09-21",
+      "status": "missed_collection",
+      "alert_status": "MISSED_COLLECTION",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-20 04:44:23.501536",
+      "finished_at": "2026-09-20 04:44:23.517637"
+    },
+    {
+      "date": "2026-09-22",
+      "status": "failed",
+      "alert_status": "NO_ELIGIBLE_FIXTURES",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-21 03:39:07.304092",
+      "finished_at": "2026-09-22 03:05:01.848559"
+    },
+    {
+      "date": "2026-09-23",
+      "status": "failed",
+      "alert_status": "NO_ELIGIBLE_FIXTURES",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-23 03:16:02.569392",
+      "finished_at": "2026-09-23 03:16:02.588015"
+    }
+  ],
+  "missed_collection_days": [
+    "2026-09-19",
+    "2026-09-20",
+    "2026-09-21"
+  ],
   "checkpoint": {
     "ready": false,
     "complete_days": 1,

@@ -64,7 +64,7 @@
   }
 
   function seriesStats(values, predicate) {
-    const clean = (values || []).map(Number).filter(Number.isFinite).slice(0, 10);
+    const clean = (values || []).map(Number).filter(Number.isFinite).slice(0, 20);
     if (!clean.length) return null;
     const hits = clean.filter(predicate).length;
     const raw = hits / clean.length * 100;
@@ -120,6 +120,23 @@
 
   function classification(confidence) {
     return confidence >= 90 ? 'ELITE' : confidence >= 85 ? 'MUITO FORTE' : confidence >= 80 ? 'FORTE' : confidence >= 75 ? 'MODERADA' : 'NÃO RECOMENDAR';
+  }
+
+  function candidateDecision(rejectionReasons, metrics) {
+    if (!rejectionReasons.length) return 'APPROVED';
+    const structural = new Set([
+      REJECTION.INSUFFICIENT_DATA, REJECTION.LOW_SAMPLE, REJECTION.HIGH_DIVERGENCE,
+      REJECTION.LOW_DATA_QUALITY, REJECTION.WEAK_SUPPORTING_METRICS,
+      REJECTION.MANUAL_ONLY, REJECTION.ADVERSE_MATCHUP, REJECTION.EXTREME_UNDERDOG
+    ]);
+    if (rejectionReasons.some((reason) => structural.has(reason))) return 'REJECTED';
+    const hasUsableBase = (metrics.primaryStats || []).some((item) => item && item.samples >= 3);
+    return hasUsableBase
+      && Number(metrics.rawProbability) >= 55
+      && Number(metrics.adjustedProbability) >= 55
+      && Number(metrics.confidence) >= 55
+      && Number(metrics.dataQuality) >= 45
+      ? 'ALTERNATIVE' : 'REJECTED';
   }
 
   function calculateValueScore(candidate) {
@@ -210,6 +227,10 @@
       if (stat && stat.samples >= 3 && stat.raw < 60) weaknesses.push(`${name}: somente ${stat.hits}/${stat.samples} jogos atingiram a linha`);
     });
 
+    const uniqueRejectionReasons = [...new Set(rejectionReasons)];
+    const decision = candidateDecision(uniqueRejectionReasons, {
+      primaryStats: primaryKeys.map((key) => stats[key]), rawProbability, adjustedProbability, confidence, dataQuality
+    });
     const candidate = {
       fixtureId: String(input.fixtureId), competitionId: input.competitionId || null, competitionName: input.competitionName || '',
       homeTeam: input.homeTeam || '', awayTeam: input.awayTeam || '', marketType: input.marketType,
@@ -221,10 +242,12 @@
       consistencyScore: consistency, sampleScore: sample, supportingScore: supporting, contextScore: context, dataQualityScore: dataQuality,
       credibleProbability: round1(credibleProbability || 0),
       dataQualityGrade: qualityGrade(dataQuality), confidenceScore: confidence, classification: classification(confidence),
-      strengths, weaknesses, rejectionReasons: [...new Set(rejectionReasons)], dataComplete: dataQuality >= 75,
-      status: rejectionReasons.length ? 'REJECTED' : 'APPROVED', bookmakerOdds: input.bookmakerOdds || null,
+      strengths, weaknesses, rejectionReasons: uniqueRejectionReasons, dataComplete: dataQuality >= 75,
+      status: decision, initialStatus: decision, bookmakerOdds: input.bookmakerOdds || null,
       impliedProbability: null, expectedValue: null, edge: null, minimumLine: input.minimumLine || 0,
-      sourceStats: stats, average: Number.isFinite(Number(input.average)) ? Number(input.average) : null
+      sourceStats: stats, average: Number.isFinite(Number(input.average)) ? Number(input.average) : null,
+      strengthScore: Number.isFinite(Number(input.strengthScore)) ? clamp(input.strengthScore) : null,
+      matchupScore: Number.isFinite(Number(input.matchupScore)) ? clamp(input.matchupScore) : context
     };
     candidate.sourcePriority = input.sourcePriority || '';
     candidate.valueScore = calculateValueScore(candidate);
@@ -236,7 +259,8 @@
     if (!candidates.length) return null;
     const profile = CONFIG.profiles[profileName] || CONFIG.profiles.balanced;
     const approved = candidates.filter((candidate) => candidate.status === 'APPROVED');
-    const pool = approved.length ? approved : candidates;
+    const alternatives = candidates.filter((candidate) => candidate.status === 'ALTERNATIVE');
+    const pool = approved.length ? approved : alternatives.length ? alternatives : candidates;
     const safest = [...pool].sort((a, b) => b.confidenceScore - a.confidenceScore || b.adjustedProbability - a.adjustedProbability)[0];
     if (!safest || profileName === 'conservative') return safest;
     const efficient = pool.filter((candidate) => safest.confidenceScore - candidate.confidenceScore <= profile.maxLineDrop)
@@ -355,17 +379,24 @@
           : candidate.scope === 'away' ? [candidate.sourceStats?.away]
             : [candidate.sourceStats?.home, candidate.sourceStats?.away];
         const validPrimary = primary.filter((item) => item && item.samples >= 3);
+        // Um mercado independente não precisa superar o melhor mercado do
+        // jogo para poder compor a múltipla. Ele pode entrar como complemento
+        // quando possui base própria suficiente e frequência consistente.
+        // Ausência de dados, amostra curta e rejeições estruturais continuam
+        // bloqueando a promoção.
         return validPrimary.length === primary.length
-          && validPrimary.every((item) => item.raw >= 50)
-          && candidate.rawProbability >= 75 && candidate.adjustedProbability >= 72
-          && candidate.confidenceScore >= 72 && candidate.dataQualityScore >= 55;
+          && validPrimary.every((item) => item.raw >= 60)
+          && candidate.rawProbability >= 67 && candidate.adjustedProbability >= 65
+          && candidate.confidenceScore >= 65 && candidate.dataQualityScore >= 55;
       }))[0];
       if (!fallback) return;
+      fallback.initialStatus = fallback.initialStatus || fallback.status;
       fallback.status = 'APPROVED';
       fallback.diversityFallback = true;
-      fallback.classification = fallback.confidenceScore >= 70 ? 'COMPLEMENTAR FORTE' : 'COMPLEMENTAR';
+      fallback.promotionReason = 'SECONDARY_QUALITY_GATE';
+      fallback.classification = fallback.confidenceScore >= 72 ? 'COMPLEMENTAR FORTE' : 'COMPLEMENTAR';
       fallback.rejectionReasons = [];
-      fallback.strengths = [...fallback.strengths, 'Melhor opção consistente disponível nesta categoria'];
+      fallback.strengths = [...fallback.strengths, 'Complemento independente com amostra e frequência mínimas confirmadas'];
     }));
     return pool;
   }
@@ -446,7 +477,7 @@
       const fixtureSelections = [main];
       const additions = ranked.filter((candidate) => candidate.fixtureId === main.fixtureId && candidate !== main
         && (candidate.diversityFallback || candidate.confidenceScore >= profile.secondMinConfidence)
-        && main.confidenceScore - candidate.confidenceScore <= profile.secondMaxGap);
+        && (candidate.diversityFallback || main.confidenceScore - candidate.confidenceScore <= profile.secondMaxGap));
       for (const candidate of additions) {
         if (fixtureSelections.length >= profile.maxSelectionsPerFixture) break;
         if (fixtureSelections.some((existing) => marketCategory(existing) === marketCategory(candidate))) continue;
@@ -475,7 +506,43 @@
     return processed >= minimumProcessed && (!eligible || processed / eligible >= minimumCoverage);
   }
 
+  function candidateDebugRecord(candidate) {
+    const samples = Math.max(Number(candidate.h2hSample || 0), Number(candidate.homeSample || 0), Number(candidate.awaySample || 0));
+    const odds = Array.isArray(candidate.bookmakerOdds) ? candidate.bookmakerOdds : candidate.bookmakerOdds || null;
+    return {
+      fixture_id: String(candidate.fixtureId), market: candidate.marketType, market_group: candidate.marketGroup,
+      line: candidate.line, side: candidate.scope, sample_size: samples,
+      historical_rate: candidate.rawProbability, probability: candidate.adjustedProbability,
+      calibrated_probability: candidate.calibratedProbability ?? null,
+      confidence: candidate.confidenceScore, strength: candidate.strengthScore ?? null,
+      matchup: candidate.matchupScore ?? candidate.contextScore ?? null, odds,
+      final_score: candidate.finalRank ?? candidate.confidenceScore,
+      classification: candidate.status, initial_classification: candidate.initialStatus || candidate.status,
+      reasons: [...new Set(candidate.rejectionReasons || [])], promotion_reason: candidate.promotionReason || null
+    };
+  }
+
+  function auditCandidateFunnel(candidates, deduplicatedCandidates = []) {
+    const list = candidates || [];
+    const afterData = list.filter((candidate) => !(candidate.rejectionReasons || []).some((reason) =>
+      [REJECTION.INSUFFICIENT_DATA, REJECTION.LOW_SAMPLE].includes(reason)));
+    const afterThresholds = afterData.filter((candidate) => !(candidate.rejectionReasons || []).some((reason) =>
+      [REJECTION.LOW_RAW_PROBABILITY, REJECTION.LOW_ADJUSTED_PROBABILITY, REJECTION.LOW_CONFIDENCE].includes(reason)));
+    const afterCalibration = afterThresholds.filter((candidate) => Number.isFinite(Number(candidate.adjustedProbability)));
+    return {
+      raw_candidates: list.length,
+      after_data_filters: afterData.length,
+      after_thresholds: afterThresholds.length,
+      after_calibration: afterCalibration.length,
+      after_deduplication: (deduplicatedCandidates || []).length,
+      approved: list.filter((candidate) => candidate.status === 'APPROVED').length,
+      alternatives: list.filter((candidate) => candidate.status === 'ALTERNATIVE').length,
+      rejected: list.filter((candidate) => candidate.status === 'REJECTED').length
+    };
+  }
+
   return {MODEL_VERSION, CONFIG, REJECTION, sampleScore, h2hCredibility, seriesStats, consistencyScore, dataQualityScore, qualityGrade,
     evaluateCandidate, chooseOptimalLine, rankCandidates, correlationPenalty, marketCategory, marketCompositionPattern,
-    diversifyTicketComposition, diversifyApprovedPool, buildTicket, analysisMetadata, partialAnalysisSufficient, classification};
+    diversifyTicketComposition, diversifyApprovedPool, buildTicket, analysisMetadata, partialAnalysisSufficient, classification,
+    candidateDecision, candidateDebugRecord, auditCandidateFunnel};
 });

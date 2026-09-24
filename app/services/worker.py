@@ -73,6 +73,8 @@ RED_CONFIRM_PENDING = {}
 RED_CONFIRM_SECONDS = int(os.environ.get("RED_CONFIRM_SECONDS", "3"))
 FORCE_SECOND_HALF_FROM_FIRST_HALF = os.environ.get("FORCE_SECOND_HALF_FROM_FIRST_HALF", "0").strip().lower() in ("1", "true", "yes")
 NON_DELTA_KEYS = {"Minute", "Possession"}
+FIRST_HALF_PROVISIONAL = "PROVISIONAL"
+FIRST_HALF_FINAL_CONFIRMED = "FINAL_CONFIRMED"
 ALERT_FRESH_SECONDS = int(os.environ.get("ALERT_FRESH_SECONDS", "180"))
 RED_CORRECTION_SECONDS = int(os.environ.get("RED_CORRECTION_SECONDS", "300"))
 ANALYSIS_THREADS = max(1, int(os.environ.get("WORKER_ANALYSIS_THREADS", "1")))
@@ -841,12 +843,12 @@ def second_half_allowed(game_id: str, time_text: str, minute: int | None) -> boo
         return False
     if is_first_half_boundary_text(time_text):
         return False
-    # Only allow 2H alerts after HT confirmed or 50+ to avoid 45+ stoppage false positives.
-    if not HALFTIME_CONFIRMED_AT.get(game_id) and minute < 50:
-        return False
     if minute < 46:
         return False
-    return True
+    # A minute/status alone is insufficient: after a restart it could cause
+    # first-half totals to be evaluated as second-half statistics.  A 2H rule
+    # is eligible only when a persisted, explicitly final baseline exists.
+    return get_second_half_baseline(game_id) is not None
 
 def _is_recent_game_update(game_id: str) -> bool:
     if not game_id:
@@ -1802,7 +1804,11 @@ def _load_persisted_first_half_snapshot(game_id: str):
     if not game_id:
         return None
     state = LiveGameState.query.filter_by(game_id=game_id).first()
-    if not state or not state.first_half_snapshot_json:
+    if (
+        not state
+        or state.first_half_snapshot_status != FIRST_HALF_FINAL_CONFIRMED
+        or not state.first_half_snapshot_json
+    ):
         return None
     try:
         stats = json.loads(state.first_half_snapshot_json)
@@ -1839,67 +1845,96 @@ def _baseline_source_for_second_half(game_id: str, stats_payload):
     return current_stats
 
 
-def _has_first_half_context(game_id: str) -> bool:
-    snap = LAST_GAME_SNAPSHOTS.get(game_id) or {}
-    prev_minute = snap.get("minute")
-    prev_time = snap.get("time_text", "")
-    if isinstance(prev_minute, int) and prev_minute <= 45 and not is_second_half(prev_time, prev_minute):
+def _load_provisional_first_half_snapshot(state: LiveGameState | None):
+    if state is None or not state.first_half_provisional_json:
+        return None
+    try:
+        stats = json.loads(state.first_half_provisional_json)
+    except Exception:
+        return None
+    return copy_stats(stats) if isinstance(stats, dict) and stats else None
+
+
+def _provisional_is_transition_ready(state: LiveGameState | None) -> bool:
+    """Reject stale partial-1H observations after a long worker outage."""
+    if state is None or state.first_half_provisional_minute != 45:
+        return False
+    marker = state.first_half_provisional_time_text or ""
+    return is_first_half_boundary_text(marker)
+
+
+def _is_unambiguous_second_half(time_text: str, minute: int | None) -> bool:
+    if minute is None or is_half_time_text(time_text) or is_first_half_extra_time(time_text):
+        return False
+    if is_second_half(time_text, minute):
         return True
+    # BetsAPI commonly changes from 45+X directly to a plain 46+ clock.
+    return minute > 45
+
+
+def _is_trackable_first_half(time_text: str, minute: int | None) -> bool:
+    if minute is None or is_half_time_text(time_text) or is_second_half(time_text, minute):
+        return False
+    return minute <= 45 or is_first_half_extra_time(time_text)
+
+
+def _store_provisional_first_half(state: LiveGameState, stats: dict, minute: int, time_text: str) -> None:
+    """Persist the newest cumulative 1H observation, including every 45+ update."""
+    if not stats:
+        return
+    state.first_half_provisional_json = json.dumps(copy_stats(stats), ensure_ascii=False)
+    state.first_half_provisional_minute = minute
+    state.first_half_provisional_time_text = time_text or ""
+    if state.first_half_snapshot_status != FIRST_HALF_FINAL_CONFIRMED:
+        state.first_half_snapshot_status = FIRST_HALF_PROVISIONAL
+
+
+def _confirm_first_half_baseline(state: LiveGameState, stats: dict, minute: int | None) -> bool:
+    """Atomically freeze a trustworthy final 1H snapshot and 2H baseline."""
+    if not isinstance(stats, dict) or not stats:
+        return False
+    frozen = copy_stats(stats)
+    payload = json.dumps(frozen, ensure_ascii=False)
+    state.first_half_snapshot_json = payload
+    state.first_half_snapshot_minute = minute
+    state.first_half_snapshot_status = FIRST_HALF_FINAL_CONFIRMED
+    state.first_half_snapshot_confirmed_at = now_sp()
+    state.second_half_baseline_json = payload
+    SECOND_HALF_BASELINES[state.game_id] = frozen
+    SECOND_HALF_FROM_NOW.pop(state.game_id, None)
+    HALFTIME_CONFIRMED_AT[state.game_id] = now_sp()
+    return True
+
+
+def _has_first_half_context(game_id: str) -> bool:
     persisted = _load_persisted_first_half_snapshot(game_id)
     return bool(persisted and isinstance(persisted.get("stats"), dict))
 
 def ensure_second_half_baseline(game_id: str, stats_payload) -> None:
-    if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES: return
-    if game_id in SECOND_HALF_FROM_NOW:
+    if not stats_payload or not game_id or game_id in SECOND_HALF_BASELINES:
         return
-    minute = stats_payload.get("minute") or 0
-    time_text = stats_payload.get("time_text", "")
-    if is_first_half_boundary_text(time_text):
-        return
-    if minute < 45:
-        HALFTIME_SEEN_AT.pop(game_id, None)
-        HALFTIME_CONFIRMED_AT.pop(game_id, None)
-        return
-
-    # The persistent state owns halftime confirmation and snapshot creation.
-    # Consuming confirmation here used to prevent persist_live_game_state from
-    # saving the real HT snapshot, leaving 2H rules with an earlier baseline.
-    if minute == 45 or is_half_time_text(time_text):
-        return
-
-    # From 46+ onward:
-    # Modificação solicitada: Se o bot está ligado e o jogo já está no 2º tempo, ele cria baseline imediatamente na hora e começa a contar a partir dali.
-    if is_second_half(time_text, minute) or minute >= 46:
-        if _has_first_half_context(game_id):
-            SECOND_HALF_BASELINES[game_id] = copy_stats(_baseline_source_for_second_half(game_id, stats_payload))
-        else:
-            # Se não tem contexto do 1º tempo, cria baseline imediatamente com os stats atuais
-            SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
-            SECOND_HALF_FROM_NOW[game_id] = True
-        
-        HALFTIME_SEEN_AT.pop(game_id, None)
-        HALFTIME_CONFIRMED_AT.pop(game_id, None)
+    # Baselines are now created only by persist_live_game_state after explicit
+    # HT or a transition backed by a persisted provisional 1H snapshot.
+    persisted = _load_persisted_first_half_snapshot(game_id)
+    if persisted:
+        SECOND_HALF_BASELINES[game_id] = copy_stats(persisted["stats"])
 
 
 def _load_persisted_second_half_baseline(game_id: str):
     if not game_id:
         return None
     state = LiveGameState.query.filter_by(game_id=game_id).first()
-    if not state or not state.second_half_baseline_json:
+    if (
+        not state
+        or state.first_half_snapshot_status != FIRST_HALF_FINAL_CONFIRMED
+        or not state.second_half_baseline_json
+    ):
         return None
     try:
         baseline = json.loads(state.second_half_baseline_json)
     except Exception:
         return None
     if isinstance(baseline, dict) and baseline:
-        minute_total = (baseline.get("Minute") or {}).get("total") if isinstance(baseline.get("Minute"), dict) else None
-        if isinstance(minute_total, int) and minute_total > 45 and state.first_half_snapshot_json:
-            try:
-                first_half = json.loads(state.first_half_snapshot_json)
-                if isinstance(first_half, dict) and first_half:
-                    return first_half
-            except Exception:
-                pass
         return baseline
     return None
 
@@ -1910,10 +1945,6 @@ def get_second_half_baseline(game_id: str):
         if persisted_first_half and isinstance(persisted_first_half.get("stats"), dict):
             SECOND_HALF_BASELINES[game_id] = copy_stats(persisted_first_half["stats"])
             return SECOND_HALF_BASELINES[game_id]
-    if game_id in SECOND_HALF_FROM_NOW:
-        baseline = SECOND_HALF_BASELINES.get(game_id)
-        if baseline:
-            return baseline
     baseline = SECOND_HALF_BASELINES.get(game_id)
     if baseline:
         return baseline
@@ -1946,59 +1977,36 @@ def persist_live_game_state(game: dict, stats_payload: dict) -> bool:
     minute = stats_payload.get("minute") or 0
     time_text = stats_payload.get("time_text", "")
     
-    # Se o jogo ficou nos 45 por 3 min, salva o HT
-    if (minute == 45 or is_half_time_text(time_text)) and not is_first_half_extra_time(time_text):
-        if game_id not in SECOND_HALF_FROM_NOW and _ht_confirmed_with_state(state, time_text, minute):
-            first_half_stats = copy_stats(stats_payload.get("stats", {}))
-            if first_half_stats:
-                state.first_half_snapshot_json = json.dumps(first_half_stats, ensure_ascii=False)
-                state.first_half_snapshot_minute = minute
+    current_stats = stats_with_score_goals(
+        stats_payload.get("stats", {}),
+        stats_payload.get("score"),
+    )
+    if _is_trackable_first_half(time_text, minute):
+        # This deliberately includes 45+X. Reaching/stalling at 45 never
+        # finalizes the baseline.
+        _store_provisional_first_half(state, current_stats, minute, time_text)
+    elif is_half_time_text(time_text):
+        # Explicit HT is authoritative and may update a provisional snapshot
+        # with the provider's final corrections before it is frozen.
+        _store_provisional_first_half(state, current_stats, minute, time_text)
+        _confirm_first_half_baseline(state, current_stats, minute)
+    elif _is_unambiguous_second_half(time_text, minute):
+        if state.first_half_snapshot_status != FIRST_HALF_FINAL_CONFIRMED:
+            provisional = _load_provisional_first_half_snapshot(state)
+            if provisional and _provisional_is_transition_ready(state):
+                # The current 2H payload may already contain an event at the
+                # transition. Freeze the last pre-transition observation, not
+                # the current cumulative payload.
+                _confirm_first_half_baseline(state, provisional, state.first_half_provisional_minute)
+        baseline = _load_persisted_second_half_baseline(game_id)
+        if baseline:
+            SECOND_HALF_BASELINES[game_id] = copy_stats(baseline)
+            if not state.second_half_started:
+                state.second_half_started = True
+                state.second_half_started_at = now_sp()
 
-    # If a previous run saved a late baseline but we have first-half snapshot,
-    # repair baseline to the first-half reference so 2nd-half deltas are correct.
-    if state.second_half_baseline_json and state.first_half_snapshot_json and game_id not in SECOND_HALF_FROM_NOW:
-        try:
-            persisted_base = json.loads(state.second_half_baseline_json)
-        except Exception:
-            persisted_base = None
-        base_minute = (
-            (persisted_base.get("Minute") or {}).get("total")
-            if isinstance(persisted_base, dict) and isinstance(persisted_base.get("Minute"), dict)
-            else None
-        )
-        if isinstance(base_minute, int) and base_minute > 45:
-            state.second_half_baseline_json = state.first_half_snapshot_json
-            try:
-                fixed_base = json.loads(state.first_half_snapshot_json)
-            except Exception:
-                fixed_base = None
-            if isinstance(fixed_base, dict) and fixed_base:
-                SECOND_HALF_BASELINES[game_id] = copy_stats(fixed_base)
-
-    baseline = SECOND_HALF_BASELINES.get(game_id)
-    if baseline:
-        # If provider corrects stats downward, adjust baseline to avoid negative/locked deltas.
-        for key, value in stats_payload.get("stats", {}).items():
-            if key in NON_DELTA_KEYS or not isinstance(value, dict):
-                continue
-            base_val = baseline.get(key)
-            if not isinstance(base_val, dict):
-                continue
-            for side in ("home", "away", "total"):
-                curr = _num(value.get(side, 0))
-                base = _num(base_val.get(side, 0))
-                if curr < base:
-                    base_val[side] = curr
-        SECOND_HALF_BASELINES[game_id] = baseline
-        state.second_half_baseline_json = json.dumps(baseline, ensure_ascii=False)
-        if not state.second_half_started:
-            state.second_half_started = True
-            state.second_half_started_at = now_sp()
-    else:
-        if not state.second_half_baseline_json and (is_second_half(time_text, minute) or minute >= 46):
-            snapshot = copy_stats(stats_payload.get("stats", {}))
-            if snapshot:
-                state.second_half_baseline_json = json.dumps(snapshot, ensure_ascii=False)
+    # Never lower/mutate a frozen baseline after provider regressions. Delta
+    # calculation clamps below-baseline corrections to zero.
 
     db.session.add(state)
     return True
@@ -2007,14 +2015,18 @@ def apply_second_half_delta(stats, baseline):
     def _delta(curr, base):
         curr_n = _num(curr)
         base_n = _num(base)
-        # Some providers reset 2H stats to zero; when that happens use current as 2H total.
-        return curr_n - base_n if curr_n >= base_n else curr_n
+        return max(0, curr_n - base_n)
 
     adjusted = {}
     for key, value in stats.items():
         if not isinstance(value, dict): continue
-        if key in NON_DELTA_KEYS or key not in baseline:
+        if key in NON_DELTA_KEYS:
             adjusted[key] = value.copy()
+            continue
+        # A cumulative value without a corresponding final-1H reference is
+        # not safe to use for a 2H-only rule. Omitting it makes evaluation
+        # wait/fail closed instead of leaking a first-half total.
+        if key not in baseline:
             continue
         base = baseline[key]
         adjusted[key] = {
@@ -2896,17 +2908,9 @@ def process_live_games(session):
         game_id = game.get("game_id")
         if game_id and game_id not in GAME_FIRST_SEEN_AT:
             GAME_FIRST_SEEN_AT[game_id] = now_sp()
-            # Only count from now when the bot truly has no saved HT/2H
-            # reference. A worker restart must keep the persisted baseline.
-            persisted_baseline = _load_persisted_second_half_baseline(game_id)
-            if (
-                isinstance(minute, int)
-                and minute >= 46
-                and not _has_first_half_context(game_id)
-                and not persisted_baseline
-            ):
-                SECOND_HALF_FROM_NOW[game_id] = True
-                SECOND_HALF_BASELINES[game_id] = copy_stats(stats_payload.get("stats", {}))
+            # Never invent a 2H baseline from the first payload seen after a
+            # restart. Without a persisted FINAL_CONFIRMED 1H snapshot, 2H
+            # rules remain blocked instead of silently discarding real 2H data.
 
         # If minute advanced but score/stats are stuck, force a cache-busted re-fetch.
         state = LiveGameState.query.filter_by(game_id=game.get("game_id")).first()
@@ -2984,7 +2988,8 @@ def process_live_games(session):
                 
                 baseline = get_second_half_baseline(game["game_id"])
                 if not baseline: continue
-                stats_for_rule = apply_second_half_delta(stats_payload["stats"], baseline)
+                cumulative_stats = stats_with_score_goals(stats_payload.get("stats", {}), stats_payload.get("score"))
+                stats_for_rule = apply_second_half_delta(cumulative_stats, baseline)
                 m2h = max(0, minute - 45)
                 stats_for_rule["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
                 # 2H rules must be evaluated strictly on second-half delta.
@@ -3019,7 +3024,8 @@ def process_live_games(session):
                             if not baseline:
                                 latest_stats_for_rule = None
                             if latest_stats_for_rule is not None:
-                                latest_stats_for_rule = apply_second_half_delta(latest_payload.get("stats", {}), baseline)
+                                latest_cumulative = stats_with_score_goals(latest_payload.get("stats", {}), latest_payload.get("score"))
+                                latest_stats_for_rule = apply_second_half_delta(latest_cumulative, baseline)
                                 m2h_latest = max(0, (latest_minute or 0) - 45)
                                 latest_stats_for_rule["Minute"] = {"home": m2h_latest, "away": m2h_latest, "total": m2h_latest}
 
@@ -3050,7 +3056,8 @@ def process_live_games(session):
                                     if second_half_allowed(game["game_id"], forced_payload.get("time_text", ""), forced_minute):
                                         baseline = get_second_half_baseline(game["game_id"])
                                         if baseline:
-                                            forced_stats_for_rule = apply_second_half_delta(forced_payload.get("stats", {}), baseline)
+                                            forced_cumulative = stats_with_score_goals(forced_payload.get("stats", {}), forced_payload.get("score"))
+                                            forced_stats_for_rule = apply_second_half_delta(forced_cumulative, baseline)
                                             m2h_forced = max(0, (forced_minute or 0) - 45)
                                             forced_stats_for_rule["Minute"] = {"home": m2h_forced, "away": m2h_forced, "total": m2h_forced}
                                         else:
@@ -3197,7 +3204,8 @@ def process_live_games(session):
                         if rule.second_half_only:
                             baseline = get_second_half_baseline(game["game_id"])
                             if baseline:
-                                stats_for_rule = apply_second_half_delta(latest_payload.get("stats", {}), baseline)
+                                latest_cumulative = stats_with_score_goals(latest_payload.get("stats", {}), latest_payload.get("score"))
+                                stats_for_rule = apply_second_half_delta(latest_cumulative, baseline)
                                 m2h_latest = max(0, (latest_payload.get("minute") or 0) - 45)
                                 stats_for_rule["Minute"] = {"home": m2h_latest, "away": m2h_latest, "total": m2h_latest}
                         else:
@@ -3659,7 +3667,8 @@ def follow_alerts(session):
             baseline = get_second_half_baseline(alert.game_id)
             if not baseline:
                 continue
-            stats = apply_second_half_delta(stats_payload["stats"], baseline)
+            cumulative_stats = stats_with_score_goals(stats_payload.get("stats", {}), stats_payload.get("score"))
+            stats = apply_second_half_delta(cumulative_stats, baseline)
             m2h = max(0, minute - 45)
             stats["Minute"] = {"home": m2h, "away": m2h, "total": m2h}
 
@@ -3755,7 +3764,8 @@ def follow_alerts(session):
                 if rule and rule.second_half_only:
                     latest_baseline = get_second_half_baseline(alert.game_id)
                     if latest_baseline:
-                        latest_eval_stats = apply_second_half_delta(latest_stats, latest_baseline)
+                        latest_cumulative = stats_with_score_goals(latest_stats, latest_score)
+                        latest_eval_stats = apply_second_half_delta(latest_cumulative, latest_baseline)
                     m2h_latest = max(0, (latest_minute or 0) - 45)
                     latest_eval_stats["Minute"] = {"home": m2h_latest, "away": m2h_latest, "total": m2h_latest}
 

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Usuarios | GreenHunter{% endblock %}
+{% block title %}Usuários | GreenHunter{% endblock %}
 {% block meta_description %}Gerencie usuarios, acessos e status das contas cadastradas na plataforma GreenHunter.{% endblock %}
 {% block content %}
 <div class="admin-users-page">
 <div class="page-header">
   <div>
-    <div class="page-title">Usuarios</div>
+    <div class="page-title">Usuários</div>
     <div class="page-subtitle">Gerencie contas, regras e acessos.</div>
   </div>
 </div>
@@ -14,9 +14,9 @@
   <div class="card-body">
     <form class="row g-2 align-items-center mb-3" method="get" action="{{ url_for('admin.users_list') }}">
       <div class="col-12 col-md-6 col-lg-4">
-        <label class="visually-hidden" for="user-search">Pesquisar usuario ou ID</label>
+        <label class="visually-hidden" for="user-search">Pesquisar usuário ou ID</label>
         <div class="input-group">
-          <input id="user-search" class="form-control" type="search" name="q" value="{{ search_query }}" placeholder="Pesquisar por usuario ou ID" autocomplete="off">
+          <input id="user-search" class="form-control" type="search" name="q" value="{{ search_query }}" placeholder="Pesquisar por usuário ou ID" autocomplete="off">
           <button class="btn btn-primary" type="submit">Pesquisar</button>
         </div>
       </div>
@@ -30,7 +30,7 @@
       <table class="table table-clean align-middle mb-0 admin-users-table">
         <thead>
           <tr>
-            <th>Usuario</th>
+            <th>Usuário</th>
             <th>Email</th>
             <th>Plano</th>
             <th>Admin</th>
@@ -52,7 +52,7 @@
               {% if row.user.is_admin_user %}
                 <span class="badge-status badge-on">Admin</span>
               {% else %}
-                <span class="badge-status badge-wait">Usuario</span>
+                <span class="badge-status badge-wait">Usuário</span>
               {% endif %}
             </td>
             <td data-label="Regras">{{ row.rules }} / {{ row.user.effective_rule_limit }}</td>
@@ -69,7 +69,7 @@
           </tr>
           {% endfor %}
           {% if users|length == 0 %}
-          <tr><td colspan="10" class="text-muted">Nenhum usuario encontrado.</td></tr>
+          <tr><td colspan="10" class="text-muted">Nenhum usuário encontrado.</td></tr>
           {% endif %}
         </tbody>
       </table>

@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Usuario | GreenHunter{% endblock %}
+{% block title %}Usuário | GreenHunter{% endblock %}
 {% block meta_description %}Consulte detalhes administrativos de usuario, configuracoes e atividade dentro do GreenHunter.{% endblock %}
 {% block content %}
 <div class="admin-user-detail-page">
 <div class="page-header">
   <div>
-    <div class="page-title">Usuario: {{ user.username }}</div>
-    <div class="page-subtitle">Resumo das regras e alertas deste usuario.</div>
+    <div class="page-title">Usuário: {{ user.username }}</div>
+    <div class="page-subtitle">Resumo das regras e alertas deste usuário.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-outline-secondary" href="{{ url_for('admin.users_list') }}">Voltar</a>
-    <a class="btn btn-primary" href="{{ url_for('admin.edit_user', user_id=user.id) }}">Editar usuario</a>
+    <a class="btn btn-primary" href="{{ url_for('admin.edit_user', user_id=user.id) }}">Editar usuário</a>
     <form method="post" action="{{ url_for('admin.reset_telegram', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Resetar Telegram deste usuario?');">
       <button class="btn btn-outline-danger">Resetar Telegram</button>
     </form>
@@ -60,7 +60,7 @@
   </div>
   <div class="stat-card">
     <div class="stat-label">Admin</div>
-    <div class="stat-value">{{ "Sim" if user.is_admin_user else "Nao" }}</div>
+    <div class="stat-value">{{ "Sim" if user.is_admin_user else "Não" }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Criado em</div>
@@ -100,11 +100,17 @@
                 <td data-label="Greens">{{ rule_stats.get(rule.id, {}).get("green", 0) }}</td>
                 <td data-label="Reds">{{ rule_stats.get(rule.id, {}).get("red", 0) }}</td>
                 <td class="text-end admin-detail-action">
-                  <form method="post" action="{{ url_for('admin.toggle_rule', rule_id=rule.id) }}" class="d-inline">
-                    <button class="btn btn-sm btn-outline-secondary">
-                      {% if rule.is_active %}Desativar{% else %}Ativar{% endif %}
-                    </button>
-                  </form>
+                  <div class="admin-rule-actions">
+                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('rules.edit_rule', rule_id=rule.id) }}">Editar</a>
+                    <form method="post" action="{{ url_for('admin.toggle_rule', rule_id=rule.id) }}">
+                      <button class="btn btn-sm btn-outline-secondary">
+                        {% if rule.is_active %}Desativar{% else %}Ativar{% endif %}
+                      </button>
+                    </form>
+                    <form method="post" action="{{ url_for('rules.delete_rule', rule_id=rule.id) }}" onsubmit="return confirm('Excluir permanentemente a regra {{ rule.name|e }} e os alertas vinculados a ela?');">
+                      <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                    </form>
+                  </div>
                 </td>
               </tr>
               {% endfor %}
