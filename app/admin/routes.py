@@ -9,6 +9,7 @@ from flask import Blueprint, abort, after_this_request, current_app, flash, json
 from flask_login import current_user, login_required
 from sqlalchemy import case, func, or_
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.orm import joinedload, load_only
 
 from ..extensions import db
 from ..models import AdminBroadcast, AdminBroadcastView, LiveGameState, LoginAttempt, MatchAlert, Rule, RuleCondition, SavedTicket, User
@@ -384,33 +385,40 @@ def dashboard():
             }
         )
 
-    rule_stats = {}
-    recent_all = (
-        MatchAlert.query.filter(MatchAlert.status.in_(["green", "red"]))
+    # The alert table contains large JSON payloads. Select only rule/status for
+    # the latest sample instead of hydrating 500 complete MatchAlert objects.
+    recent_resolved = (
+        db.session.query(MatchAlert.rule_id, MatchAlert.status)
+        .filter(MatchAlert.status.in_(["green", "red"]))
         .order_by(MatchAlert.created_at.desc())
         .limit(500)
+        .subquery()
+    )
+    rule_stats = (
+        db.session.query(
+            Rule,
+            func.sum(case((recent_resolved.c.status == "green", 1), else_=0)).label("green"),
+            func.sum(case((recent_resolved.c.status == "red", 1), else_=0)).label("red"),
+        )
+        .join(recent_resolved, recent_resolved.c.rule_id == Rule.id)
+        .group_by(Rule.id)
         .all()
     )
-    for alert in recent_all:
-        rule_stats.setdefault(alert.rule_id, {"rule": alert.rule, "green": 0, "red": 0})
-        if alert.status == "green":
-            rule_stats[alert.rule_id]["green"] += 1
-        elif alert.status == "red":
-            rule_stats[alert.rule_id]["red"] += 1
-
     top_rules = []
-    for stats in rule_stats.values():
-        total = stats["green"] + stats["red"]
+    for rule, green, red in rule_stats:
+        green = int(green or 0)
+        red = int(red or 0)
+        total = green + red
         if total == 0:
             continue
-        win_rate = round((stats["green"] / total) * 100, 1)
+        win_rate = round((green / total) * 100, 1)
         top_rules.append(
             {
-                "rule": stats["rule"],
+                "rule": rule,
                 "win_rate": win_rate,
                 "total": total,
-                "green": stats["green"],
-                "red": stats["red"],
+                "green": green,
+                "red": red,
             }
         )
     top_rules.sort(key=lambda x: x["win_rate"], reverse=True)
@@ -436,7 +444,20 @@ def dashboard():
 
     tracked_games = _build_tracked_games(now)
     recent_alerts = (
-        MatchAlert.query.order_by(MatchAlert.created_at.desc())
+        MatchAlert.query.options(
+            load_only(
+                MatchAlert.id,
+                MatchAlert.rule_id,
+                MatchAlert.home_team,
+                MatchAlert.away_team,
+                MatchAlert.status,
+                MatchAlert.created_at,
+                MatchAlert.last_score,
+                MatchAlert.initial_score,
+            ),
+            joinedload(MatchAlert.rule).load_only(Rule.id, Rule.name),
+        )
+        .order_by(MatchAlert.created_at.desc())
         .limit(10)
         .all()
     )

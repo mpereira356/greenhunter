@@ -9,12 +9,12 @@ from urllib.parse import urlparse
 from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.orm import joinedload, load_only, selectinload
 
 from ..extensions import db
 from ..models import LiveGameState, MatchAlert, MatchdayLeaguePreference, MercadoPagoWebhookEvent, PredictionRun, Rule, SavedTicket, SavedTicketLeg, SharedInvitation, User, UserMatchdayPreference
 from ..services.sharing import (accept_rule_snapshot, accept_ticket_snapshot, encode_snapshot,
-                                find_recipient, ticket_is_shareable, ticket_snapshot,
+                                find_recipient, ticket_is_editable, ticket_is_shareable, ticket_snapshot,
                                 ticket_snapshot_is_pregame)
 from ..services.mercadopago import cancel_subscription, create_subscription, get_authorized_payment, get_payment, get_subscription, user_id_from_reference, valid_webhook_signature
 from ..services.worker import get_api_status
@@ -842,12 +842,80 @@ def api_status():
 @main_bp.route("/bilhetes")
 @login_required
 def saved_tickets():
-    tickets = (
-        SavedTicket.query.filter_by(user_id=current_user.id)
-        .order_by(SavedTicket.created_at.desc()).limit(current_user.saved_ticket_limit).all()
+    per_page = 20
+    status = (request.args.get("status") or "all").strip().lower()
+    if status not in {"all", "pending", "green", "red"}:
+        status = "all"
+    search = (request.args.get("q") or "").strip()[:80]
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    order = (request.args.get("order") or "desc").strip().lower()
+    if order not in {"asc", "desc"}:
+        order = "desc"
+    try:
+        page = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page = 1
+
+    base_query = SavedTicket.query.filter_by(user_id=current_user.id)
+    status_rows = (
+        db.session.query(SavedTicket.status, func.count(SavedTicket.id))
+        .filter(SavedTicket.user_id == current_user.id)
+        .group_by(SavedTicket.status)
+        .all()
     )
+    status_counts = {row_status: int(count) for row_status, count in status_rows}
+    summary = {
+        "total": sum(status_counts.values()),
+        "pending": status_counts.get("pending", 0),
+        "green": status_counts.get("green", 0),
+        "red": status_counts.get("red", 0),
+    }
+
+    query = base_query
+    if status != "all":
+        query = query.filter(SavedTicket.status == status)
+    if search:
+        query = query.filter(SavedTicket.name.ilike(f"%{search}%"))
+    try:
+        if date_from:
+            query = query.filter(SavedTicket.created_at >= datetime.strptime(date_from, "%Y-%m-%d"))
+    except ValueError:
+        date_from = ""
+    try:
+        if date_to:
+            end_date = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(SavedTicket.created_at < end_date)
+    except ValueError:
+        date_to = ""
+
+    filtered_total = query.count()
+    page_count = max(1, math.ceil(filtered_total / per_page))
+    page = min(page, page_count)
+    ordering = SavedTicket.created_at.asc() if order == "asc" else SavedTicket.created_at.desc()
+    tickets = (
+        query.options(selectinload(SavedTicket.legs))
+        .order_by(ordering, SavedTicket.id.asc() if order == "asc" else SavedTicket.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    for ticket in tickets:
+        ticket.list_game_count = len({leg.game_id for leg in ticket.legs})
+        ticket.list_market_count = len(ticket.legs)
     shareable_ticket_ids = {ticket.id for ticket in tickets if ticket_is_shareable(ticket)}
-    return render_template("tickets/list.html", tickets=tickets, shareable_ticket_ids=shareable_ticket_ids)
+    editable_ticket_ids = {ticket.id for ticket in tickets if ticket_is_editable(ticket)}
+    return render_template(
+        "tickets/list_v2.html",
+        tickets=tickets,
+        shareable_ticket_ids=shareable_ticket_ids,
+        editable_ticket_ids=editable_ticket_ids,
+        summary=summary,
+        filtered_total=filtered_total,
+        page=page,
+        page_count=page_count,
+        filters={"status": status, "q": search, "date_from": date_from, "date_to": date_to, "order": order},
+    )
 
 
 @main_bp.post("/bilhetes/<int:ticket_id>/compartilhar")
@@ -923,8 +991,8 @@ def respond_shared_invitation(invitation_id, decision):
 @login_required
 def edit_saved_ticket(ticket_id):
     ticket = SavedTicket.query.filter_by(id=ticket_id, user_id=current_user.id).first_or_404()
-    if ticket.status != "pending" and not current_user.is_admin_user:
-        flash("Bilhetes já finalizados não podem ser alterados.", "warning")
+    if not current_user.is_admin_user and not ticket_is_editable(ticket):
+        flash("Este bilhete não pode mais ser editado: ele foi finalizado ou algum jogo já começou.", "warning")
         return redirect(url_for("main.saved_tickets"))
     if request.method == "GET":
         line_options = {}
@@ -1226,7 +1294,20 @@ def matchday():
     if include_live and day == today:
         merged = {match["game_id"]: dict(match) for match in all_matches}
         for live_match in _current_matchday_live_matches():
-            merged[live_match["game_id"]] = live_match
+            game_id = live_match["game_id"]
+            localized = merged.get(game_id)
+            if localized:
+                # LiveGameState uses canonical provider identity for rule
+                # matching. Keep the pt.betsapi.com names already collected by
+                # the agenda while refreshing only the live state fields.
+                live_match = {
+                    **live_match,
+                    "url": localized.get("url") or live_match.get("url"),
+                    "league": localized.get("league") or live_match.get("league"),
+                    "home_team": localized.get("home_team") or live_match.get("home_team"),
+                    "away_team": localized.get("away_team") or live_match.get("away_team"),
+                }
+            merged[game_id] = live_match
         all_matches = sorted(
             merged.values(),
             key=lambda match: (not match.get("is_live", False), match.get("time") or "", match.get("league") or ""),

@@ -70,7 +70,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260922-admin-control-v27') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260925-ticket-invite-v30') }}">
   </head>
   <body data-page="{{ request.endpoint or '' }}"{% if current_user.is_authenticated and current_user.is_premium_user %} class="is-premium-user"{% endif %}>
     <script>
@@ -270,6 +270,10 @@
       {% endif %}
 
       {% block content %}{% endblock %}
+      <footer class="gh-responsible-footer{% if current_user.is_authenticated and request.endpoint == 'main.dashboard' %} is-dashboard-fixed{% endif %}" aria-label="Aviso de uso responsável">
+        <span aria-hidden="true">i</span>
+        <p>O GreenHunter é uma ferramenta de análise estatística e informativa. Nenhuma análise, sugestão ou alerta representa garantia de resultado ou lucro em apostas. Aposte com responsabilidade.</p>
+      </footer>
     </main>
 
     {% if current_user.is_authenticated %}

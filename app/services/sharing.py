@@ -65,12 +65,16 @@ def _kickoff(leg):
         return None
 
 
-def ticket_is_shareable(ticket, now=None):
+def ticket_is_editable(ticket, now=None):
     now = (now or now_sp()).replace(tzinfo=None)
     return bool(ticket.status == "pending" and ticket.legs and all(
         leg.status == "pending" and _kickoff(leg) is not None and _kickoff(leg) > now
         for leg in ticket.legs
     ))
+
+
+def ticket_is_shareable(ticket, now=None):
+    return ticket_is_editable(ticket, now)
 
 
 def ticket_snapshot(ticket):

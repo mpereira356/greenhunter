@@ -31,6 +31,7 @@
         <thead>
           <tr>
             <th>Usuário</th>
+            <th>ID</th>
             <th>Email</th>
             <th>Plano</th>
             <th>Admin</th>
@@ -46,6 +47,7 @@
           {% for row in users %}
           <tr>
             <td class="admin-user-identity" data-label="Usuário">{{ row.user.username }}</td>
+            <td data-label="ID">#{{ row.user.id }}</td>
             <td class="admin-user-email" data-label="E-mail" title="{{ row.user.email or '-' }}">{{ row.user.email or '-' }}</td>
             <td data-label="Plano">{{ row.user.plan_label }}</td>
             <td data-label="Acesso">
@@ -69,7 +71,7 @@
           </tr>
           {% endfor %}
           {% if users|length == 0 %}
-          <tr><td colspan="10" class="text-muted">Nenhum usuário encontrado.</td></tr>
+          <tr><td colspan="11" class="text-muted">Nenhum usuário encontrado.</td></tr>
           {% endif %}
         </tbody>
       </table>

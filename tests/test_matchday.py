@@ -3,7 +3,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.services.matchday import _fetch_from_public, _is_excluded_youth_match, get_matchday, parse_matchday_html, save_matchday_summary_cache
+from app.services.matchday import _fetch_from_public, _is_excluded_youth_match, _localize_national_team_name, get_matchday, parse_matchday_html, save_matchday_summary_cache
 from app.services.match_analysis import _h2h_team_goal_rows, _h2h_total_goal_rows, _phase_metrics
 from app.services.scraper import _find_history_tables, _parse_history_table, _scheduled_time_from_history_page, _team_name_in_text
 from app.services.tickets import _is_under_market, _leg_value
@@ -12,6 +12,21 @@ from bs4 import BeautifulSoup
 
 
 class MatchdayParserTest(unittest.TestCase):
+    def test_localizes_national_teams_without_changing_club_names(self):
+        expected = {
+            "Puerto Rico": "Porto Rico",
+            "Guyana": "Guiana",
+            "Dominican Republic": "República Dominicana",
+            "Nicaragua": "Nicarágua",
+            "Cayman Islands": "Ilhas Cayman",
+            "Dominica": "Domínica",
+            "Japan": "Japão",
+            "Uruguay": "Uruguai",
+        }
+        for source, translated in expected.items():
+            self.assertEqual(_localize_national_team_name(source), translated)
+        self.assertEqual(_localize_national_team_name("Manchester City"), "Manchester City")
+
     def test_history_row_preserves_explicit_date_and_external_identity(self):
         table = BeautifulSoup("""
         <table><tr>
@@ -108,6 +123,42 @@ class MatchdayParserTest(unittest.TestCase):
 
         self.assertEqual(matches, [first, third])
         self.assertEqual(get_with_fallback.call_count, 3)
+
+    @patch.dict(
+        "app.services.matchday.os.environ",
+        {"MATCHDAY_MAX_PAGES": "1", "MATCHDAY_TODAY_MAX_PAGES": "1"},
+    )
+    @patch("app.services.matchday.BASE_URLS", ["https://betsapi.com", "https://pt.betsapi.com"])
+    @patch("app.services.matchday.get_with_fallback")
+    @patch("app.services.matchday.make_session")
+    def test_public_fetch_prefers_portuguese_betsapi_names(self, make_session, get_with_fallback):
+        portuguese_html = """
+            <table><tr>
+              <td class="league_n"><a>Inglaterra - Liga Principal</a></td>
+              <td>09/23 22:00</td>
+              <td><a href="/soccer/r/778899/manchester-city-vs-wolverhampton-wanderers">
+                Manchester City v Wolverhampton Wanderers
+              </a></td>
+            </tr></table>
+        """
+        international_html = """
+            <table><tr>
+              <td class="league_n"><a>England Premier League</a></td>
+              <td>09/23 22:00</td>
+              <td><a href="/soccer/r/778899/man-city-vs-wolves">Man City v Wolves</a></td>
+            </tr></table>
+        """
+        get_with_fallback.side_effect = lambda session, url: SimpleNamespace(
+            status_code=200,
+            text=portuguese_html if "pt.betsapi.com" in url else international_html,
+        )
+
+        matches = _fetch_from_public("2026-09-23")
+
+        self.assertEqual(get_with_fallback.call_args_list[0].args[1], "https://pt.betsapi.com/cf/soccer/2026-09-23/")
+        self.assertEqual(matches[0]["league"], "England Premier League")
+        self.assertEqual(matches[0]["home_team"], "Manchester City")
+        self.assertEqual(matches[0]["away_team"], "Wolverhampton Wanderers")
 
     @patch("app.services.matchday._save_cache")
     @patch("app.services.matchday.time.sleep")

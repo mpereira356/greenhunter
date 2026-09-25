@@ -2,7 +2,7 @@ import unittest
 from datetime import timedelta
 from types import SimpleNamespace
 
-from app.services.sharing import ticket_is_shareable, ticket_snapshot_is_pregame
+from app.services.sharing import ticket_is_editable, ticket_is_shareable, ticket_snapshot_is_pregame
 from app.utils.time import now_sp
 
 
@@ -19,6 +19,14 @@ class SharingEligibilityTest(unittest.TestCase):
         self.assertFalse(ticket_is_shareable(self._ticket(now - timedelta(minutes=1)), now))
         self.assertFalse(ticket_is_shareable(self._ticket(now + timedelta(hours=2), leg_status="green"), now))
         self.assertFalse(ticket_is_shareable(self._ticket(now + timedelta(hours=2), ticket_status="red"), now))
+
+    def test_ticket_only_editable_while_every_leg_is_pending_and_pregame(self):
+        now = now_sp().replace(second=0, microsecond=0)
+        self.assertTrue(ticket_is_editable(self._ticket(now + timedelta(minutes=1)), now))
+        self.assertFalse(ticket_is_editable(self._ticket(now), now))
+        self.assertFalse(ticket_is_editable(self._ticket(now - timedelta(minutes=1)), now))
+        self.assertFalse(ticket_is_editable(self._ticket(now + timedelta(hours=1), ticket_status="green"), now))
+        self.assertFalse(ticket_is_editable(self._ticket(now + timedelta(hours=1), ticket_status="red"), now))
 
     def test_snapshot_expires_when_a_single_game_has_started(self):
         now = now_sp().replace(second=0, microsecond=0)

@@ -1,5 +1,6 @@
 import json
 import glob
+import gettext
 import os
 import re
 import threading
@@ -25,10 +26,69 @@ from app.utils.time import now_sp
 
 MATCHDAY_CACHE_DIR = os.environ.get("MATCHDAY_CACHE_DIR", os.path.join("data", "matchday_cache"))
 MATCHDAY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
-MATCHDAY_CACHE_VERSION = 7
+MATCHDAY_CACHE_VERSION = 10
 MATCHDAY_TREND_INDEX_VERSION = 1
 MATCHDAY_SUMMARY_CACHE_VERSION = 5
 MATCHDAY_SUMMARY_CACHE_TTL_SECONDS = int(os.environ.get("MATCHDAY_SUMMARY_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
+
+
+def _country_names_pt_br() -> dict[str, str]:
+    """Build an English -> pt-BR country map from the OS ISO catalogue."""
+    mapping = {
+        "england": "Inglaterra",
+        "scotland": "Escócia",
+        "wales": "País de Gales",
+        "northern ireland": "Irlanda do Norte",
+        "usa": "Estados Unidos",
+        "united states": "Estados Unidos",
+        "south korea": "Coreia do Sul",
+        "north korea": "Coreia do Norte",
+        "ivory coast": "Costa do Marfim",
+        "cape verde": "Cabo Verde",
+        "czech republic": "República Tcheca",
+        "curacao": "Curaçao",
+    }
+    catalogue = "/usr/share/iso-codes/json/iso_3166-1.json"
+    try:
+        translator = gettext.translation(
+            "iso_3166-1",
+            localedir="/usr/share/locale",
+            languages=["pt_BR", "pt"],
+            fallback=True,
+        )
+        with open(catalogue, "r", encoding="utf-8") as handle:
+            countries = json.load(handle).get("3166-1", [])
+        for country in countries:
+            names = [country.get("name"), country.get("official_name"), country.get("common_name")]
+            translated = translator.gettext(country.get("name") or "")
+            for name in names:
+                if name and translated:
+                    mapping.setdefault(str(name).casefold(), translated)
+    except (OSError, ValueError, TypeError):
+        # Explicit fallbacks cover the examples even on minimal containers.
+        mapping.update({
+            "puerto rico": "Porto Rico",
+            "guyana": "Guiana",
+            "dominican republic": "República Dominicana",
+            "nicaragua": "Nicarágua",
+            "cayman islands": "Ilhas Cayman",
+            "dominica": "Domínica",
+            "japan": "Japão",
+            "uruguay": "Uruguai",
+        })
+    return mapping
+
+
+COUNTRY_NAMES_PT_BR = _country_names_pt_br()
+
+
+def _localize_national_team_name(name: str) -> str:
+    """Translate only exact national-team names; club names stay untouched."""
+    original = " ".join(str(name or "").strip().split())
+    if not original:
+        return original
+    translated = COUNTRY_NAMES_PT_BR.get(original.casefold())
+    return translated or original
 
 
 def _summary_cache_path(day: str, game_id: str, sample_limit: int) -> str:
@@ -407,15 +467,40 @@ def _fetch_from_public(day: str) -> list[dict]:
     found = {}
     seen_pages = set()
     for page in range(1, maximum + 1):
-        page_matches = []
         path = f"/cf/soccer/{day}/" if page == 1 else f"/cf/soccer/{day}/p.{page}"
-        for base in BASE_URLS:
+        bases = list(BASE_URLS)
+        pt_base = next((base for base in bases if "pt.betsapi.com" in str(base).casefold()), None)
+        international_base = next((base for base in bases if "pt.betsapi.com" not in str(base).casefold()), None)
+
+        def fetch_page(base):
+            if not base:
+                return []
             response = get_with_fallback(session, f"{base}{path}")
-            if response.status_code == 200:
-                page_matches = parse_matchday_html(response.text, base, reference_day=day)
-                # Uma resposta HTTP válida pode ficar vazia depois dos filtros;
-                # consultar o domínio espelho repetiria a mesma página.
-                break
+            if response.status_code != 200:
+                return []
+            return parse_matchday_html(response.text, base, reference_day=day)
+
+        # Team labels come from the Portuguese catalogue. Competition labels
+        # remain canonical/international. game_id joins both representations.
+        localized_source = pt_base or international_base
+        localized_matches = fetch_page(localized_source)
+        international_matches = (
+            fetch_page(international_base)
+            if international_base and international_base != localized_source
+            else localized_matches
+        )
+        localized_by_id = {item["game_id"]: item for item in localized_matches}
+        international_by_id = {item["game_id"]: item for item in international_matches}
+        page_matches = []
+        for game_id in dict.fromkeys([*international_by_id, *localized_by_id]):
+            canonical = international_by_id.get(game_id) or localized_by_id[game_id]
+            localized = localized_by_id.get(game_id) or canonical
+            combined = dict(canonical)
+            if localized.get("home_team"):
+                combined["home_team"] = _localize_national_team_name(localized["home_team"])
+            if localized.get("away_team"):
+                combined["away_team"] = _localize_national_team_name(localized["away_team"])
+            page_matches.append(combined)
         # Algumas páginas são compostas apenas por eSoccer ou categorias
         # bloqueadas. Isso produz uma página filtrada vazia, mas não significa
         # que a paginação acabou: jogos válidos podem reaparecer adiante.

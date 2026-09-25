@@ -955,16 +955,33 @@
       const requestKey = `${gameKey}:${signature}`;
       if (bet365Requests.has(requestKey)) return;
       bet365Requests.set(requestKey, 'pending');
+      // Freeze the exact market/line sent in this request. The user may change
+      // 8,5 to 7,5 while the previous network response is still in flight.
+      // A stale response must never overwrite the price of the new line.
+      const requestedSelections = items.map((item) => ({
+        id: item.id,
+        marketKey: item.marketKey || item.generatedMarket,
+        generatedMarket: item.generatedMarket,
+        direction: item.direction,
+        selectedLine: item.selectedLine
+      }));
+      const requestedById = new Map(requestedSelections.map((item) => [String(item.id), item]));
       const first = items[0];
       const card = cards.find((entry) => String(entry.dataset.gameId) === String(first.gameId) && entry.dataset.gameDay === first.day);
       const endpoint = card?.dataset.bet365Odds || `/jogos-do-dia/${encodeURIComponent(first.gameId)}/odds-bet365`;
       fetch(endpoint, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({day: first.day, match: {home: first.home, away: first.away, league: first.league, time: first.time}, selections: items.map((item) => ({id: item.id, marketKey: item.marketKey || item.generatedMarket, generatedMarket: item.generatedMarket, direction: item.direction, selectedLine: item.selectedLine}))})
+        body: JSON.stringify({day: first.day, match: {home: first.home, away: first.away, league: first.league, time: first.time}, selections: requestedSelections})
       }).then((response) => response.ok ? response.json() : Promise.reject(new Error('Odds indisponíveis')))
         .then((data) => {
           let changed = false;
           items.forEach((item) => {
+            const requested = requestedById.get(String(item.id));
+            const currentMarket = item.marketKey || item.generatedMarket;
+            if (!requested
+              || String(currentMarket || '') !== String(requested.marketKey || '')
+              || String(item.direction || 'over') !== String(requested.direction || 'over')
+              || Number(item.selectedLine) !== Number(requested.selectedLine)) return;
             const odd = data.odds?.[item.id];
             const bookmakerOdds = Array.isArray(data.bookmakers?.[item.id]) ? data.bookmakers[item.id] : [];
             if (Number.isFinite(Number(odd)) && Number(item.bet365Odd) !== Number(odd)) {

@@ -426,10 +426,16 @@ def _ensure_performance_indexes():
         "ON match_alert (user_id, created_at, league)",
         "CREATE INDEX IF NOT EXISTS ix_match_alert_status_ft_completed "
         "ON match_alert (status, ft_completed)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_created_at "
+        "ON match_alert (created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_match_alert_status_created_at "
+        "ON match_alert (status, created_at)",
         "CREATE INDEX IF NOT EXISTS ix_rule_user_active "
         "ON rule (user_id, is_active)",
         "CREATE INDEX IF NOT EXISTS ix_live_game_state_updated_at "
         "ON live_game_state (updated_at)",
+        "CREATE INDEX IF NOT EXISTS ix_login_attempt_user_success_created "
+        "ON login_attempt (user_id, success, created_at)",
     )
     with db.engine.connect() as conn:
         for statement in statements:

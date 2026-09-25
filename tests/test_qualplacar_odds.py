@@ -134,6 +134,31 @@ class QualPlacarOddsTest(unittest.TestCase):
 
     @patch("app.services.qualplacar_odds._get_detail")
     @patch("app.services.qualplacar_odds.get_qualplacar_odds")
+    def test_total_corner_odds_keep_75_and_85_lines_separate(self, get_odds, get_detail):
+        get_odds.return_value = [{"id": "99", "league": "Liga", "home": "Casa", "away": "Fora", "time": "18:00"}]
+        get_detail.return_value = {"result": {"analise_pre_jogo": {"odds": {"data": [{
+            "id": 67,
+            "bookmaker": {"data": [{
+                "name": "bet365",
+                "odds": {"data": [
+                    {"label": "Over", "total": "8", "value": "1.55"},
+                    {"label": "Over", "total": "9", "value": "1.95"},
+                ]},
+            }]},
+        }]}}}}
+        match = {"league": "Liga", "home_team": "Casa", "away_team": "Fora", "time": "18:00"}
+        selections = [
+            {"id": "corners-75", "marketKey": "corners_total", "direction": "over", "selectedLine": 7.5},
+            {"id": "corners-85", "marketKey": "corners_total", "direction": "over", "selectedLine": 8.5},
+        ]
+
+        self.assertEqual(service.bet365_selection_odds(match, "2026-09-09", selections), {
+            "corners-75": 1.55,
+            "corners-85": 1.95,
+        })
+
+    @patch("app.services.qualplacar_odds._get_detail")
+    @patch("app.services.qualplacar_odds.get_qualplacar_odds")
     def test_bookmaker_selection_odds_returns_all_comparable_houses(self, get_odds, get_detail):
         get_odds.return_value = [{"id": "99", "league": "Liga", "home": "Casa", "away": "Fora", "time": "18:00", "home_odd": 1.8, "away_odd": 4.1}]
         get_detail.return_value = {"result": {"analise_pre_jogo": {"odds": {"data": [{

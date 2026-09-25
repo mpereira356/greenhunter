@@ -1,21 +1,21 @@
 {
   "fixtures": 40,
   "candidates": 880,
-  "green": 518,
-  "red": 278,
+  "green": 522,
+  "red": 280,
   "pending": 0,
   "void": 0,
-  "unresolved": 84,
+  "unresolved": 78,
   "eligible_finished_candidates": 880,
-  "resolved": 796,
-  "settlement_coverage": 90.45,
+  "resolved": 802,
+  "settlement_coverage": 91.14,
   "settlement_failure_reasons": {
     "FOULS_MISSING": {
-      "count": 42,
+      "count": 39,
       "percent_of_unresolved": 50.0
     },
     "OFFSIDES_MISSING": {
-      "count": 42,
+      "count": 39,
       "percent_of_unresolved": 50.0
     }
   },
@@ -36,11 +36,11 @@
     },
     "fouls": {
       "eligible_finished_candidates": 120,
-      "resolved": 78,
-      "unresolved": 42,
-      "settlement_coverage": 65.0,
+      "resolved": 81,
+      "unresolved": 39,
+      "settlement_coverage": 67.5,
       "failure_reasons": {
-        "FOULS_MISSING": 42
+        "FOULS_MISSING": 39
       }
     },
     "goals": {
@@ -59,11 +59,11 @@
     },
     "offsides": {
       "eligible_finished_candidates": 120,
-      "resolved": 78,
-      "unresolved": 42,
-      "settlement_coverage": 65.0,
+      "resolved": 81,
+      "unresolved": 39,
+      "settlement_coverage": 67.5,
       "failure_reasons": {
-        "OFFSIDES_MISSING": 42
+        "OFFSIDES_MISSING": 39
       }
     },
     "shots": {
@@ -82,29 +82,29 @@
     }
   },
   "legacy": {
-    "quantity": 796,
-    "green": 518,
-    "red": 278,
-    "hit_rate": 65.075,
-    "brier": 0.245518,
-    "log_loss": 0.691506,
-    "calibration_error": 0.101545,
-    "roc_auc": 0.595202,
-    "pr_auc": 0.732851,
+    "quantity": 802,
+    "green": 522,
+    "red": 280,
+    "hit_rate": 65.087,
+    "brier": 0.245305,
+    "log_loss": 0.691032,
+    "calibration_error": 0.101289,
+    "roc_auc": 0.59519,
+    "pr_auc": 0.732594,
     "buckets": {
       "50-59": {
-        "quantity": 135,
-        "green": 84,
+        "quantity": 136,
+        "green": 85,
         "red": 51,
-        "actual_rate": 62.22,
-        "mean_score": 55.03
+        "actual_rate": 62.5,
+        "mean_score": 55.01
       },
       "60-69": {
-        "quantity": 175,
-        "green": 123,
-        "red": 52,
-        "actual_rate": 70.29,
-        "mean_score": 65.27
+        "quantity": 179,
+        "green": 126,
+        "red": 53,
+        "actual_rate": 70.39,
+        "mean_score": 65.28
       },
       "70-79": {
         "quantity": 177,
@@ -121,32 +121,32 @@
         "mean_score": 81.37
       },
       "<50": {
-        "quantity": 289,
+        "quantity": 290,
         "green": 163,
-        "red": 126,
-        "actual_rate": 56.4,
-        "mean_score": 35.19
+        "red": 127,
+        "actual_rate": 56.21,
+        "mean_score": 35.23
       }
     },
     "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
   },
   "v2_raw": {
-    "quantity": 778,
-    "green": 504,
-    "red": 274,
-    "hit_rate": 64.781,
-    "brier": 0.224468,
-    "log_loss": 0.648687,
-    "calibration_error": 0.091151,
-    "roc_auc": 0.633451,
-    "pr_auc": 0.738631,
+    "quantity": 784,
+    "green": 508,
+    "red": 276,
+    "hit_rate": 64.796,
+    "brier": 0.224227,
+    "log_loss": 0.648015,
+    "calibration_error": 0.090466,
+    "roc_auc": 0.633937,
+    "pr_auc": 0.739308,
     "buckets": {
       "50-59": {
-        "quantity": 100,
-        "green": 67,
-        "red": 33,
-        "actual_rate": 67.0,
-        "mean_score": 54.39
+        "quantity": 102,
+        "green": 68,
+        "red": 34,
+        "actual_rate": 66.67,
+        "mean_score": 54.38
       },
       "60-69": {
         "quantity": 157,
@@ -156,18 +156,18 @@
         "mean_score": 64.31
       },
       "70-79": {
-        "quantity": 170,
-        "green": 121,
-        "red": 49,
-        "actual_rate": 71.18,
-        "mean_score": 75.49
+        "quantity": 173,
+        "green": 123,
+        "red": 50,
+        "actual_rate": 71.1,
+        "mean_score": 75.46
       },
       "80-89": {
-        "quantity": 100,
-        "green": 75,
+        "quantity": 101,
+        "green": 76,
         "red": 25,
-        "actual_rate": 75.0,
-        "mean_score": 85.6
+        "actual_rate": 75.25,
+        "mean_score": 85.61
       },
       "90-100": {
         "quantity": 38,
@@ -187,15 +187,15 @@
     "warning": "Scores avaliados experimentalmente como probabilidades não calibradas."
   },
   "v2_calibrated": {
-    "quantity": 778,
-    "green": 504,
-    "red": 274,
-    "hit_rate": 64.781,
-    "brier": 0.217745,
-    "log_loss": 0.627749,
-    "calibration_error": 0.061391,
-    "roc_auc": 0.629667,
-    "pr_auc": 0.740393,
+    "quantity": 784,
+    "green": 508,
+    "red": 276,
+    "hit_rate": 64.796,
+    "brier": 0.218031,
+    "log_loss": 0.628392,
+    "calibration_error": 0.063233,
+    "roc_auc": 0.626929,
+    "pr_auc": 0.738723,
     "buckets": {
       "50-59": {
         "quantity": 122,
@@ -205,25 +205,25 @@
         "mean_score": 55.31
       },
       "60-69": {
-        "quantity": 205,
-        "green": 146,
+        "quantity": 207,
+        "green": 148,
         "red": 59,
-        "actual_rate": 71.22,
-        "mean_score": 65.9
+        "actual_rate": 71.5,
+        "mean_score": 65.89
       },
       "70-79": {
-        "quantity": 234,
-        "green": 165,
-        "red": 69,
-        "actual_rate": 70.51,
-        "mean_score": 74.29
+        "quantity": 237,
+        "green": 166,
+        "red": 71,
+        "actual_rate": 70.04,
+        "mean_score": 74.3
       },
       "80-89": {
-        "quantity": 61,
-        "green": 47,
+        "quantity": 62,
+        "green": 48,
         "red": 14,
-        "actual_rate": 77.05,
-        "mean_score": 86.42
+        "actual_rate": 77.42,
+        "mean_score": 86.44
       },
       "<50": {
         "quantity": 156,
@@ -246,12 +246,12 @@
   },
   "balanced": {
     "selected": 448,
-    "green": 312,
-    "red": 117,
+    "green": 315,
+    "red": 119,
     "pending": 0,
     "void": 0,
-    "unresolved": 19,
-    "hit_rate": 72.73
+    "unresolved": 14,
+    "hit_rate": 72.58
   },
   "strength_coverage_percent": 20.0,
   "matchup_coverage_percent": 0.0,
@@ -274,18 +274,18 @@
     },
     "fouls": {
       "quantity": 120,
-      "resolved": 78,
-      "green": 56,
-      "red": 22,
-      "hit_rate": 71.79,
+      "resolved": 81,
+      "green": 57,
+      "red": 24,
+      "hit_rate": 70.37,
       "conclusion_eligible": true
     },
     "offsides": {
       "quantity": 120,
-      "resolved": 78,
-      "green": 50,
+      "resolved": 81,
+      "green": 53,
       "red": 28,
-      "hit_rate": 64.1,
+      "hit_rate": 65.43,
       "conclusion_eligible": true
     },
     "shots": {
@@ -387,8 +387,8 @@
       "conclusion_eligible": true
     }
   },
-  "start_date": "2026-08-25",
-  "end_date": "2026-09-23",
+  "start_date": "2026-08-27",
+  "end_date": "2026-09-25",
   "window_days": 30,
   "drift": {
     "status": "POSSIBLE_DRIFT",
@@ -413,8 +413,8 @@
       },
       "target": {
         "development": 0.6444444444444445,
-        "prospective": 0.6507537688442211,
-        "delta": 0.006309324399776606
+        "prospective": 0.6508728179551122,
+        "delta": 0.0064283735106677176
       },
       "strength": {
         "development": 0.5506607929515418,
@@ -483,6 +483,24 @@
       "candidates": 0,
       "started_at": "2026-09-23 03:16:02.569392",
       "finished_at": "2026-09-23 03:16:02.588015"
+    },
+    {
+      "date": "2026-09-24",
+      "status": "failed",
+      "alert_status": "NO_ELIGIBLE_FIXTURES",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-24 03:09:53.112533",
+      "finished_at": "2026-09-24 03:09:53.124872"
+    },
+    {
+      "date": "2026-09-25",
+      "status": "failed",
+      "alert_status": "NO_ELIGIBLE_FIXTURES",
+      "fixtures": 0,
+      "candidates": 0,
+      "started_at": "2026-09-25 03:26:43.509008",
+      "finished_at": "2026-09-25 03:26:43.550705"
     }
   ],
   "missed_collection_days": [
@@ -494,7 +512,7 @@
     "ready": false,
     "complete_days": 1,
     "resolved_fixtures": 40,
-    "resolved_candidates": 796,
+    "resolved_candidates": 802,
     "conditions": {
       "days_14": false,
       "fixtures_500": false,
